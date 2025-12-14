@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cc-v2-quant-engine"
+version = "0.1.0-alpha"
+description = "Curiosity Cottage V2 Autonomous Trading System"
+authors = [
+    { name = "Curiosity Cottage Capital", email = "cto@curiositycottage.com" }
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "litestar",
+    "uvicorn[standard]",
+    "pydantic-settings",
+    "numpy",
+    "pandas",
+    "scipy",
+    "sqlalchemy[asyncio]",
+    "asyncpg",
+    "scikit-learn",
+    "langgraph",
+    "langchain-community",
+    "ollama",
+    "loguru",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

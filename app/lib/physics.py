@@ -1,0 +1,3 @@
+"""
+Heavy Tail & Regime Math.
+"""

@@ -1,0 +1,3 @@
+"""
+Shared State Schema (TypedDict).
+"""

@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  engine:
+    build: .
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      - timescaledb
+      - ollama
+      - chronos
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: password
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  chronos:
+    image: amazon/chronos-bolt:small
+
+volumes:
+  ollama_data:
