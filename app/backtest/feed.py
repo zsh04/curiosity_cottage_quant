@@ -56,3 +56,26 @@ class HistoricalCSVDataFeed(DataFeed):
                 event_queue.put(event)
             except StopIteration:
                 self.continue_backtest = False
+
+
+class TimescaleDataFeed(HistoricalCSVDataFeed):
+    """
+    Loads data from TimescaleDB and behaves like a Historical Feed.
+    """
+
+    def __init__(self, symbols: list[str], start_date, end_date):
+        from app.infra.database.client import TimescaleClient
+
+        client = TimescaleClient()
+        data_dict = {}
+
+        print(f"Loading data from TimescaleDB for {symbols}...")
+        for symbol in symbols:
+            df = client.get_bars(symbol, start_date, end_date)
+            if not df.empty:
+                data_dict[symbol] = df
+                print(f"Loaded {len(df)} bars for {symbol}")
+            else:
+                print(f"Warning: No data found for {symbol}")
+
+        super().__init__(data_dict)
