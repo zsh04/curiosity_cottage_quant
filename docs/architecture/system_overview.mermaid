@@ -1,0 +1,36 @@
+graph TD
+    %% -- Data Ingestion --
+    subgraph "Perception Layer"
+        MD[Market Data (Alpaca)] -->|Ticks| DB[(TimescaleDB)]
+        NEWS[News Stream (Tiingo)] -->|Text| DB
+        MACRO[Macro Feed (Yields/VIX)] -->|Rates| DB
+    end
+
+    %% -- The Physics Engine --
+    subgraph "Physics Layer (The Gatekeeper)"
+        DB -->|Returns| PHY[Physics Engine]
+        PHY -->|Calc Alpha| HE[Hill Estimator]
+        HE -->|Alpha Value| STATE{Regime State}
+    end
+
+    %% -- The Cognitive Core --
+    subgraph "Cognitive Layer (LangGraph)"
+        STATE -->|State: Safe| ANALYST[Analyst Agent]
+        STATE -->|State: Crisis| LOCK[Lockdown Mode]
+        
+        ANALYST -->|Signal| RISK[Risk Agent]
+        MACRO -->|Context| RISK
+        
+        RISK -->|Sizing (Kelly)| EXEC[Execution Agent]
+    end
+
+    %% -- Execution --
+    subgraph "Action Layer"
+        EXEC -->|Limit Orders| BROKER[Exchange]
+        BROKER -.->|Fills| DB
+    end
+
+    %% -- Styles --
+    style STATE fill:#f9f,stroke:#333
+    style RISK fill:#ff9999,stroke:#333
+    style LOCK fill:#ff0000,stroke:#333,color:#fff

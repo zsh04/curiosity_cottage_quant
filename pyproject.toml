@@ -25,6 +25,7 @@ dependencies = [
     "langchain-community",
     "ollama",
     "loguru",
+    "alpaca-trade-api",
 ]
 
 [tool.hatch.build.targets.wheel]
