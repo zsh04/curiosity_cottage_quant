@@ -10,9 +10,9 @@ class TestCognitiveCore:
     def test_macro_agent_gaussian(self):
         """Test Macro Agent with Gaussian data"""
         np.random.seed(42)
-        # Low volatility Gaussian data
+        # Low volatility Gaussian data, Price > 0 to avoid zero-division in returns
         # Increase sample size for stable estimation
-        prices = np.cumsum(np.random.normal(0, 1, 5000))
+        prices = 100.0 + np.cumsum(np.random.normal(0, 1, 5000))
 
         state = {"market_data": {"prices": prices.tolist()}}
         result = MacroAgent.analyze_regime(state)
