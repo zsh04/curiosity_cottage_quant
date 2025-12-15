@@ -1,4 +1,9 @@
-from mlx_lm import load, generate
+try:
+    from mlx_lm import load, generate
+except ImportError:
+    load = None  # type: ignore
+    generate = None  # type: ignore
+
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
 # import torch # Removed unused
 
@@ -16,6 +21,11 @@ class ModelFactory:
         """Loads Gemma 2 (9B) via MLX-LM."""
         if "gemma" not in self.models:
             print("Loading Gemma 2 (9B) via MLX...")
+            if load is None:
+                print("MLX-LM not found (Linux/CI Env). Using Mock.")
+                self.models["gemma"] = ("MOCK_MODEL", "MOCK_TOKENIZER")
+                return self.models["gemma"]
+
             # Note: This requires the model to be downloaded.
             # First run might be slow.
             model, tokenizer = load("google/gemma-2-9b-it")
