@@ -21,3 +21,5 @@ python-dotenv>=0.2.0
 statsmodels>=0.14.0
 types-requests
 scikit-learn>=1.2.0
+transformers>=4.30.0
+torch
