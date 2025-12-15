@@ -84,6 +84,112 @@ class PhysicsStrategy(Strategy):
             if signal_direction == "LONG" and not self.invested:
                 event_queue.put(SignalEvent(timestamp, symbol, "LONG"))
                 self.invested = True
-            elif signal_direction == "EXIT" and self.invested:
                 event_queue.put(SignalEvent(timestamp, symbol, "EXIT"))
                 self.invested = False
+
+
+class MomentumStrategy(Strategy):
+    """
+    Moving Average Crossover Strategy.
+    Long when SMA_Fast > SMA_Slow. Exit when Crosses back.
+    """
+
+    def __init__(self, fast_window=50, slow_window=200):
+        self.fast_window = fast_window
+        self.slow_window = slow_window
+        self.prices = []
+        self.invested = False
+
+    def calculate_signals(self, event: MarketEvent, event_queue):
+        if event.type != "MARKET":
+            return
+
+        self.prices.append(event.close)
+
+        if len(self.prices) < self.slow_window:
+            return
+
+        prices_series = pd.Series(self.prices)
+        sma_fast = prices_series.rolling(window=self.fast_window).mean().iloc[-1]
+        sma_slow = prices_series.rolling(window=self.slow_window).mean().iloc[-1]
+
+        if sma_fast > sma_slow and not self.invested:
+            event_queue.put(SignalEvent(event.timestamp, event.symbol, "LONG"))
+            self.invested = True
+        elif sma_fast < sma_slow and self.invested:
+            event_queue.put(SignalEvent(event.timestamp, event.symbol, "EXIT"))
+            self.invested = False
+
+
+class MeanReversionStrategy(Strategy):
+    """
+    Bollinger Bands Reversion.
+    Long when price < Lower Band. Exit when price > Upper Band.
+    """
+
+    def __init__(self, window=20, num_std=2):
+        self.window = window
+        self.num_std = num_std
+        self.prices = []
+        self.invested = False
+
+    def calculate_signals(self, event: MarketEvent, event_queue):
+        if event.type != "MARKET":
+            return
+
+        self.prices.append(event.close)
+
+        if len(self.prices) < self.window:
+            return
+
+        prices_series = pd.Series(self.prices)
+        rolling_mean = prices_series.rolling(window=self.window).mean().iloc[-1]
+        rolling_std = prices_series.rolling(window=self.window).std().iloc[-1]
+
+        upper_band = rolling_mean + (rolling_std * self.num_std)
+        lower_band = rolling_mean - (rolling_std * self.num_std)
+
+        price = event.close
+
+        if price < lower_band and not self.invested:
+            event_queue.put(SignalEvent(event.timestamp, event.symbol, "LONG"))
+            self.invested = True
+        elif price > upper_band and self.invested:
+            event_queue.put(SignalEvent(event.timestamp, event.symbol, "EXIT"))
+            self.invested = False
+
+
+class BreakoutStrategy(Strategy):
+    """
+    Donchian Channel Breakout.
+    Long when Price > Max(High, N). Exit when Price < Min(Low, N).
+    Using closing prices as proxy for High/Low for simplicity on single price stream.
+    """
+
+    def __init__(self, window=20):
+        self.window = window
+        self.prices = []
+        self.invested = False
+
+    def calculate_signals(self, event: MarketEvent, event_queue):
+        if event.type != "MARKET":
+            return
+
+        self.prices.append(event.close)
+
+        if len(self.prices) <= self.window:
+            return
+
+        # Recent window *excluding* current bar to determine "breakout" from *previous* range
+        past_window = self.prices[-(self.window + 1) : -1]
+        max_high = max(past_window)
+        min_low = min(past_window)
+
+        price = event.close
+
+        if price > max_high and not self.invested:
+            event_queue.put(SignalEvent(event.timestamp, event.symbol, "LONG"))
+            self.invested = True
+        elif price < min_low and self.invested:
+            event_queue.put(SignalEvent(event.timestamp, event.symbol, "EXIT"))
+            self.invested = False

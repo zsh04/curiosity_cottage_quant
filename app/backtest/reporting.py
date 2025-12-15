@@ -11,23 +11,24 @@ class PerformanceReporter:
         """
         portfolio_history: List of dicts with 'timestamp', 'total_equity'
         """
-        self.history = pd.DataFrame(portfolio_history)
-        if not self.history.empty:
-            self.history["timestamp"] = pd.to_datetime(self.history["timestamp"])
-            self.history.set_index("timestamp", inplace=True)
-            self.history["returns"] = self.history["total_equity"].pct_change()
+        self.raw_history = portfolio_history
+        self.history_df = pd.DataFrame()  # Cache or remove
 
-    def generate_report(self):
-        if self.history.empty:
-            return "No trades or history."
+    def calculate_metrics(self) -> dict:
+        if not self.raw_history:
+            return {}
 
-        total_return = (
-            self.history["total_equity"].iloc[-1] / self.history["total_equity"].iloc[0]
-        ) - 1.0
+        # Convert to DF on demand
+        df = pd.DataFrame(self.raw_history)
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        df.set_index("timestamp", inplace=True)
+        df["returns"] = df["total_equity"].pct_change()
 
-        returns = self.history["returns"].dropna()
+        total_return = (df["total_equity"].iloc[-1] / df["total_equity"].iloc[0]) - 1.0
+
+        returns = df["returns"].dropna()
         if len(returns) > 1:
-            sharpe = (returns.mean() / returns.std()) * np.sqrt(252)  # Annulized
+            sharpe = (returns.mean() / returns.std()) * np.sqrt(365 * 24)  # Crypto 24/7
         else:
             sharpe = 0.0
 
@@ -37,9 +38,19 @@ class PerformanceReporter:
         drawdown = (cum_returns - running_max) / running_max
         max_drawdown = drawdown.min()
 
-        report = {
-            "Total Return": f"{total_return:.2%}",
-            "Sharpe Ratio": f"{sharpe:.2f}",
-            "Max Drawdown": f"{max_drawdown:.2%}",
+        return {
+            "total_return_pct": total_return * 100,
+            "sharpe_ratio": sharpe,
+            "max_drawdown_pct": max_drawdown * 100,
         }
-        return report
+
+    def generate_report(self):
+        metrics = self.calculate_metrics()
+        if not metrics:
+            return "No trades or history."
+
+        return {
+            "Total Return": f"{metrics['total_return_pct']:.2f}%",
+            "Sharpe Ratio": f"{metrics['sharpe_ratio']:.2f}",
+            "Max Drawdown": f"{metrics['max_drawdown_pct']:.2f}%",
+        }

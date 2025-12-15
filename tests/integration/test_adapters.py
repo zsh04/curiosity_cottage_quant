@@ -1,12 +1,12 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from datetime import datetime
-from adapters.alpaca import AlpacaAdapter
-from adapters.tiingo import TiingoAdapter
+from app.adapters.alpaca import AlpacaAdapter
+from app.adapters.tiingo import TiingoAdapter
 
 
 class TestAdapters:
-    @patch("adapters.alpaca.StockHistoricalDataClient")
+    @patch("app.adapters.alpaca.StockHistoricalDataClient")
     def test_alpaca_fetch_bars(self, mock_client_cls):
         """Test Alpaca Adapter fetching and parsing logic."""
         # Setup Mock
@@ -34,7 +34,7 @@ class TestAdapters:
         assert bars[0]["symbol"] == "AAPL"
         assert bars[0]["close"] == 150.0
 
-    @patch("adapters.tiingo.requests.get")
+    @patch("app.adapters.tiingo.requests.get")
     def test_tiingo_fetch_news(self, mock_get):
         """Test Tiingo Adapter news fetching."""
         # Setup Mock

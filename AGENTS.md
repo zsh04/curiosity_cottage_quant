@@ -12,7 +12,7 @@ The goal of this system is to generate consistent, uncorrelated Alpha through **
 We employ a **Federated Agent Model** orchestrated via LangGraph:
 1.  **Analyst (The Engine):** Ingests multi-modal data (Price, News, Macro) to generate Probabilistic Signals.
 2.  **Macro (The Context):** Monitors Global Liquidity (Yields, VIX, Correlations). Has **VETO** power over the Analyst.
-3.  **Risk (The Governance):** Enforces the **CCQP (Curiosity Cottage Quantitative Protocol)**. Calculates sizing based on Tail Risk.
+3.  **Risk (The Governance):** Enforces the **CCQP (Curiosity Cottage Quantitative Protocol)**. Calculates sizing based on **Bayesian Expected Shortfall (BES)** and Physics Veto.
 4.  **Execution (The Action):** Manages order lifecycle and slippage optimization.
 
 ## 3. The "Physics" Constraints
