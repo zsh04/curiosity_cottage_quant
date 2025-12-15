@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from lib.kalman.kinematic import KinematicKalmanFilter
+from app.lib.kalman.kinematic import KinematicKalmanFilter
 
 
 class TestKinematicKalmanFilter:

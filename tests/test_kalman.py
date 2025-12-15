@@ -1,5 +1,5 @@
+import pytest
 import unittest
-import numpy as np
 from app.lib.kalman import KinematicKalmanFilter
 
 
@@ -8,7 +8,7 @@ class TestKinematicKalmanFilter(unittest.TestCase):
         # Scenario: Object moves at constant velocity of 1.0
         # Position sequence: 0, 1, 2, 3, 4, 5
         kf = KinematicKalmanFilter(dt=1.0, process_noise=0.001, measurement_noise=0.1)
-        kf.initialize(0.0)
+        kf.update(0.0)
 
         observations = [1.0, 2.0, 3.0, 4.0, 5.0]
         states = []
@@ -35,7 +35,7 @@ class TestKinematicKalmanFilter(unittest.TestCase):
         # t=3, p=4.5
 
         kf = KinematicKalmanFilter(dt=1.0, process_noise=0.01, measurement_noise=0.01)
-        kf.initialize(0.0)
+        kf.update(0.0)
 
         observations = [0.5, 2.0, 4.5, 8.0, 12.5]
         states = []
