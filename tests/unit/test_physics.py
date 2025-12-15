@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from lib.physics.heavy_tail import HeavyTailEstimator
+from app.lib.physics.heavy_tail import HeavyTailEstimator
 
 
 class TestHeavyTailEstimator:
@@ -20,7 +20,7 @@ class TestHeavyTailEstimator:
         # Let's check if it classifies as Gaussian (> 2.0)
 
         assert alpha > 2.0, f"Gaussian data should have Alpha > 2.0, got {alpha}"
-        assert HeavyTailEstimator.detect_regime(alpha) == "GAUSSIAN"
+        assert HeavyTailEstimator.detect_regime(alpha) == "Gaussian"
 
     def test_hill_estimator_pareto(self):
         """
@@ -36,9 +36,10 @@ class TestHeavyTailEstimator:
 
         # Allow some estimation error margin
         assert 1.3 < alpha < 1.7, f"Expected Alpha ~ 1.5, got {alpha}"
-        assert HeavyTailEstimator.detect_regime(alpha) == "LEVY"
+        assert HeavyTailEstimator.detect_regime(alpha) == "Critical"
 
     def test_detect_regime_logic(self):
-        assert HeavyTailEstimator.detect_regime(3.5) == "GAUSSIAN"
-        assert HeavyTailEstimator.detect_regime(1.5) == "LEVY"
-        assert HeavyTailEstimator.detect_regime(0.8) == "CAUCHY"
+        assert HeavyTailEstimator.detect_regime(3.5) == "Gaussian"
+        assert HeavyTailEstimator.detect_regime(2.5) == "Lévy Stable"
+        assert HeavyTailEstimator.detect_regime(1.5) == "Critical"
+        assert HeavyTailEstimator.detect_regime(0.8) == "Critical"
