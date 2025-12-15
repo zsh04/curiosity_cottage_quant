@@ -52,7 +52,7 @@ def execution_agent(state: AgentState):
             order = {
                 "symbol": symbol,
                 "qty": qty,
-                "side": action.lower(),
+                "side": str(action or "").lower(),
                 "type": "market",
                 "time_in_force": "day",
             }

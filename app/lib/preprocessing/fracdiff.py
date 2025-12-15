@@ -51,7 +51,6 @@ class FractionalDifferentiator:
         # However, for massive series, we might want a fixed window size.
         # Here we use the full available history up to the weight cutoff.
 
-        res = {}
         # We need at least len(weights) data points to compute the first value
         if len(series) < len(weights):
             return pd.Series(index=series.index, dtype=float)

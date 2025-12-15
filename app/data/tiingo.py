@@ -36,7 +36,7 @@ class TiingoProvider(MarketDataProvider):
             endpoint = f"/tiingo/daily/{symbol}/prices"
             # Daily endpoint defaults to daily freq.
             # sort is usually not needed or handled by start date.
-            params = {
+            params: Dict[str, Any] = {
                 "startDate": (
                     pd.Timestamp.now() - pd.Timedelta(days=limit * 2)
                 ).strftime("%Y-%m-%d"),
@@ -111,7 +111,7 @@ class TiingoProvider(MarketDataProvider):
         headers = self._get_headers()
         headers["Content-Type"] = "application/json"
 
-        params = {"tickers": symbol, "limit": limit}
+        params: Dict[str, Any] = {"tickers": symbol, "limit": limit}
 
         try:
             resp = requests.get(url, headers=headers, params=params)

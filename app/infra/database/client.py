@@ -3,6 +3,7 @@ import os
 import asyncpg
 import pandas as pd
 from datetime import datetime
+from typing import Optional
 
 
 class TimescaleClient:
@@ -10,7 +11,7 @@ class TimescaleClient:
     Client for querying market data from TimescaleDB.
     """
 
-    def __init__(self, dsn: str = None):
+    def __init__(self, dsn: Optional[str] = None):
         self.dsn = dsn or os.getenv(
             "DATABASE_URL", "postgresql://user:password@localhost:5432/quant_db"
         )

@@ -19,7 +19,10 @@ class ExecutionAgent:
         # We'll assume the Risk Manager might have updated 'messages' or we need to add a field.
 
         state["messages"].append(
-            "EXECUTION: Received control. Simulation Mode - No Order Sent."
+            {
+                "role": "system",
+                "content": "EXECUTION: Received control. Simulation Mode - No Order Sent.",
+            }
         )
         return state
 

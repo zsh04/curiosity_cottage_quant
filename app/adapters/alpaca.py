@@ -3,7 +3,7 @@ from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from datetime import datetime
 import os
-from typing import List, Dict, Any
+from typing import List, Optional, Dict, Any
 
 
 class AlpacaAdapter:
@@ -12,7 +12,7 @@ class AlpacaAdapter:
     Handles Market Data and Order Routing.
     """
 
-    def __init__(self, api_key: str = None, secret_key: str = None):
+    def __init__(self, api_key: Optional[str] = None, secret_key: Optional[str] = None):
         self.api_key = api_key or os.getenv("APCA_API_KEY_ID")
         self.secret_key = secret_key or os.getenv("APCA_API_SECRET_KEY")
 
@@ -24,7 +24,7 @@ class AlpacaAdapter:
         self.data_client = StockHistoricalDataClient(self.api_key, self.secret_key)
 
     def fetch_bars(
-        self, symbol: str, start: datetime, end: datetime = None
+        self, symbol: str, start: datetime, end: Optional[datetime] = None
     ) -> List[Dict[str, Any]]:
         """
         Fetch historical bar data (OHLCV).
@@ -34,7 +34,14 @@ class AlpacaAdapter:
         )
 
         bars = self.data_client.get_stock_bars(request_params)
-        df = bars.df
+        # Type check to satisfy mypy, though it usually returns BarSet
+        if hasattr(bars, "df"):
+            df = bars.df
+        else:
+            # Fallback if it returns a dict-like structure (unlikely in this client version but possible in mocks)
+            import pandas as pd
+
+            df = pd.DataFrame(bars)
 
         # Convert to list of dicts for agnostic internal usage
         # Reset index to get 'timestamp' and 'symbol' as columns if they are in index

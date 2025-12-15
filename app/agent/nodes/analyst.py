@@ -33,7 +33,9 @@ class AnalystAgent:
         # We will assume the 'state' dict carries the KF state or we re-hydrate it.
         # For simplicity in this architectural scaffold, we'll log the intention.
 
-        state["messages"].append("ANALYST: Processing Market Data...")
+        state["messages"].append(
+            {"role": "system", "content": "ANALYST: Processing Market Data..."}
+        )
 
         # Simulating a signal for wiring purposes
         # Ideally, we'd check if v > 0 and a > 0
@@ -43,7 +45,9 @@ class AnalystAgent:
         # if kf_state.velocity > 0 and kf_state.acceleration > 0:
         #     signal = "BUY"
 
-        state["messages"].append(f"ANALYST: Generated Signal {signal}")
+        state["messages"].append(
+            {"role": "system", "content": f"ANALYST: Generated Signal {signal}"}
+        )
 
         return state
 

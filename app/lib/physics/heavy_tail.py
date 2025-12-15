@@ -1,6 +1,38 @@
 import numpy as np
 import pandas as pd
-from typing import Union, Tuple, Optional
+from typing import Union, Tuple, Optional, List
+from enum import Enum
+from dataclasses import dataclass
+
+
+class Regime(str, Enum):
+    GAUSSIAN = "Gaussian"
+    LEVY_STABLE = "Lévy Stable"
+    CRITICAL = "Critical"  # Replaces CAUCHY for consistency
+
+
+@dataclass
+class RegimeMetrics:
+    alpha: float
+    regime: Regime
+    leverage_cap: float
+
+
+def expected_shortfall(returns: np.ndarray, confidence_level: float = 0.95) -> float:
+    """
+    Calculate the Expected Shortfall (CVaR) at a given confidence level.
+    """
+    if len(returns) == 0:
+        return 0.0
+
+    cutoff_index = int((1 - confidence_level) * len(returns))
+    if cutoff_index == 0:
+        cutoff_index = 1
+
+    sorted_returns = np.sort(returns)
+    tail = sorted_returns[:cutoff_index]
+    es = -np.mean(tail)
+    return float(max(0.0, es))
 
 
 class HeavyTailEstimator:
@@ -16,7 +48,7 @@ class HeavyTailEstimator:
 
     def __init__(self, window_size: int = 100):
         self.window_size = window_size
-        self.returns = []  # List to store returns
+        self.returns: List[float] = []  # List to store returns
 
     def update(self, return_val: float):
         """Add a new return observation."""
@@ -78,17 +110,21 @@ class HeavyTailEstimator:
         return alpha
 
     @staticmethod
-    def detect_regime(alpha: float) -> str:
+    def get_regime(alpha: float) -> RegimeMetrics:
         """
-        Classifies the regime based on the Alpha.
-
-        Alpha > 2.0: 'Gaussian' (Finite Variance)
-        1.0 < Alpha <= 2.0: 'Levy' (Infinite Variance / Heavy Tail)
-        Alpha <= 1.0: 'Cauchy' (Undefined Mean - Extreme Risk)
+        Classify the regime based on the Alpha.
         """
-        if alpha > 2.0:
-            return "GAUSSIAN"
-        elif alpha > 1.0:
-            return "LEVY"
+        if alpha > 3.0:
+            return RegimeMetrics(alpha=alpha, regime=Regime.GAUSSIAN, leverage_cap=1.0)
+        elif 2.0 < alpha <= 3.0:
+            return RegimeMetrics(
+                alpha=alpha, regime=Regime.LEVY_STABLE, leverage_cap=0.5
+            )
         else:
-            return "CAUCHY"
+            # alpha <= 2.0
+            return RegimeMetrics(alpha=alpha, regime=Regime.CRITICAL, leverage_cap=0.0)
+
+    @staticmethod
+    def detect_regime(alpha: float) -> str:
+        # Legacy/String wrapper
+        return HeavyTailEstimator.get_regime(alpha).regime.value

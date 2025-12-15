@@ -1,6 +1,6 @@
 import requests
 import os
-from typing import List, Dict, Any
+from typing import List, Optional, Dict, Any
 
 
 class TiingoAdapter:
@@ -8,7 +8,7 @@ class TiingoAdapter:
     Adapter for Tiingo API (News & Sentiment).
     """
 
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv("TIINGO_API_KEY")
         if not self.api_key:
             raise ValueError("Tiingo API Key (TIINGO_API_KEY) must be set.")
@@ -25,7 +25,7 @@ class TiingoAdapter:
         }
 
         url = f"{self.base_url}/news"
-        params = {"tickers": tickers, "limit": limit}
+        params: Dict[str, Any] = {"tickers": tickers, "limit": limit}
 
         response = requests.get(url, headers=headers, params=params)
 
