@@ -1,6 +1,7 @@
 import asyncio
 import os
 import asyncpg
+from typing import Optional
 
 
 class DatabaseSchema:
@@ -8,7 +9,7 @@ class DatabaseSchema:
     Manages TimescaleDB Schema and Initialization.
     """
 
-    def __init__(self, dsn: str = None):
+    def __init__(self, dsn: Optional[str] = None):
         self.dsn = dsn or os.getenv(
             "DATABASE_URL", "postgresql://user:password@localhost:5432/quant_db"
         )

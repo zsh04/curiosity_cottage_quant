@@ -33,7 +33,10 @@ class RiskManager:
         if state["max_drawdown"] >= self.max_drawdown_limit:
             state["status"] = TradingStatus.HALTED_DRAWDOWN
             state["messages"].append(
-                f"CRITICAL: Max Drawdown {state['max_drawdown']:.1%} breached limit {self.max_drawdown_limit:.1%}. FIRM FAILURE."
+                {
+                    "role": "system",
+                    "content": f"CRITICAL: Max Drawdown {state['max_drawdown']:.1%} breached limit {self.max_drawdown_limit:.1%}. FIRM FAILURE.",
+                }
             )
             return state
 
@@ -48,7 +51,10 @@ class RiskManager:
         if state["daily_pnl"] < 0 and daily_loss_pct > self.daily_stop_limit:
             state["status"] = TradingStatus.SLEEPING
             state["messages"].append(
-                f"RISK: Daily Loss {daily_loss_pct:.2%} exceeds limit {self.daily_stop_limit:.0%}. Sleeping logic activated."
+                {
+                    "role": "system",
+                    "content": f"RISK: Daily Loss {daily_loss_pct:.2%} exceeds limit {self.daily_stop_limit:.0%}. Sleeping logic activated.",
+                }
             )
             return state
 
@@ -57,7 +63,10 @@ class RiskManager:
         if state.get("regime") == Regime.CRITICAL.value:
             state["status"] = TradingStatus.HALTED_PHYSICS
             state["messages"].append(
-                f"PHYSICS VETO: Regime is {state['regime']} (Alpha {state.get('current_alpha', 'N/A')}). Trading Halted."
+                {
+                    "role": "system",
+                    "content": f"PHYSICS VETO: Regime is {state['regime']} (Alpha {state.get('current_alpha', 'N/A')}). Trading Halted.",
+                }
             )
             return state
 
@@ -79,7 +88,10 @@ class RiskManager:
         if regime_metrics.regime == Regime.CRITICAL:
             state["status"] = TradingStatus.HALTED_PHYSICS
             state["messages"].append(
-                f"PHYSICS VETO: Alpha {alpha:.2f} indicates Critical Regime. Trading Halted."
+                {
+                    "role": "system",
+                    "content": f"PHYSICS VETO: Alpha {alpha:.2f} indicates Critical Regime. Trading Halted.",
+                }
             )
 
         return state

@@ -1,5 +1,5 @@
 import unittest
-from app.agent.graph import graph
+from app.agent.graph import app_graph
 from app.agent.state import AgentState, TradingStatus
 
 
@@ -22,7 +22,7 @@ class TestAgentGraph(unittest.TestCase):
         # we will test the nodes individually or use graph.invoke if synchronous.
         # LangGraph invoke is synchronous by default for StateGraph.
 
-        result = graph.invoke(initial_state)
+        result = app_graph.invoke(initial_state)
 
         # Verify messages contain output from all agents
         messages = result["messages"]
@@ -47,7 +47,7 @@ class TestAgentGraph(unittest.TestCase):
         # The graph will run: Macro -> Analyst -> Risk (Vetos) -> End
         # Execution should NOT run
 
-        result = graph.invoke(initial_state)
+        result = app_graph.invoke(initial_state)
 
         messages = result["messages"]
         self.assertTrue(any("PHYSICS VETO" in m for m in messages))

@@ -1,4 +1,5 @@
 import numpy as np
+from numpy import typing as npt
 from app.agent.state import AgentState
 from app.data.aggregator import DataAggregator
 
@@ -8,11 +9,11 @@ class PosteriorDistribution:
     Wrapper for forecast samples to support BES calculation.
     """
 
-    def __init__(self, samples: np.array):
+    def __init__(self, samples: npt.NDArray):
         self.samples = samples
 
     def mean(self) -> float:
-        return np.mean(self.samples)
+        return float(np.mean(self.samples))
 
     def calculate_tail_loss(
         self, percentile: float = 0.05, uncertainty: float = 0.0
@@ -35,7 +36,7 @@ class PosteriorDistribution:
 
         # Expected Shortfall is the negative mean of the tail (loss magnitude)
         # Assuming samples are returns/price changes where negative = loss
-        return abs(np.mean(tail_samples))
+        return float(abs(np.mean(tail_samples)))
 
 
 def calculate_bes_size(posterior_distribution, kalman_covariance_p, hill_alpha):
@@ -64,7 +65,7 @@ def calculate_bes_size(posterior_distribution, kalman_covariance_p, hill_alpha):
     return optimal_size
 
 
-def calculate_hill_alpha(returns: np.array, tail_cutoff: float = 0.05) -> float:
+def calculate_hill_alpha(returns: npt.NDArray, tail_cutoff: float = 0.05) -> float:
     """
     Calculates the Hill Estimator (Alpha) for the tail index.
     Formula: alpha = (1/k * sum(ln(x_i / x_min)))^-1
@@ -171,7 +172,7 @@ def risk_agent(state: AgentState):
                 {
                     "symbol": symbol,
                     "qty": qty,
-                    "side": base_action.lower(),
+                    "side": str(base_action or "").lower(),
                     "type": "market",
                     "reason": f"BES_Alloc:{target_fraction:.3f}, Alpha:{hill_alpha}",
                 }
