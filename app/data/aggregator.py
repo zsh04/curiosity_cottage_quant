@@ -82,19 +82,31 @@ class DataAggregator:
         Prioritizes Tiingo, falls back to Finnhub.
         """
         headlines = []
-        source_used = "Tiingo"
+        source_used = "Alpaca"
 
-        # Try Tiingo first
+        # 1. Try Alpaca (Primary)
         try:
-            news_items = self.tiingo.get_news(symbol, limit=5)
+            news_items = self.alpaca.get_news(symbol, limit=5)
             if news_items:
                 headlines = [
                     item["headline"] for item in news_items if item.get("headline")
                 ]
         except Exception as e:
-            print(f"Tiingo Sentiment Error: {e}")
+            print(f"Alpaca Sentiment Error: {e}")
 
-        # Fallback to Finnhub if empty
+        # 2. Try Tiingo (Secondary)
+        if not headlines:
+            source_used = "Tiingo"
+            try:
+                news_items = self.tiingo.get_news(symbol, limit=5)
+                if news_items:
+                    headlines = [
+                        item["headline"] for item in news_items if item.get("headline")
+                    ]
+            except Exception as e:
+                print(f"Tiingo Sentiment Error: {e}")
+
+        # 3. Fallback to Finnhub if empty
         if not headlines:
             source_used = "Finnhub"
             try:

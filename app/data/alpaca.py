@@ -1,8 +1,8 @@
 import os
 import pandas as pd
 from typing import Dict, List, Any
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockBarsRequest
+from alpaca.data.historical import StockHistoricalDataClient, NewsClient
+from alpaca.data.requests import StockBarsRequest, NewsRequest
 from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.client import TradingClient
 from app.data.base import MarketDataProvider
@@ -21,6 +21,7 @@ class AlpacaProvider(MarketDataProvider):
 
         self.trading_client = TradingClient(self.api_key, self.api_secret, paper=True)
         self.data_client = StockHistoricalDataClient(self.api_key, self.api_secret)
+        self.news_client = NewsClient(self.api_key, self.api_secret)
 
     def get_bars(
         self, symbol: str, timeframe: str = "1D", limit: int = 100
@@ -73,5 +74,30 @@ class AlpacaProvider(MarketDataProvider):
         }
 
     def get_news(self, symbol: str, limit: int = 5) -> List[Dict[str, Any]]:
-        # Alpaca has news API but let's leave this for Finnhub per plan
-        return []
+        """
+        Fetches news from Alpaca using NewsClient.
+        """
+        try:
+            # Alpaca NewsRequest takes 'symbols' as list
+            request = NewsRequest(symbols=symbol, limit=limit)
+            news_set = self.news_client.get_news(request)
+
+            results = []
+            for item in news_set.data["news"]:
+                # item is a News object
+                results.append(
+                    {
+                        "headline": item.headline,
+                        "summary": item.summary,
+                        "source": item.source,
+                        "url": item.url,
+                        "published_at": item.created_at.isoformat()
+                        if item.created_at
+                        else None,
+                    }
+                )
+            return results
+
+        except Exception as e:
+            print(f"Alpaca News API Error: {e}")
+            return []

@@ -10,6 +10,11 @@ The system follows a Hexagonal Architecture (Ports & Adapters) pattern, centered
 4.  **Persistence**: TimescaleDB (Time-series & Vector Store).
 5.  **Infrastructure**: Docker Compose orchestration.
 
+### AI Stack:
+*   **Reasoning**: Gemma 2 (9B) via Ollama/MLX.
+*   **Forecasting**: Chronos-Bolt (Amazon) for probabilistic time-series prediction.
+*   **Sentiment**: FinBERT (ProsusAI) for news classification.
+
 ## 2. API Specifications
 
 ### Risk & Physics
@@ -52,6 +57,6 @@ The system follows a Hexagonal Architecture (Ports & Adapters) pattern, centered
 ```
 
 ## 3. Data Pipeline
-*   **Ingestion**: Tiingo (Websocket + REST).
+*   **Ingestion**: Alpaca (Primary News/Price), Tiingo (Backup).
 *   **Preprocessing**: Fractional Differentiation (Standard `d=0.4` unless optimized).
 *   **Storage**: TimescaleDB Hypertables for ticks; pgvector for agent embeddings.

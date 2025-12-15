@@ -13,8 +13,9 @@ We have standardized on a high-performance, modern stack to support real-time da
 | **Frontend** | **React + Vite** (TypeScript) | Provides a responsive, type-safe Control Center. Vite ensures rapid development cycles, and React offers the component ecosystem needed for complex dashboards. |
 | **Database** | **TimescaleDB** | An extension of PostgreSQL optimized for time-series data. It handles our tick-level market data and "State Estimates" history with compression and efficiency. |
 | **AI Orchestration** | **LangGraph** | Enables the creation of stateful, multi-agent workflows (Macro -> Analyst -> Execution) with cyclic graph capabilities, superior to linear chains. |
+| **Generative Models** | **Gemma 2**, **Chronos-Bolt**, **FinBERT** | **Gemma 2 (9B)** via Ollama for reasoning. **Chronos-Bolt** for probabilistic time-series forecasting. **FinBERT** for financial sentiment analysis. |
 | **Local LLMs** | **Ollama** | Allows us to run quantized models (like Gemma 2) locally for privacy and cost-efficiency within the "Analyst Agent" workflow. |
-| **Data Providers** | **Tiingo** (Primary), **Finnhub** (Backup) | Tiingo provides high-fidelity institutional data. Finnhub serves as a redundant failover for news and price feeds to ensure system resilience. |
+| **Data Providers** | **Alpaca** (Primary), **Tiingo**, **Finnhub** | Alpaca is now the primary source for Price and News. Tiingo and Finnhub provide failover resilience. |
 | **Infrastructure** | **Docker Compose** | Ensures reproducible environments for all services, including the database and AI model servers. |
 
 ## Core Components Implemented
