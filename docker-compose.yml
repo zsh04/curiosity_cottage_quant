@@ -10,7 +10,6 @@ services:
     depends_on:
       - timescaledb
       - ollama
-      - chronos
 
   timescaledb:
     image: timescale/timescaledb:latest-pg15
@@ -25,16 +24,20 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
 
-  chronos:
-    image: amazon/chronos-bolt:small
+  bff:
+    image: node:20-alpine
+    ports:
+      - "3000:3000"
+    environment:
+      - UPSTREAM_API_URL=http://engine:8000
+    volumes:
+      - ./app/bff:/app
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+
+#   chronos:
+#     image: amazon/chronos-bolt:small
 
 volumes:
   ollama_data:

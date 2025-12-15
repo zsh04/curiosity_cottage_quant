@@ -10,10 +10,10 @@ The goal of this system is to generate consistent, uncorrelated Alpha through **
 
 ## 2. The Cognitive Architecture
 We employ a **Federated Agent Model** orchestrated via LangGraph:
-1.  **Analyst (The Engine):** Ingests multi-modal data (Price, News, Macro) to generate Probabilistic Signals.
-2.  **Macro (The Context):** Monitors Global Liquidity (Yields, VIX, Correlations). Has **VETO** power over the Analyst.
-3.  **Risk (The Governance):** Enforces the **CCQP (Curiosity Cottage Quantitative Protocol)**. Calculates sizing based on Tail Risk.
-4.  **Execution (The Action):** Manages order lifecycle and slippage optimization.
+1.  **Analyst (The Screener):** Scans the universe of assets. Filters by momentum, volatility, and news sentiment (using **FinBERT**).
+2.  **Macro (The Strategist):** Analyzes the broad market environment (Regime Detection) and forecasts trends using **Chronos-Bolt**.
+3.  **Risk (The Governance):** Enforces the **CCQP (Curiosity Cottage Quantitative Protocol)**. Calculates sizing based on **Bayesian Expected Shortfall (BES)** and Physics Veto.
+4.  **Execution (The Trader):** Executes the orders sized by the Risk Agent. Handles splicing (Iceberg) and routing.
 
 ## 3. The "Physics" Constraints
 * **The Alpha Rule:** Trading is mathematically forbidden if the Tail Index $\alpha \le 2.0$ (Infinite Variance Regime).

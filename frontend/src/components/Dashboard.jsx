@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Card from './Card';
 
 const StatWidget = ({ label, value, trend, trendUp }) => (
@@ -21,11 +21,69 @@ const StatWidget = ({ label, value, trend, trendUp }) => (
 );
 
 const Dashboard = () => {
+    const [metrics, setMetrics] = useState(null);
+    const [status, setStatus] = useState(null);
+    const [signals, setSignals] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    const handleAction = async (action) => {
+        try {
+            const res = await fetch(`/api/actions/${action}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                alert(`Action Triggered: ${data.message}`);
+            } else {
+                alert('Action Failed');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to trigger action');
+        }
+    };
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [metricsRes, statusRes, signalsRes] = await Promise.all([
+                    fetch('/api/system/metrics'),
+                    fetch('/api/system/status'),
+                    fetch('/api/signals')
+                ]);
+
+                if (metricsRes.ok && statusRes.ok && signalsRes.ok) {
+                    const metricsData = await metricsRes.json();
+                    const statusData = await statusRes.json();
+                    const signalsData = await signalsRes.json();
+                    setMetrics(metricsData);
+                    setStatus(statusData);
+                    setSignals(signalsData);
+                }
+            } catch (error) {
+                console.error("Failed to fetch dashboard data", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
+        const interval = setInterval(fetchData, 5000); // Poll every 5s
+        return () => clearInterval(interval);
+    }, []);
+
+    if (loading) {
+        return <div style={{ padding: 'var(--space-xl)', color: 'var(--color-text-muted)' }}>Loading System Data...</div>;
+    }
+
     return (
         <div>
             <header style={{ marginBottom: 'var(--space-xl)' }}>
                 <h1 className="animate-fade-in">Control Center</h1>
-                <p style={{ color: 'var(--color-text-muted)' }}>Overview of system performance and active agents.</p>
+                <p style={{ color: 'var(--color-text-muted)' }}>
+                    System Status: <span style={{ color: status?.status === 'Online' ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                        ● {status?.status || 'Unknown'}
+                    </span>
+                    <span style={{ marginLeft: 'var(--space-md)' }}>v{status?.version}</span>
+                </p>
             </header>
 
             {/* Stats Grid */}
@@ -36,16 +94,26 @@ const Dashboard = () => {
                 marginBottom: 'var(--space-xl)'
             }}>
                 <Card>
-                    <StatWidget label="Total PnL (24h)" value="$12,450" trend="2.4%" trendUp={true} />
+                    <StatWidget
+                        label="Total PnL (24h)"
+                        value={metrics ? `$${metrics.pnl_24h.toLocaleString()}` : '---'}
+                        trend={metrics ? `${metrics.pnl_trend_pct}%` : null}
+                        trendUp={metrics?.pnl_trend_pct >= 0}
+                    />
                 </Card>
                 <Card>
-                    <StatWidget label="Active Agents" value="8" trend="Stable" trendUp={true} />
+                    <StatWidget label="Active Agents" value={status?.active_agents ?? '0'} trend="Stable" trendUp={true} />
                 </Card>
                 <Card>
-                    <StatWidget label="System Load" value="42%" trend="1.2%" trendUp={false} />
+                    <StatWidget
+                        label="System Load"
+                        value={metrics ? `${metrics.system_load_pct}%` : '---'}
+                        trend="1.2%"
+                        trendUp={false}
+                    />
                 </Card>
                 <Card>
-                    <StatWidget label="Open Positions" value="14" />
+                    <StatWidget label="Open Positions" value={metrics?.open_positions ?? '0'} />
                 </Card>
             </div>
 
@@ -81,15 +149,12 @@ const Dashboard = () => {
                                     <th style={{ padding: 'var(--space-sm)', color: 'var(--color-text-muted)' }}>Confidence</th>
                                 </tr>
                             </thead>
+
                             <tbody>
-                                {[
-                                    { time: '10:42:05', sym: 'BTC-PERP', action: 'LONG', conf: '92%' },
-                                    { time: '10:41:12', sym: 'ETH-PERP', action: 'SHORT', conf: '88%' },
-                                    { time: '10:38:55', sym: 'SOL-PERP', action: 'CLOSE', conf: 'N/A' },
-                                ].map((row, i) => (
+                                {Array.isArray(signals) && signals.map((row, i) => (
                                     <tr key={i} style={{ borderBottom: '1px solid var(--border-color)' }}>
                                         <td style={{ padding: 'var(--space-sm)' }}>{row.time}</td>
-                                        <td style={{ padding: 'var(--space-sm)', fontWeight: 600 }}>{row.sym}</td>
+                                        <td style={{ padding: 'var(--space-sm)', fontWeight: 600 }}>{row.symbol}</td>
                                         <td style={{ padding: 'var(--space-sm)' }}>
                                             <span style={{
                                                 color: row.action === 'LONG' ? 'var(--color-success)' :
@@ -98,9 +163,16 @@ const Dashboard = () => {
                                                 {row.action}
                                             </span>
                                         </td>
-                                        <td style={{ padding: 'var(--space-sm)' }}>{row.conf}</td>
+                                        <td style={{ padding: 'var(--space-sm)' }}>{row.confidence}</td>
                                     </tr>
                                 ))}
+                                {(!signals || signals.length === 0) && (
+                                    <tr>
+                                        <td colSpan="4" style={{ padding: 'var(--space-md)', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+                                            No signals found
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </Card>
@@ -110,9 +182,26 @@ const Dashboard = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
                     <Card title="Quick Actions">
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                            <button className="btn-primary">Emergency Halt</button>
-                            <button className="btn-primary" style={{ background: 'var(--color-bg-paper)', border: '1px solid var(--border-color)', color: 'var(--color-text-main)' }}>Rebalance Portfolio</button>
-                            <button className="btn-primary" style={{ background: 'var(--color-bg-paper)', border: '1px solid var(--border-color)', color: 'var(--color-text-main)' }}>Export Logs</button>
+                            <button
+                                className="btn-primary"
+                                onClick={() => handleAction('halt')}
+                            >
+                                Emergency Halt
+                            </button>
+                            <button
+                                className="btn-primary"
+                                style={{ background: 'var(--color-bg-paper)', border: '1px solid var(--border-color)', color: 'var(--color-text-main)' }}
+                                onClick={() => handleAction('rebalance')}
+                            >
+                                Rebalance Portfolio
+                            </button>
+                            <button
+                                className="btn-primary"
+                                style={{ background: 'var(--color-bg-paper)', border: '1px solid var(--border-color)', color: 'var(--color-text-main)' }}
+                                onClick={() => handleAction('export-logs')}
+                            >
+                                Export Logs
+                            </button>
                         </div>
                     </Card>
 
