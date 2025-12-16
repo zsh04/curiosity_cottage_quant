@@ -8,6 +8,7 @@ import os
 from typing import Dict, List, Optional
 
 import requests
+import numpy as np
 from opentelemetry import trace
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ class ChronosAdapter:
             base_url: Chronos service URL (defaults to env CHRONOS_URL or http://cc_chronos:8002)
         """
         self.base_url = base_url or os.getenv("CHRONOS_URL", "http://cc_chronos:8002")
-        self.timeout = 2.0  # 2-second timeout
+        self.timeout = 10.0  # 10-second timeout
 
     @tracer.start_as_current_span("chronos_predict")
     def predict(
@@ -80,19 +81,40 @@ class ChronosAdapter:
 
             # Parse response
             data = response.json()
-            forecast = {
-                "median": data.get("median", []),
-                "low": data.get("quantile_0.1", []),
-                "high": data.get("quantile_0.9", []),
-            }
 
-            logger.info(
-                f"🔮 Chronos forecast: {horizon} steps, "
-                f"median range [{min(forecast['median']):.2f}, {max(forecast['median']):.2f}]"
-            )
+            # Handle raw samples format (from Chronos service v2)
+            if "forecast" in data and isinstance(data["forecast"], list):
+                samples = np.array(data["forecast"])  # Shape: (samples, horizon)
+                # Calculate quantiles along axis 0 (across samples)
+                median = np.quantile(samples, 0.5, axis=0).tolist()
+                low = np.quantile(samples, 0.1, axis=0).tolist()
+                high = np.quantile(samples, 0.9, axis=0).tolist()
 
-            span.set_attribute("chronos.forecast_points", len(forecast["median"]))
-            return forecast
+                forecast = {
+                    "median": median,
+                    "low": low,
+                    "high": high,
+                }
+            else:
+                # Handle formatted (legacy/mock) response
+                if not data.get("median"):
+                    logger.error(f"⚠️ Chronos returned empty forecast. Response: {data}")
+
+                forecast = {
+                    "median": data.get("median", []),
+                    "low": data.get("quantile_0.1", []),
+                    "high": data.get("quantile_0.9", []),
+                }
+
+            if forecast["median"]:
+                logger.info(
+                    f"🔮 Chronos forecast: {horizon} steps, "
+                    f"median range [{min(forecast['median']):.2f}, {max(forecast['median']):.2f}]"
+                )
+                span.set_attribute("chronos.forecast_points", len(forecast["median"]))
+                return forecast
+            else:
+                return None
 
         except requests.Timeout:
             logger.warning(f"⏱️  Chronos timeout after {self.timeout}s")

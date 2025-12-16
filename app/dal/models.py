@@ -149,7 +149,11 @@ class MarketTick(Base):
 
     time = Column(DateTime, primary_key=True, nullable=False)
     symbol = Column(String(10), primary_key=True, nullable=False)
-    price = Column(Float)
+    price = Column(Float)  # Legacy/Last
+    open = Column(Float)
+    high = Column(Float)
+    low = Column(Float)
+    close = Column(Float)
     volume = Column(Float)
 
 

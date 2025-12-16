@@ -5,9 +5,11 @@ Responsible for executing trades based on Risk-approved sizing.
 
 import time
 import logging
-from typing import Optional
+import uuid
 from app.agent.state import AgentState, TradingStatus
 from app.services.global_state import get_global_state_service, get_current_snapshot_id
+from app.execution.alpaca_client import AlpacaClient
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +20,8 @@ class ExecutionAgent:
     """
 
     def __init__(self):
-        pass
+        # Initialize Alpaca Client (will be None or inactive if keys/flag missing)
+        self.alpaca = AlpacaClient()
 
     def execute(self, state: AgentState) -> AgentState:
         """
@@ -37,37 +40,74 @@ class ExecutionAgent:
             symbol = state.get("symbol")
             status = state.get("status")
 
-            # 2. Validation Guard
+            # 2. Validation Guard (Risk Veto)
             if approved_size <= 0:
-                print("EXECUTION: Idle")
+                print("⛔ RISK VETO: Size is 0.00. No trade.")
                 return state
 
             if status != TradingStatus.ACTIVE:
-                print("EXECUTION: BLOCKED")
+                print("EXECUTION: BLOCKED (System Not Active)")
                 return state
 
             if price <= 0:
                 print(f"EXECUTION: Error - Invalid Price {price}")
                 return state
 
-            # 3. Simulation Logic (Phase 1)
+            # 3. Calculate Quantity
             qty = approved_size / price
 
-            # Update simulation cash
-            current_cash = state.get("cash", 0.0)
-            state["cash"] = current_cash - approved_size
+            # 4. SAFETY SWITCH: Live/Paper vs Simulation
+            if settings.LIVE_TRADING_ENABLED:
+                # --- LIVE FIRE (or Paper API) ---
+                try:
+                    order = self.alpaca.submit_order(
+                        symbol=symbol,
+                        qty=round(qty, 4),  # Alpaca support fractional
+                        side=signal_side,
+                    )
+                    log_msg = f"🚀 ORDER SENT: {signal_side} {qty:.4f} {symbol} | ID: {order.id}"
+                    print(log_msg)
+                    logger.warning(log_msg)
 
-            # Log confirmation
-            trade_executed = True
-            log_msg = (
-                f"EXECUTION: ⚡ SENT ORDER: {signal_side} {symbol} | "
-                f"Amt: ${approved_size:.2f} | Qty: {qty:.4f} | Price: ${price:.2f}"
-            )
-            print(log_msg)
+                    state["execution_status"] = "FILLED"
+                    state["order_id"] = str(order.id)
+                    success = True
+                    trade_executed = True
 
-            if "messages" not in state:
-                state["messages"] = []
-            state["messages"].append(log_msg)
+                    # Store message for UI
+                    if "messages" not in state:
+                        state["messages"] = []
+                    state["messages"].append(log_msg)
+
+                except Exception as e:
+                    error_msg = f"❌ ALPACA EXECUTION ERROR: {e}"
+                    print(error_msg)
+                    logger.error(error_msg)
+                    success = False
+                    if "messages" not in state:
+                        state["messages"] = []
+                    state["messages"].append(error_msg)
+            else:
+                # --- DRY RUN / SIMULATION ---
+                # Update simulation cash (Mocking fill)
+                current_cash = state.get("cash", 0.0)
+                state["cash"] = current_cash - approved_size
+
+                log_msg = (
+                    f"🧪 PAPER TRADE (SIMULATED): Would {signal_side} {qty:.4f} {symbol} "
+                    f"based on Size=${approved_size:.2f}"
+                )
+                print(log_msg)
+                logger.info(log_msg)
+
+                state["execution_status"] = "SIMULATED"
+                state["order_id"] = "sim_" + str(uuid.uuid4())[:8]
+                success = True
+                trade_executed = True
+
+                if "messages" not in state:
+                    state["messages"] = []
+                state["messages"].append(log_msg)
 
         except Exception as e:
             success = False

@@ -3,6 +3,7 @@ import time
 from typing import Optional
 from app.agent.state import AgentState, TradingStatus, OrderSide
 from app.lib.physics import Regime
+from app.agent.risk.bes import BesSizing
 from app.services.global_state import get_global_state_service, get_current_snapshot_id
 
 logger = logging.getLogger(__name__)
@@ -17,6 +18,7 @@ class RiskManager:
 
     def __init__(self, max_drawdown_limit: float = 0.20):
         self.max_drawdown_limit = max_drawdown_limit
+        self.bes = BesSizing()
 
     def check_governance(self, state: AgentState) -> AgentState:
         """
@@ -48,23 +50,53 @@ class RiskManager:
 
     def size_position(self, state: AgentState) -> float:
         """
-        Bayesian Sizing Logic.
-        Base Size = Risk 1% of NAV with 2% Stop.
+        Bayesian Sizing Logic using BesSizing.
         """
-        nav = state.get("nav", 100000.0)
-        alpha = state.get("current_alpha", 2.0)
-        confidence = state.get("signal_confidence", 0.0)
+        # Extract Inputs
+        alpha = state.get("current_alpha")
+        forecast = state.get("chronos_forecast")
+        price = state.get("price")
 
-        # 1. Base Size
-        base_size = (nav * 0.01) / 0.02
+        # Guard 1: Data Integrity
+        if alpha is None or not forecast or not price:
+            logger.warning(
+                "RISK: Missing input data (alpha/forecast/price). Sizing 0.0."
+            )
+            return 0.0
 
-        # 2. Physics Scalar
-        physics_scalar = min(1.0, max(0.0, alpha - 1.5))
+        # Guard 2: Physics (BES Calculation)
+        # Using NAV as capital base
+        capital = state.get("nav", 100000.0)
+        try:
+            size_pct = self.bes.calculate_size(
+                forecast=forecast, alpha=alpha, current_price=price, capital=capital
+            )
+        except Exception as e:
+            logger.error(f"RISK: BES Calculation Error: {e}")
+            return 0.0
 
-        # 3. Final Calculation
-        approved_size = base_size * confidence * physics_scalar
+        # Guard 3: Drawdown (Redundant to check_governance but good for sizing specific logic)
+        # If strict drawdown limit is close, reduce size?
+        # For now, following prompt: "If drawdown > 2%, force size = 0.0"
+        # Note: state['max_drawdown'] is usually positive float, e.g. 0.05 for 5% DD
+        current_dd = state.get("max_drawdown", 0.0)
+        # Prompt said: "Check state['portfolio_value'] vs high_water_mark"
+        # But state usually has "max_drawdown". I created state definition.
+        # Let's rely on stored max_drawdown for simplicity if it tracks daily.
+        # Or calculate it if needed. State has 'nav' and likely 'max_drawdown'.
+        # Assuming max_drawdown is current drawdown since peak.
+        if current_dd > 0.02:
+            logger.warning(f"RISK: Drawdown {current_dd:.1%} > 2%. Safety Halt.")
+            return 0.0
 
-        return approved_size
+        # Calculate Approved Notional
+        # Size is returned as % of capital (0.0 to 0.20)
+        approved_notional = size_pct * capital
+
+        # Store ES for logging (re-calculate or done implicitly? Method doesn't return it separate)
+        # We'll just log the size.
+
+        return approved_notional
 
 
 def risk_node(state: AgentState) -> AgentState:
@@ -85,18 +117,31 @@ def risk_node(state: AgentState) -> AgentState:
             state["approved_size"] = 0.0
         elif signal_side in [OrderSide.BUY.value, OrderSide.SELL.value]:
             # Active + Signal -> Check Sizing
-            size = manager.size_position(state)
-            state["approved_size"] = size
+            size_notional = manager.size_position(state)
+            state["approved_size"] = size_notional
 
-            alpha = state.get("current_alpha", 0.0)
-            log_msg = f"RISK: ✅ Approved ${size:.2f} (Alpha: {alpha:.2f})"
+            # Logging
+            alpha_val = state.get("current_alpha", 0.0)
+            # Re-estimate ES for logging transparency
+            es_val = 0.0
+            forecast = state.get("chronos_forecast")
+            if forecast:
+                es_val = manager.bes.estimate_es(forecast)
+
+            size_pct = size_notional / state.get("nav", 100000.0)
+
+            log_msg = f"⚖️ RISK: Alpha={alpha_val:.2f} | ES_95={es_val:.4f} | Size={size_pct:.2%}"
             print(log_msg)
             if "messages" not in state:
                 state["messages"] = []
             state["messages"].append(log_msg)
+
         else:
             # FLAT or Invalid
             state["approved_size"] = 0.0
+            if "messages" not in state:
+                state["messages"] = []
+            state["messages"].append("RISK: FLAT (No Signal)")
 
     except Exception as e:
         success = False

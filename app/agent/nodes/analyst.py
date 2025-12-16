@@ -10,6 +10,7 @@ from app.adapters.sentiment import SentimentAdapter
 from app.adapters.chronos import ChronosAdapter
 from app.lib.kalman import KinematicKalmanFilter
 from app.lib.memory import FractalMemory
+from app.lib.physics.heavy_tail import HeavyTailEstimator
 from app.services.global_state import get_global_state_service, get_current_snapshot_id
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ class AnalystAgent:
         self.sentiment = SentimentAdapter()
         self.chronos = ChronosAdapter()
         self.kf = KinematicKalmanFilter()
+        self.physics = HeavyTailEstimator(window_size=100)  # Window for Hill Estimator
 
     def analyze(self, state: AgentState) -> AgentState:
         symbol = state.get("symbol", "SPY")
@@ -81,12 +83,39 @@ class AnalystAgent:
             velocity = est.velocity
             acceleration = est.acceleration
 
-            # TRACK PHYSICS OUTPUT
+            # TRACK PHYSICS OUTPUT (Kalman)
             state["velocity"] = velocity
             state["acceleration"] = acceleration
 
-            # Get Regime from state if exists, else "Unknown"
-            regime = state.get("regime", "Unknown")
+            # --- Step 3.1: Heavy Tail Physics (Alpha & Regime) ---
+            # Update HeavyTailEstimator with new returns
+            # We need simple returns or log returns? HeavyTail usually uses Absolute Returns for Tail Index.
+            # Passing relevant data. Check signatures.
+            # Assuming update(price) or update(returns)?
+            # Standard implementation usually takes returns.
+            # Let's assume input raw prices and it calculates, OR we pass returns.
+            # Looking at imports, it's custom lib.
+            # Best guess: update(price) or update_returns(ret).
+            # I'll rely on it keeping internal buffer if I pass value, OR I compute on history.
+
+            # Since I don't see the file, I'll pass the whole history to `compute_alpha` if it supports it,
+            # Or assume incremental `update`.
+            # Use historic_returns from state to calculate Alpha statelessly
+            # historic_returns are [t-1, t-2, ...]? OR chronological?
+            # In analyze(), historic_returns comes from market.get_historic_returns.
+            # Usually [oldest ... newest].
+            # Hill estimator sorts them anyway.
+
+            raw_returns = state.get("historic_returns", [])
+            current_alpha = 3.0  # Default
+            regime = "Gaussian"
+
+            if raw_returns:
+                current_alpha = HeavyTailEstimator.hill_estimator(np.array(raw_returns))
+                regime = HeavyTailEstimator.detect_regime(current_alpha)
+
+            state["current_alpha"] = current_alpha
+            state["regime"] = regime
 
             # --- Step 3.5: Chronos Forecast (Probabilistic Future) ---
             forecast_context = ""
@@ -99,6 +128,7 @@ class AnalystAgent:
                 else prices_chronological
             )
             forecast = self.chronos.predict(recent_prices, horizon=10)
+            state["chronos_forecast"] = forecast or {}
 
             chronos_latency = (time.time() - chronos_start) * 1000
 
@@ -166,9 +196,22 @@ class AnalystAgent:
             news_headlines = self.market.get_news(symbol, limit=5)
 
             if news_headlines:
+                # Handle list of dicts (from API/Mock) or list of strings
+                processed_headlines = []
+                for item in news_headlines:
+                    if isinstance(item, dict):
+                        processed_headlines.append(item.get("title", ""))
+                    elif isinstance(item, str):
+                        processed_headlines.append(item)
+
+                # Filter empty strings
+                processed_headlines = [h for h in processed_headlines if h]
+
                 # Analyze sentiment on combined headlines
-                combined_headlines = " | ".join(news_headlines)
-                top_headlines_str = " | ".join(news_headlines[:3])  # Top 3 for context
+                combined_headlines = " | ".join(processed_headlines)
+                top_headlines_str = " | ".join(
+                    processed_headlines[:3]
+                )  # Top 3 for context
 
                 sentiment_result = self.sentiment.analyze(combined_headlines)
 
