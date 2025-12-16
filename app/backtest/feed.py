@@ -14,6 +14,10 @@ class DataFeed(ABC):
         pass
 
     @abstractmethod
+    def get_current_price(self, symbol) -> float:
+        pass
+
+    @abstractmethod
     def update_bars(self, event_queue):
         pass
 
@@ -32,10 +36,14 @@ class HistoricalCSVDataFeed(DataFeed):
         self.continue_backtest = True
         self.bar_index = 0
         self._symbol_generators = {s: self.data[s].iterrows() for s in self.symbol_list}
+        self.latest_prices = {}
 
     def get_latest_bar(self, symbol):
         # In a real implementation this would return the last seen bar from a buffer
         pass
+
+    def get_current_price(self, symbol) -> float:
+        return self.latest_prices.get(symbol, 0.0)
 
     def update_bars(self, event_queue: queue.Queue):
         """
@@ -53,6 +61,7 @@ class HistoricalCSVDataFeed(DataFeed):
                     close=row["close"],
                     volume=row.get("volume", 0),
                 )
+                self.latest_prices[symbol] = row["close"]
                 event_queue.put(event)
             except StopIteration:
                 self.continue_backtest = False

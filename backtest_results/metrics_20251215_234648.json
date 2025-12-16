@@ -1,0 +1,16 @@
+{
+  "total_return": 0.0,
+  "total_return_pct": 0.0,
+  "benchmark_return": 0.022623819528041267,
+  "benchmark_return_pct": 2.2623819528041267,
+  "alpha": -0.022623819528041267,
+  "alpha_pct": -2.2623819528041267,
+  "sharpe_ratio": 0.0,
+  "max_drawdown": 0.0,
+  "max_drawdown_pct": 0.0,
+  "benchmark_max_drawdown_pct": -1.524225512203261,
+  "win_rate": 0.0,
+  "win_rate_pct": 0.0,
+  "total_days": 19,
+  "winning_days": 0
+}

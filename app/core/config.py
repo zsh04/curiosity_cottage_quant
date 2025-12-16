@@ -2,7 +2,6 @@
 Pydantic Settings (12-Factor App).
 """
 
-from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +15,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/cc_quant"
 
     # --- Brokerage (Alpaca) ---
+    LIVE_TRADING_ENABLED: bool = (
+        False  # Safety Switch (True = Live/Paper API, False = Dry Run)
+    )
     ALPACA_API_KEY: str = ""
     ALPACA_SECRET_KEY: str = ""
     ALPACA_ENDPOINT: str = "https://paper-api.alpaca.markets"  # Default to paper
