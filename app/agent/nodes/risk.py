@@ -1,128 +1,131 @@
-from typing import Dict, Any
-import numpy as np
-from app.agent.state import AgentState, TradingStatus
-from app.lib.physics import HeavyTailEstimator, Regime, expected_shortfall
+import logging
+import time
+from typing import Optional
+from app.agent.state import AgentState, TradingStatus, OrderSide
+from app.lib.physics import Regime
+from app.services.global_state import get_global_state_service, get_current_snapshot_id
+
+logger = logging.getLogger(__name__)
 
 
 class RiskManager:
     """
-    Enforces the Risk Governance Protocol.
-    1. Capital Preservation (Ruin/DayStop)
-    2. Physics Veto (Alpha Regime)
-    3. Position Sizing (ES-Kelly)
+    Enforces the 'Iron Gate' Protocol:
+    1. Governance: Hard checks on Drawdown and Regime.
+    2. Sizing: Bayesian sizing based on Volatility Stop + Physics Scalar.
     """
 
-    def __init__(
-        self,
-        max_drawdown_limit: float = 0.20,
-        daily_stop_limit: float = 0.02,
-        kelly_fraction: float = 0.5,
-    ):
+    def __init__(self, max_drawdown_limit: float = 0.20):
         self.max_drawdown_limit = max_drawdown_limit
-        self.daily_stop_limit = daily_stop_limit
-        self.kelly_fraction = kelly_fraction
-        self.estimator = HeavyTailEstimator()
 
     def check_governance(self, state: AgentState) -> AgentState:
         """
-        Main entry point for Risk Governance.
-        Checks hard stops first, then regimes.
+        Hard Stops. If breached, status -> HALTED.
         """
-        # 1. Capital Preservation Checks
-        # Ruin Check
-        if state["max_drawdown"] >= self.max_drawdown_limit:
+        # 1. Ruin Check
+        if state.get("max_drawdown", 0.0) >= self.max_drawdown_limit:
             state["status"] = TradingStatus.HALTED_DRAWDOWN
-            state["messages"].append(
-                f"CRITICAL: Max Drawdown {state['max_drawdown']:.1%} breached limit {self.max_drawdown_limit:.1%}. FIRM FAILURE."
-            )
+            msg = f"CRITICAL: Max Drawdown {state['max_drawdown']:.1%} breached limit. FIRM FAILURE."
+            state["messages"].append(msg)
             return state
 
-        # Daily Stop Check (Assuming daily_pnl is absolute return, e.g. -0.025 for -2.5%)
-        # If daily_pnl is dollars, we need to divide by NAV. Assuming state["daily_pnl"] is a percentage for simplicity now?
-        # Let's assume daily_pnl is in DOLLARS in the state, so we divide by NAV.
-
-        # Correction: State definition should be clear. Let's assume percentages for now or calculate.
-        # Let's assume daily_pnl is raw PnL amount.
-        daily_loss_pct = -state["daily_pnl"] / state["nav"] if state["nav"] > 0 else 0
-
-        if state["daily_pnl"] < 0 and daily_loss_pct > self.daily_stop_limit:
-            state["status"] = TradingStatus.SLEEPING
-            state["messages"].append(
-                f"RISK: Daily Loss {daily_loss_pct:.2%} exceeds limit {self.daily_stop_limit:.0%}. Sleeping logic activated."
-            )
-            return state
-
-        # 2. Physics Veto Check
-        # Check if the current regime (from State) is Critical
-        if state.get("regime") == Regime.CRITICAL.value:
+        # 2. Physics Veto
+        regime = state.get("regime", "Unknown")
+        if regime == Regime.CRITICAL.value:
             state["status"] = TradingStatus.HALTED_PHYSICS
-            state["messages"].append(
-                f"PHYSICS VETO: Regime is {state['regime']} (Alpha {state.get('current_alpha', 'N/A')}). Trading Halted."
-            )
+            msg = f"PHYSICS VETO: Critical Regime detected. Trading Halted."
+            state["messages"].append(msg)
             return state
+
+        # If all good, ensure Active
+        if state.get("status") not in [
+            TradingStatus.HALTED_PHYSICS,
+            TradingStatus.HALTED_DRAWDOWN,
+        ]:
+            state["status"] = TradingStatus.ACTIVE
 
         return state
 
-    def update_physics(
-        self, state: AgentState, historic_returns: np.ndarray
-    ) -> AgentState:
+    def size_position(self, state: AgentState) -> float:
         """
-        Calculates Alpha and Updates Regime.
+        Bayesian Sizing Logic.
+        Base Size = Risk 1% of NAV with 2% Stop.
         """
-        alpha = self.estimator.hill_estimator(historic_returns)
-        regime_metrics = self.estimator.get_regime(alpha)
+        nav = state.get("nav", 100000.0)
+        alpha = state.get("current_alpha", 2.0)
+        confidence = state.get("signal_confidence", 0.0)
 
-        state["current_alpha"] = alpha
-        state["regime"] = regime_metrics.regime.value
+        # 1. Base Size
+        base_size = (nav * 0.01) / 0.02
 
-        # Physics Veto Logic
-        if regime_metrics.regime == Regime.CRITICAL:
-            state["status"] = TradingStatus.HALTED_PHYSICS
-            state["messages"].append(
-                f"PHYSICS VETO: Alpha {alpha:.2f} indicates Critical Regime. Trading Halted."
-            )
+        # 2. Physics Scalar
+        physics_scalar = min(1.0, max(0.0, alpha - 1.5))
 
-        return state
+        # 3. Final Calculation
+        approved_size = base_size * confidence * physics_scalar
 
-    def calculate_position_size(
-        self, state: AgentState, es_returns: np.ndarray
-    ) -> float:
-        """
-        Calculates position size using ES-Costrained Fractional Kelly.
-        Size = (Equity * KellyFrac) / ES_95%
-        """
-        # Get leverage cap based on regime
-        regime_metrics = self.estimator.get_regime(state["current_alpha"])
-        if regime_metrics.leverage_cap == 0.0:
-            return 0.0
-
-        es_95 = expected_shortfall(es_returns, confidence_level=0.95)
-
-        if es_95 == 0:
-            return 0.0  # No risk data, no trade
-
-        # Raw Size
-        # Check standard Kelly limits? Here we use the simplified ES formula from the doc.
-        # Ensure we don't divide by zero or negative ES (handled by positive return of expected_shortfall)
-
-        size_dollars = (state["nav"] * self.kelly_fraction) / es_95
-
-        # Apply Regime Cap
-        # Effective leverage = Size / NAV
-        # We need to clamp this. But the formula is for "Size" (likely dollars).
-        # Let's check the leverage cap.
-
-        max_position_dollars = state["nav"] * regime_metrics.leverage_cap
-
-        final_size = min(size_dollars, max_position_dollars)
-
-        return final_size
+        return approved_size
 
 
 def risk_node(state: AgentState) -> AgentState:
-    # This function creates a runnable node for the graph
-    # Ideally checking external data for returns to update physics
-    # For now, this is a placeholder stub for the graph integration
     manager = RiskManager()
-    state = manager.check_governance(state)
+    start_time = time.time()
+    success = True
+    error_msg = None
+
+    try:
+        # 1. Update Governance Status
+        state = manager.check_governance(state)
+
+        status = state.get("status", TradingStatus.ACTIVE)
+        signal_side = state.get("signal_side", OrderSide.FLAT.value)
+
+        # 2. The Logic Branch
+        if status != TradingStatus.ACTIVE:
+            state["approved_size"] = 0.0
+        elif signal_side in [OrderSide.BUY.value, OrderSide.SELL.value]:
+            # Active + Signal -> Check Sizing
+            size = manager.size_position(state)
+            state["approved_size"] = size
+
+            alpha = state.get("current_alpha", 0.0)
+            log_msg = f"RISK: ✅ Approved ${size:.2f} (Alpha: {alpha:.2f})"
+            print(log_msg)
+            if "messages" not in state:
+                state["messages"] = []
+            state["messages"].append(log_msg)
+        else:
+            # FLAT or Invalid
+            state["approved_size"] = 0.0
+
+    except Exception as e:
+        success = False
+        error_msg = f"RISK: 💥 CRASH: {e}"
+        print(error_msg)
+        logger.exception(error_msg)
+        state["approved_size"] = 0.0
+        if "messages" not in state:
+            state["messages"] = []
+        state["messages"].append(error_msg)
+
+    finally:
+        # TRACK RISK NODE PERFORMANCE
+        latency = (time.time() - start_time) * 1000
+        state_service = get_global_state_service()
+        snapshot_id = get_current_snapshot_id()
+        if state_service and snapshot_id:
+            state_service.save_agent_metrics(
+                snapshot_id=snapshot_id,
+                agent_name="risk",
+                latency_ms=latency,
+                success=success,
+                output_data={
+                    "approved_size": state.get("approved_size"),
+                    "status": str(state.get("status")),
+                    "alpha": state.get("current_alpha"),
+                    "regime": state.get("regime"),
+                },
+                error=error_msg,
+            )
+
     return state

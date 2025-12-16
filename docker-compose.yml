@@ -1,40 +1,192 @@
 version: '3.8'
 
-services:
-  engine:
-    build: .
-    volumes:
-      - .:/app
-    env_file:
-      - .env
-    depends_on:
-      - timescaledb
-      - ollama
-      - chronos
+networks:
+  cc_net:
+    driver: bridge
 
-  timescaledb:
+volumes:
+  timescaledb_data:
+  ollama_data:
+
+services:
+  # --- Service 1: The Engine (Cognitive Core) ---
+  cc_engine:
+    container_name: cc_engine
+    build: .
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@cc_db:5432/quant_db
+      - OTEL_SERVICE_NAME=cc_engine
+      - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
+      - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
+      - OLLAMA_BASE_URL=http://cc_brain:11434
+      - OLLAMA_MODEL=gemma2:9b
+      - FINBERT_API_URL=http://cc_finbert:8000
+    depends_on:
+      - cc_db
+      - cc_brain
+      - cc_chronos
+      - cc_pulse
+      - cc_finbert
+    networks:
+      - cc_net
+
+  # --- Service 2: Storage (Time-Series) ---
+  cc_db:
+    container_name: cc_db
     image: timescale/timescaledb:latest-pg15
+    environment:
+      - POSTGRES_DB=quant_db
+      - POSTGRES_PASSWORD=password
     ports:
       - "5432:5432"
-    environment:
-      POSTGRES_PASSWORD: password
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+      - ./infra/db/init:/docker-entrypoint-initdb.d
+    networks:
+      - cc_net
 
-  ollama:
+  # --- Service 3: The Brain (LLM Inference) ---
+  cc_brain:
+    container_name: cc_brain
     image: ollama/ollama:latest
     ports:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    environment:
+      - OTEL_SERVICE_NAME=cc_brain
+      - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
+      - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    networks:
+      - cc_net
 
-  chronos:
-    image: amazon/chronos-bolt:small
+  # --- Service 4: The Prophecy (Forecasting) ---
+  cc_chronos:
+    container_name: cc_chronos
+    build:
+      context: ./models/chronos
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8000"
+    environment:
+      - OTEL_SERVICE_NAME=cc_chronos
+      - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
+      - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cc_net
 
-volumes:
-  ollama_data:
+  # --- Service 5: Pulse (Telemetry) ---
+  # --- Service 5: Pulse (Telemetry) ---
+  cc_pulse:
+    container_name: cc_pulse
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./infra/otel/collector-config-generated.yml:/etc/otelcol-contrib/config.yaml:ro
+    environment:
+      - GRAFANA_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
+      - OTEL_SERVICE_NAME=cc_pulse
+      - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
+      - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+      - "13133:13133" # Health Check
+    depends_on:
+      cc_config_gen:
+        condition: service_completed_successfully
+    networks:
+      - cc_net
+
+  cc_config_gen:
+    image: alpine:latest
+    volumes:
+      - ./infra/otel:/work
+    environment:
+      - HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
+      - OTEL_SERVICE_NAME=cc_config_gen
+      - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
+      - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
+    command: sh /work/init_config.sh
+    networks:
+      - cc_net
+
+  # --- Service 6: Gateway (BFF) ---
+  cc_gateway:
+    container_name: cc_gateway
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./bff:/app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "3000:3000"
+    environment:
+      - OTEL_SERVICE_NAME=cc_gateway
+      - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
+      - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
+    depends_on:
+      - cc_engine
+    networks:
+      - cc_net
+
+  # --- Service 7: Face (UI Terminal) ---
+  cc_terminal:
+    container_name: cc_terminal
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install --legacy-peer-deps && npm run dev"
+    ports:
+      - "5173:5173"
+    environment:
+      - OTEL_SERVICE_NAME=cc_terminal
+      - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
+      - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
+    depends_on:
+      - cc_gateway
+    networks:
+      - cc_net
+
+  # --- Service 8: FinBERT (Sentiment Analysis) ---
+  cc_finbert:
+    container_name: cc_finbert
+    build:
+      context: ./models/finbert
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cc_net

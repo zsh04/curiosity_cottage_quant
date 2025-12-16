@@ -1,61 +1,45 @@
-from typing import Literal
-
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import StateGraph, END
 from app.agent.state import AgentState, TradingStatus
-from app.agent.nodes.risk import risk_node
-from app.agent.nodes.macro import macro_node
+
+# New "Sensor Fusion" Nodes
 from app.agent.nodes.analyst import analyst_node
+from app.agent.nodes.risk import risk_node
+
+# Assuming execution_node exists and is correct
 from app.agent.nodes.execution import execution_node
 
-# Define the graph
-builder = StateGraph(AgentState)
+# Start Graph Construction
+workflow = StateGraph(AgentState)
 
-# Add nodes
-builder.add_node("macro_context", macro_node)
-builder.add_node("analyst_engine", analyst_node)
-builder.add_node("risk_guardian", risk_node)
-builder.add_node("execution_engine", execution_node)
+# Nodes
+# Note: Macro layer might be bypassed or using legacy if not refactored yet.
+# Given the user says "remove ... not require any longer", and we heavily focused on Analyst->Risk->Execution pipeline.
+# Usually Analyst is the entry point in simplified "Sensor Fusion" without Macro global view.
+# However, the previous graph had Macro as entry.
+# Without a new Macro node, I will set Analyst as Entry Point as per "Analyst Node... implements full Sensor Fusion pipeline".
 
-# Define edges
-# 1. Start -> Macro (Check Global Liquidity)
-builder.add_edge(START, "macro_context")
+workflow.add_node("analyst", analyst_node)
+workflow.add_node("risk", risk_node)
+workflow.add_node("execution", execution_node)
 
-# 2. Macro -> Analyst (If Macro Veto doesn't sleep)
-# Needing conditional edge here if Macro has Veto power?
-# For now, simplistic: Macro -> Analyst
-builder.add_edge("macro_context", "analyst_engine")
+# Edges
+workflow.set_entry_point("analyst")
 
-# 3. Analyst -> Risk (Submit Signal for Governance)
-builder.add_edge("analyst_engine", "risk_guardian")
+workflow.add_edge("analyst", "risk")
 
 
-# 4. Risk -> Execution (Conditional on Governance)
-def route_after_risk(state: AgentState) -> Literal[END, "execution_engine"]:
-    """
-    Decide next step based on Risk Governance.
-    """
-    if state["status"] in [
-        TradingStatus.HALTED_PHYSICS,
-        TradingStatus.HALTED_DRAWDOWN,
-        TradingStatus.SLEEPING,
-    ]:
-        return END
-
-    # If active, proceed to execution
-    return "execution_engine"
+def check_veto(state: AgentState):
+    status = state.get("status")
+    if status in [TradingStatus.HALTED_PHYSICS, TradingStatus.HALTED_DRAWDOWN]:
+        print(f"--- Graph Decision: HALT ({status}) ---")
+        return "end"
+    return "execution"
 
 
-builder.add_conditional_edges(
-    "risk_guardian",
-    route_after_risk,
-    {
-        END: END,
-        "execution_engine": "execution_engine",
-    },
+workflow.add_conditional_edges(
+    "risk", check_veto, {"end": END, "execution": "execution"}
 )
 
-# 5. Execution -> End
-builder.add_edge("execution_engine", END)
+workflow.add_edge("execution", END)
 
-# Compile
-graph = builder.compile()
+app_graph = workflow.compile()

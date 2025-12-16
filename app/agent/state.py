@@ -1,32 +1,50 @@
-"""
-Shared State Schema (TypedDict).
-"""
-
-from typing import TypedDict, Optional, List
+from typing import TypedDict, List
 from enum import Enum
 
 
-class TradingStatus(Enum):
-    ACTIVE = "active"
-    HALTED_PHYSICS = "halted_physics"
-    HALTED_DRAWDOWN = "halted_drawdown"
-    SLEEPING = "sleeping"
+class TradingStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    HALTED_PHYSICS = "HALTED_PHYSICS"
+    HALTED_DRAWDOWN = "HALTED_DRAWDOWN"
+    SLEEPING = "SLEEPING"
+
+
+class OrderSide(str, Enum):
+    BUY = "BUY"
+    SELL = "SELL"
+    FLAT = "FLAT"
 
 
 class AgentState(TypedDict):
-    # --- Portfolio State ---
-    nav: float  # Net Asset Value
-    cash: float  # Available Cash
-    daily_pnl: float  # Check for 2% stop
-    max_drawdown: float  # Check for 20% ruin
+    """
+    State for the Curiosity Cottage V2 trading engine, supporting the
+    Risk-Execution Handshake.
+    """
 
-    # --- Market State ---
-    current_alpha: float  # Hill Estimator Value
-    regime: str  # Gaussian, Levy, Critical
+    # --- Portfolio ---
+    nav: float
+    cash: float
+    daily_pnl: float
+    max_drawdown: float
 
-    # --- Trading Signals ---
-    # We can add more specific signal fields later
+    # --- Market ---
+    symbol: str
+    price: float
+    historic_returns: List[float]
 
-    # --- Governance ---
+    # --- Physics ---
+    current_alpha: float
+    regime: str
+
+    # --- Signal (The Analyst's Input) ---
+    signal_side: str
+    signal_confidence: float
+    reasoning: str
+
+    # --- Governance (The Risk Output) ---
+    approved_size: float
+    risk_multiplier: float
+
+    # --- Audit ---
     status: TradingStatus
-    messages: List[str]  # Audit log of decisions
+    messages: List[str]

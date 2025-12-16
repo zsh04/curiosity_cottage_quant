@@ -33,7 +33,7 @@ jobs:
 
     - name: Run Mypy (Strict Typing)
       run: |
-        mypy . --ignore-missing-imports
+        mypy .
 
     - name: Run Pytest
       run: |

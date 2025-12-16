@@ -23,7 +23,9 @@ class MacroAgent:
         #    ...
 
         # Pass-through for now
-        state["messages"].append("MACRO: Environment Neutral. Proceeding.")
+        state["messages"].append(
+            {"role": "system", "content": "MACRO: Environment Neutral. Proceeding."}
+        )
         return state
 
 
