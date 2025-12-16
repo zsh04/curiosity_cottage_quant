@@ -104,3 +104,35 @@ class SystemController(Controller):
     async def get_model_metrics(self, state_service: StateService) -> Dict[str, Any]:
         """Return latest model performance (FinBERT, Gemma2, Chronos)"""
         return state_service.get_model_metrics(limit=50)
+
+    @get("/status/physics")
+    async def get_physics_status(self, state_service: StateService) -> Dict[str, Any]:
+        """
+        Return latest physics metrics for dashboard.
+
+        Returns:
+            alpha: Tail risk exponent (default 3.0)
+            velocity: Kinematic velocity
+            acceleration: Kinematic acceleration
+            regime: Market regime (Gaussian/Lévy Stable/Critical)
+            timestamp: When metrics were captured
+        """
+        snapshot = state_service.get_latest_snapshot()
+
+        if not snapshot:
+            # Return safe defaults if no history
+            return {
+                "alpha": 3.0,
+                "velocity": 0.0,
+                "acceleration": 0.0,
+                "regime": "Unknown",
+                "timestamp": None,
+            }
+
+        return {
+            "alpha": snapshot.current_alpha or 3.0,
+            "velocity": snapshot.velocity or 0.0,
+            "acceleration": snapshot.acceleration or 0.0,
+            "regime": snapshot.regime or "Unknown",
+            "timestamp": snapshot.timestamp.isoformat() if snapshot.timestamp else None,
+        }

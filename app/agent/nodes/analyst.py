@@ -7,6 +7,7 @@ from app.agent.state import AgentState, OrderSide, TradingStatus
 from app.adapters.market import MarketAdapter
 from app.adapters.llm import LLMAdapter
 from app.adapters.sentiment import SentimentAdapter
+from app.adapters.chronos import ChronosAdapter
 from app.lib.kalman import KinematicKalmanFilter
 from app.lib.memory import FractalMemory
 from app.services.global_state import get_global_state_service, get_current_snapshot_id
@@ -18,13 +19,14 @@ class AnalystAgent:
     """
     The Analyst Node acts as the Quantitative Strategist.
     It implements the 'Sensor Fusion' pipeline:
-    Data -> Fractal Differentiation -> Kalman Filter -> LLM Inference -> Signal.
+    Data -> Fractal Differentiation -> Kalman Filter -> Chronos Forecast -> LLM Inference -> Signal.
     """
 
     def __init__(self):
         self.market = MarketAdapter()
         self.llm = LLMAdapter()
         self.sentiment = SentimentAdapter()
+        self.chronos = ChronosAdapter()
         self.kf = KinematicKalmanFilter()
 
     def analyze(self, state: AgentState) -> AgentState:
@@ -86,18 +88,158 @@ class AnalystAgent:
             # Get Regime from state if exists, else "Unknown"
             regime = state.get("regime", "Unknown")
 
-            # --- Step 4: Cognition ---
-            context_str = (
-                f"Symbol: {symbol} | "
-                f"Price: {current_price} | "
-                f"FracDiff Velocity: {velocity:.4f} | "
-                f"FracDiff Accel: {acceleration:.4f} | "
-                f"Regime: {regime}"
+            # --- Step 3.5: Chronos Forecast (Probabilistic Future) ---
+            forecast_context = ""
+            chronos_start = time.time()
+
+            # Use last 30 prices for forecast context (or available)
+            recent_prices = (
+                prices_chronological[-30:]
+                if len(prices_chronological) >= 30
+                else prices_chronological
             )
+            forecast = self.chronos.predict(recent_prices, horizon=10)
+
+            chronos_latency = (time.time() - chronos_start) * 1000
+
+            if forecast:
+                # Extract metrics
+                median_forecast = forecast.get("median", [])
+                low_forecast = forecast.get("low", [])
+                high_forecast = forecast.get("high", [])
+
+                if median_forecast:
+                    # Trend: Is median forecast > current price?
+                    forecast_median_value = median_forecast[-1]  # Last forecasted point
+                    trend = (
+                        "Bullish"
+                        if forecast_median_value > current_price
+                        else "Bearish"
+                    )
+
+                    # Uncertainty: Spread between high/low quantiles
+                    if low_forecast and high_forecast:
+                        uncertainty_spread = abs(high_forecast[-1] - low_forecast[-1])
+                        uncertainty_pct = (uncertainty_spread / current_price) * 100
+                        confidence_level = "Low" if uncertainty_pct > 2.0 else "High"
+                    else:
+                        confidence_level = "Medium"
+
+                    forecast_context = (
+                        f"QUANTITATIVE FORECAST: Chronos predicts a {trend} trend "
+                        f"over the next 10 ticks with {confidence_level} confidence."
+                    )
+
+                    logger.info(
+                        f"🔮 Chronos: {trend} trend, {confidence_level} confidence"
+                    )
+
+                    # Track Chronos performance
+                    state_service = get_global_state_service()
+                    snapshot_id = get_current_snapshot_id()
+                    if state_service and snapshot_id:
+                        state_service.save_model_metrics(
+                            snapshot_id=snapshot_id,
+                            model_name="chronos_t5_small",
+                            latency_ms=chronos_latency,
+                            prediction={
+                                "trend": trend,
+                                "median_forecast": median_forecast[-1],
+                                "confidence_level": confidence_level,
+                            },
+                            confidence=1.0 if confidence_level == "High" else 0.5,
+                        )
+            else:
+                forecast_context = "FORECAST: Unavailable (System Offline)."
+                trend = "Unknown"
+                confidence_level = "Unknown"
+                logger.warning("⚠️  Chronos forecast unavailable")
+
+            # --- Step 3.6: News Fetching & Sentiment Analysis (FinBERT) ---
+            sentiment_context = ""
+            sentiment_label = "neutral"
+            sentiment_score = 0.0
+            top_headlines_str = ""
+
+            # Fetch live news headlines
+            logger.info(f"📰 Fetching news for {symbol}...")
+            news_headlines = self.market.get_news(symbol, limit=5)
+
+            if news_headlines:
+                # Analyze sentiment on combined headlines
+                combined_headlines = " | ".join(news_headlines)
+                top_headlines_str = " | ".join(news_headlines[:3])  # Top 3 for context
+
+                sentiment_result = self.sentiment.analyze(combined_headlines)
+
+                if sentiment_result and not sentiment_result.get("error"):
+                    sentiment_label = sentiment_result.get("sentiment", "neutral")
+                    sentiment_score = sentiment_result.get("score", 0.0)
+
+                    logger.info(
+                        f"📊 FinBERT: {sentiment_label} ({sentiment_score:.2f}) "
+                        f"from {len(news_headlines)} headlines"
+                    )
+
+                    # Track FinBERT metrics
+                    state_service = get_global_state_service()
+                    snapshot_id = get_current_snapshot_id()
+                    if state_service and snapshot_id:
+                        state_service.save_model_metrics(
+                            snapshot_id=snapshot_id,
+                            model_name="finbert",
+                            latency_ms=sentiment_result.get("latency_ms", 0),
+                            prediction={
+                                "label": sentiment_label,
+                                "score": sentiment_score,
+                                "headlines_count": len(news_headlines),
+                            },
+                            confidence=sentiment_score,
+                        )
+                else:
+                    logger.warning("⚠️  FinBERT sentiment analysis failed")
+            else:
+                # No news available - use neutral sentiment
+                logger.warning(
+                    f"⚠️  No news available for {symbol}, defaulting to neutral sentiment"
+                )
+                sentiment_label = "neutral"
+                sentiment_score = 0.0
+                top_headlines_str = "No recent news available"
+
+            # --- Step 4: Cognition (God Prompt for LLM) ---
+            # Construct comprehensive context integrating ALL signals
+            god_prompt = f"""MARKET INTELLIGENCE REPORT FOR {symbol}
+
+CURRENT STATE:
+- Price: ${current_price:.2f}
+- Regime: {regime}
+
+PHYSICS ENGINE:
+- Kinematic Velocity: {velocity:.4f}
+- Kinematic Acceleration: {acceleration:.4f}
+
+PROBABILISTIC FORECAST (Chronos-2):
+- Trend Direction: {trend}
+- Forecast Confidence: {confidence_level}
+
+NEWS SENTIMENT (FinBERT):
+- Sentiment: {sentiment_label.upper()}
+- Confidence Score: {sentiment_score:.2f}
+- Recent Headlines: {top_headlines_str}
+
+Based on these multi-modal signals (Physics, Forecast, News Sentiment), provide a trading recommendation.
+Respond in JSON format:
+{{
+  "signal_side": "BUY|SELL|FLAT",
+  "signal_confidence": 0.0-1.0,
+  "reasoning": "Concise explanation integrating all signals"
+}}
+"""
 
             # TRACK LLM INVOCATION
             llm_start = time.time()
-            signal_data = self.llm.get_trade_signal(context_str)
+            signal_data = self.llm.get_trade_signal(god_prompt)
             llm_latency = (time.time() - llm_start) * 1000
 
             # Save Gemma2 metrics
@@ -116,20 +258,6 @@ class AnalystAgent:
                     tokens_in=signal_data.get("tokens_input"),
                     tokens_out=signal_data.get("tokens_output"),
                     confidence=signal_data.get("signal_confidence"),
-                )
-
-            # TRACK SENTIMENT (Optional - can be used for additional context)
-            sentiment_result = self.sentiment.analyze(context_str)
-            if state_service and snapshot_id:
-                state_service.save_model_metrics(
-                    snapshot_id=snapshot_id,
-                    model_name="finbert",
-                    latency_ms=sentiment_result.get("latency_ms", 0),
-                    prediction={
-                        "label": sentiment_result.get("label"),
-                        "score": sentiment_result.get("score"),
-                    },
-                    confidence=sentiment_result.get("score"),
                 )
 
             # --- Step 5: Output (Decision Mapping) ---

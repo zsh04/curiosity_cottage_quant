@@ -1,4 +1,14 @@
-from sqlalchemy import Column, String, Float, Integer, DateTime, Text, JSON, Boolean
+from sqlalchemy import (
+    Column,
+    String,
+    Float,
+    Integer,
+    DateTime,
+    Text,
+    JSON,
+    Boolean,
+    Index,
+)
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 
@@ -118,3 +128,44 @@ class TradeJournal(Base):
     # Status
     status = Column(String(20))  # PENDING, FILLED, PARTIAL, REJECTED, CANCELLED
     rejection_reason = Column(Text, nullable=True)
+
+
+# ============================================
+# TIME-SERIES MODELS (TimescaleDB Hypertables)
+# ============================================
+
+
+class MarketTick(Base):
+    """
+    Market tick data stored in TimescaleDB hypertable.
+    Optimized for high-frequency time-series queries.
+    """
+
+    __tablename__ = "market_ticks"
+    __table_args__ = (
+        Index("idx_market_ticks_symbol_time", "symbol", "time"),
+        {"schema": "public"},
+    )
+
+    time = Column(DateTime, primary_key=True, nullable=False)
+    symbol = Column(String(10), primary_key=True, nullable=False)
+    price = Column(Float)
+    volume = Column(Float)
+
+
+class MacroTick(Base):
+    """
+    Macro indicator ticks (US10Y, VIX, DXY) for Protocol #3 (Macro Context).
+    Stored in TimescaleDB hypertable for efficient regime analysis.
+    """
+
+    __tablename__ = "macro_ticks"
+    __table_args__ = (
+        Index("idx_macro_ticks_symbol_time", "symbol", "time"),
+        {"schema": "public"},
+    )
+
+    time = Column(DateTime, primary_key=True, nullable=False)
+    symbol = Column(String(10), primary_key=True, nullable=False)
+    value = Column(Float)
+    regime_tag = Column(String(50), nullable=True)  # e.g., "STABLE", "VOLATILE"
