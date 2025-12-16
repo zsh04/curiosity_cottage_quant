@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PhysicsGauge from './PhysicsGauge';
 import SentimentTriad from './SentimentTriad';
 import AgentMonitor from './AgentMonitor';
@@ -8,44 +8,109 @@ import AutopsyPanel from './AutopsyPanel';
 
 const Dashboard = () => {
     const [selectedLog, setSelectedLog] = useState(null);
+    const [isConnected, setIsConnected] = useState(false);
 
-    const handleHalt = () => {
-        alert("HALT SIGNAL SENT: Disabling Live Trading...");
-        // Actual API call would go here
-    };
+    // System State from Live Backend
+    const [systemState, setSystemState] = useState({
+        market: {
+            alpha: 3.0,
+            velocity: 0.0,
+            acceleration: 0.0,
+            regime: 'Unknown',
+            price: 0.0,
+            symbol: 'SPY',
+            history: []
+        },
+        signal: {
+            side: 'FLAT',
+            confidence: 0.0,
+            reasoning: 'Initializing...',
+            strategy: 'None',
+            score: 0.0
+        },
+        sentiment: {
+            label: 'Neutral',
+            score: 0.5
+        },
+        forecast: null,
+        logs: []
+    });
 
-    // Mock Data for CerebroChart
-    const generateChartData = () => {
-        const data = [];
-        const now = new Date();
+    // WebSocket Connection
+    useEffect(() => {
+        const WS_URL = 'ws://localhost:8000/api/ws/stream';
+        let ws = null;
+        let reconnectTimeout = null;
 
-        // Generate 20 history points
-        for (let i = 20; i > 0; i--) {
-            const time = new Date(now.getTime() - i * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            data.push({
-                time,
-                price: 450 + Math.sin(i * 0.5) * 2 + Math.random(),
-                isForecast: false
+        const connect = () => {
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                console.log('✅ WebSocket Connected');
+                setIsConnected(true);
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const packet = JSON.parse(event.data);
+
+                    // Update system state with incoming data
+                    setSystemState((prevState) => ({
+                        market: {
+                            ...prevState.market,
+                            ...packet.market
+                        },
+                        signal: {
+                            ...prevState.signal,
+                            ...packet.signal
+                        },
+                        sentiment: packet.sentiment || prevState.sentiment,
+                        forecast: packet.forecast || prevState.forecast,
+                        // Prepend new packet to logs (keep last 50)
+                        logs: [packet, ...prevState.logs].slice(0, 50)
+                    }));
+                } catch (error) {
+                    console.error('Failed to parse WebSocket message:', error);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+
+            ws.onclose = () => {
+                console.log('❌ WebSocket Disconnected');
+                setIsConnected(false);
+
+                // Attempt reconnection after 5 seconds
+                reconnectTimeout = setTimeout(() => {
+                    console.log('🔄 Attempting to reconnect...');
+                    connect();
+                }, 5000);
+            };
+        };
+
+        connect();
+
+        // Cleanup on unmount
+        return () => {
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+            if (ws) ws.close();
+        };
+    }, []);
+
+    const handleHalt = async () => {
+        try {
+            const response = await fetch('http://localhost:8000/api/actions/halt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
             });
+            const result = await response.json();
+            alert(result.message || 'HALT SIGNAL SENT');
+        } catch (error) {
+            alert('Failed to send halt signal: ' + error.message);
         }
-
-        // Generate 10 forecast points
-        let lastPrice = data[data.length - 1].price || 450;
-        for (let i = 0; i < 10; i++) {
-            const time = new Date(now.getTime() + i * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            const noise = Math.random() * 2;
-            data.push({
-                time,
-                median: lastPrice + i * 0.2 + noise,
-                p10: lastPrice + i * 0.1 - (i * 0.5),
-                p90: lastPrice + i * 0.3 + (i * 0.6),
-                isForecast: true
-            });
-        }
-        return data;
     };
-
-    const chartData = generateChartData();
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-emerald-500/30">
@@ -54,7 +119,13 @@ const Dashboard = () => {
             <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md">
                 <div className="container mx-auto px-6 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+                        {/* Connection Status Indicator */}
+                        <div
+                            className={`w-3 h-3 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)] ${isConnected
+                                    ? 'bg-emerald-500 animate-pulse'
+                                    : 'bg-red-500'
+                                }`}
+                        ></div>
                         <h1 className="text-lg font-bold tracking-[0.2em] text-slate-100">
                             CURIOSITY COTTAGE <span className="text-emerald-500 text-xs align-top">v2.0</span>
                         </h1>
@@ -87,7 +158,7 @@ const Dashboard = () => {
                         <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl backdrop-blur-sm flex-[2] flex flex-col">
                             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Physics Veto</h2>
                             <div className="flex-1 flex items-center justify-center">
-                                <PhysicsGauge alpha={2.4} />
+                                <PhysicsGauge data={systemState.market} />
                             </div>
                         </div>
 
@@ -117,14 +188,18 @@ const Dashboard = () => {
                             <div className="w-full text-left mb-2">
                                 <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Market Sentiment</h2>
                             </div>
-                            <SentimentTriad />
+                            <SentimentTriad data={systemState.sentiment} />
                         </div>
 
                         {/* Forecast Chart (Cerebro) */}
                         <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl flex-[3] relative overflow-hidden flex flex-col">
                             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Chronos Forecast</h2>
                             <div className="flex-1 w-full h-full">
-                                <CerebroChart data={chartData} />
+                                <CerebroChart
+                                    history={systemState.market.history}
+                                    forecast={systemState.forecast}
+                                    currentPrice={systemState.market.price}
+                                />
                             </div>
                         </div>
 
@@ -132,7 +207,7 @@ const Dashboard = () => {
 
                     {/* --- Column 3: System Logs (Span 4) --- */}
                     <section className="lg:col-span-4 h-full">
-                        <AgentMonitor onLogClick={setSelectedLog} />
+                        <AgentMonitor logs={systemState.logs} onLogClick={setSelectedLog} />
                     </section>
 
                 </div>
