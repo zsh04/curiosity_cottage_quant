@@ -16,7 +16,9 @@ services:
     ports:
       - "5432:5432"
     environment:
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
+      POSTGRES_DB: quant_db
 
   ollama:
     image: ollama/ollama:latest
@@ -25,16 +27,7 @@ services:
     volumes:
       - ollama_data:/root/.ollama
 
-  bff:
-    image: node:20-alpine
-    ports:
-      - "3000:3000"
-    environment:
-      - UPSTREAM_API_URL=http://engine:8000
-    volumes:
-      - ./app/bff:/app
-    working_dir: /app
-    command: sh -c "npm install && npm run dev"
+
 
 #   chronos:
 #     image: amazon/chronos-bolt:small

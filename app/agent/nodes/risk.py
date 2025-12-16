@@ -132,9 +132,65 @@ class RiskManager:
 
 
 def risk_node(state: AgentState) -> AgentState:
-    # This function creates a runnable node for the graph
-    # Ideally checking external data for returns to update physics
-    # For now, this is a placeholder stub for the graph integration
+    """
+    The Iron Gate: Final decision point for all trades.
+    Strictly enforces:
+    1. Data Quality (Min 30 bars)
+    2. Physics Veto (Alpha check)
+    3. Governance (Hard stops)
+    4. Sizing (Kelly * Confidence)
+    """
     manager = RiskManager()
+
+    # 1. Data Prep
+    returns_data = state.get("historic_returns", [])
+    if len(returns_data) < 30:
+        # Insufficient Data: Force Gaussian, Log Warning
+        state["messages"].append(
+            {
+                "role": "system",
+                "content": f"RISK WARNING: Insufficient data ({len(returns_data)} < 30). Forcing Alpha=3.0.",
+            }
+        )
+        state["current_alpha"] = 3.0
+        state["regime"] = Regime.GAUSSIAN.value
+        # We perform a partial update or skip update_physics to avoid crashing on empty data
+        # But we still convert for potential sizing usage if needed (though ES will likely fail/return 0)
+        returns_array = np.array(returns_data)
+    else:
+        # 2. Physics Update
+        returns_array = np.array(returns_data)
+        state = manager.update_physics(state, returns_array)
+
+    # 3. Governance Check
     state = manager.check_governance(state)
+
+    # 4. The Logic Branch
+    if state["status"] != TradingStatus.ACTIVE:
+        state["approved_size"] = 0.0
+    else:
+        # Active Status - Check for Signal
+        signal = state.get("signal_side", "").lower()
+        if signal in ["buy", "sell"]:
+            # Calculate Base Size (Kelly / ES)
+            base_size = manager.calculate_position_size(state, returns_array)
+
+            # Apply Confidence
+            confidence = state.get("signal_confidence", 0.0)
+            final_size = base_size * confidence
+
+            # Update State
+            state["approved_size"] = final_size
+
+            # Log Decision
+            state["messages"].append(
+                {
+                    "role": "system",
+                    "content": f"RISK APPROVED: Size {final_size:.2f} | Alpha {state.get('current_alpha', 0):.2f} | Conf {confidence:.2f}",
+                }
+            )
+        else:
+            # No Signal or Flat
+            state["approved_size"] = 0.0
+
     return state
