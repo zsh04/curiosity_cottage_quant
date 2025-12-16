@@ -3,6 +3,8 @@ from litestar.config.cors import CORSConfig
 from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
 
 from app.core.telemetry import setup_telemetry
+import asyncio
+from app.agent.loop import run_agent_service
 
 # Import Controllers
 from api.routes.system import SystemController
@@ -29,6 +31,11 @@ async def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
+def on_startup() -> None:
+    """Start the Agent Loop in the background."""
+    asyncio.create_task(run_agent_service())
+
+
 # Configure CORS
 cors_config = CORSConfig(
     allow_origins=["http://localhost:5173", "http://localhost:3000"],
@@ -51,6 +58,7 @@ app = Litestar(
     # Use standard OTel Middleware which picks up global tracer
     middleware=[OpenTelemetryMiddleware] if otel_enabled else [],
     debug=True,
+    on_startup=[on_startup],
 )
 
 if __name__ == "__main__":
