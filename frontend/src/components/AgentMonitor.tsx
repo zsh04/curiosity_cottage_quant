@@ -1,120 +1,129 @@
-import React from 'react';
-import { Activity, Zap, Shield, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
 
-interface AgentMetric {
+// Types for Logs
+type LogType = 'INFO' | 'WARNING' | 'SUCCESS' | 'ERROR';
+
+interface LogMessage {
+    id: number;
     timestamp: string;
-    latency_ms: number;
-    success: boolean;
-    output: any;
-    error?: string;
+    type: LogType;
+    message: string;
 }
 
-interface AgentData {
-    [agentName: string]: AgentMetric[];
-}
+const AgentMonitor: React.FC = () => {
+    const [logs, setLogs] = useState<LogMessage[]>([]);
+    const logsEndRef = useRef<HTMLDivElement>(null);
 
-interface AgentMonitorProps {
-    agents: AgentData;
-}
+    // Auto-scroll to bottom
+    const scrollToBottom = () => {
+        logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
 
-export function AgentMonitor({ agents }: AgentMonitorProps) {
-    // Calculate stats for each agent
-    const getAgentStats = (metrics: AgentMetric[]) => {
-        if (!metrics || metrics.length === 0) {
-            return { avgLatency: 0, successRate: 0, lastRun: null };
+    useEffect(() => {
+        scrollToBottom();
+    }, [logs]);
+
+    // Mock Data Generators
+    const generateMockLog = (): LogMessage => {
+        const types: LogType[] = ['INFO', 'INFO', 'INFO', 'WARNING', 'SUCCESS', 'INFO'];
+        const messages = [
+            "Alpha updated to 2.4",
+            "Calculated Market Regime: GAUSSIAN",
+            "RISK CHECK: Approved trade size $1,250",
+            "PHYSICS VETO: Alpha < 2.0, Trade Blocked",
+            "EXECUTION: Sent BUY order for NVDA",
+            "Sleeping for 100ms...",
+            "Analyzing market depth...",
+            "Chronos Forecast: +1.2% confidence",
+            "RISK ALERT: Drawdown limit approached"
+        ];
+
+        const randomType = types[Math.floor(Math.random() * types.length)];
+        const randomMsg = messages[Math.floor(Math.random() * messages.length)];
+
+        return {
+            id: Date.now(),
+            timestamp: new Date().toLocaleTimeString(),
+            type: randomType,
+            message: randomMsg,
+        };
+    };
+
+    // Simulation Effect
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const newLog = generateMockLog();
+            setLogs((prevLogs) => {
+                // Keep only last 100 logs to prevent memory overflow
+                const updatedLogs = [...prevLogs, newLog];
+                if (updatedLogs.length > 100) return updatedLogs.slice(updatedLogs.length - 100);
+                return updatedLogs;
+            });
+        }, 2000); // Every 2 seconds
+
+        return () => clearInterval(interval);
+    }, []);
+
+    // Helpers for styling
+    const getTypeColor = (type: LogType) => {
+        switch (type) {
+            case 'SUCCESS': return 'text-green-400';
+            case 'WARNING': return 'text-yellow-400';
+            case 'ERROR': return 'text-red-500';
+            default: return 'text-gray-300';
         }
-
-        const avgLatency =
-            metrics.reduce((sum, m) => sum + m.latency_ms, 0) / metrics.length;
-        const successCount = metrics.filter((m) => m.success).length;
-        const successRate = (successCount / metrics.length) * 100;
-        const lastRun = metrics[0]?.timestamp;
-
-        return { avgLatency, successRate, lastRun };
     };
 
-    const agentIcons: Record<string, React.ReactNode> = {
-        analyst: <Activity className="w-5 h-5" />,
-        risk: <Shield className="w-5 h-5" />,
-        execution: <Zap className="w-5 h-5" />,
-    };
+    const highlightKeywords = (text: string) => {
+        // Simple parsing to highlight specific system components
+        const riskRegex = /(RISK)/g;
+        const physicsRegex = /(PHYSICS)/g;
+        const executionRegex = /(EXECUTION)/g;
 
-    const agentNames: Record<string, string> = {
-        analyst: 'Analyst',
-        risk: 'Risk Guardian',
-        execution: 'Execution',
+        let parts = text.split(/(RISK|PHYSICS|EXECUTION)/g);
+
+        return parts.map((part, index) => {
+            if (part === 'RISK') return <span key={index} className="text-red-500 font-bold">RISK</span>;
+            if (part === 'PHYSICS') return <span key={index} className="text-blue-400 font-bold">PHYSICS</span>;
+            if (part === 'EXECUTION') return <span key={index} className="text-purple-400 font-bold">EXECUTION</span>;
+            return part;
+        });
     };
 
     return (
-        <div className="bg-card border border-border rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
-                <TrendingUp className="w-5 h-5 text-primary" />
-                <h3 className="text-lg font-semibold">Agent Performance</h3>
+        <div className="flex flex-col h-full bg-black text-xs font-mono border border-gray-800 rounded-md overflow-hidden shadow-lg">
+            {/* Header */}
+            <div className="bg-gray-900 px-4 py-2 border-b border-gray-800 flex justify-between items-center">
+                <h3 className="text-gray-100 font-bold uppercase tracking-wider">System Logs</h3>
+                <span className="flex items-center gap-2">
+                    <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    </span>
+                    <span className="text-gray-400 text-[10px]">LIVE</span>
+                </span>
             </div>
 
-            <div className="space-y-4">
-                {Object.keys(agents).length === 0 ? (
-                    <div className="text-muted-foreground text-sm text-center py-4">
-                        No agent data available
-                    </div>
-                ) : (
-                    Object.entries(agents).map(([agentName, metrics]) => {
-                        const stats = getAgentStats(metrics);
-
-                        return (
-                            <div
-                                key={agentName}
-                                className="border border-border/50 rounded-md p-4 hover:bg-accent/5 transition-colors"
-                            >
-                                <div className="flex items-center justify-between mb-2">
-                                    <div className="flex items-center gap-2">
-                                        <div className="text-primary">
-                                            {agentIcons[agentName] || <Activity className="w-5 h-5" />}
-                                        </div>
-                                        <span className="font-medium">
-                                            {agentNames[agentName] || agentName}
-                                        </span>
-                                    </div>
-                                    <div
-                                        className={`text-xs px-2 py-1 rounded ${stats.successRate >= 90
-                                                ? 'bg-green-500/10 text-green-500'
-                                                : stats.successRate >= 70
-                                                    ? 'bg-yellow-500/10 text-yellow-500'
-                                                    : 'bg-red-500/10 text-red-500'
-                                            }`}
-                                    >
-                                        {stats.successRate.toFixed(0)}% Success
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                        <div className="text-muted-foreground text-xs">Avg Latency</div>
-                                        <div className="font-mono text-foreground">
-                                            {stats.avgLatency.toFixed(1)}ms
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div className="text-muted-foreground text-xs">Last Run</div>
-                                        <div className="font-mono text-foreground text-xs">
-                                            {stats.lastRun
-                                                ? new Date(stats.lastRun).toLocaleTimeString()
-                                                : 'N/A'}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Recent failures */}
-                                {metrics.some((m) => !m.success) && (
-                                    <div className="mt-2 text-xs text-red-500">
-                                        ⚠️ {metrics.filter((m) => !m.success).length} recent failures
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })
+            {/* Log Feed */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-1 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+                {logs.length === 0 && (
+                    <div className="text-gray-600 text-center mt-10 italic">Waiting for agents...</div>
                 )}
+                {logs.map((log) => (
+                    <div key={log.id} className="flex gap-3 hover:bg-gray-900/50 p-1 rounded transition-colors">
+                        <span className="text-gray-500 min-w-[60px]">{log.timestamp}</span>
+                        <span className={`font-bold min-w-[60px] ${getTypeColor(log.type)}`}>
+                            [{log.type}]
+                        </span>
+                        <span className="text-gray-300 break-all">
+                            {highlightKeywords(log.message)}
+                        </span>
+                    </div>
+                ))}
+                <div ref={logsEndRef} />
             </div>
         </div>
     );
-}
+};
+
+export default AgentMonitor;
