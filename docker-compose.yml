@@ -32,6 +32,8 @@ services:
       - cc_chronos
       - cc_pulse
       - cc_finbert
+    ports:
+      - "8000:8000"  # API and WebSocket
     networks:
       - cc_net
 
