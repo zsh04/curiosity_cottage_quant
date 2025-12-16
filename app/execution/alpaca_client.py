@@ -18,7 +18,7 @@ class AlpacaClient:
 
         if self._enabled:
             # Only initialize if enabled/configured to avoid errors in dev/backtest
-            if not settings.ALPACA_API_KEY or not settings.ALPACA_SECRET_KEY:
+            if not settings.ALPACA_API_KEY or not settings.ALPACA_API_SECRET:
                 logger.warning(
                     "⚠️ Alpaca Keys missing despite LIVE_TRADING_ENABLED=True"
                 )
@@ -27,7 +27,7 @@ class AlpacaClient:
             try:
                 self.client = TradingClient(
                     api_key=settings.ALPACA_API_KEY,
-                    secret_key=settings.ALPACA_SECRET_KEY,
+                    secret_key=settings.ALPACA_API_SECRET,
                     paper=(
                         "paper" in settings.ALPACA_ENDPOINT
                         or "sandbox" in settings.ALPACA_ENDPOINT
