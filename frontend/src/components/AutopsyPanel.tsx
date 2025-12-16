@@ -1,135 +1,129 @@
-import React, { useState } from 'react';
-import { Terminal, Search, X, AlertTriangle } from 'lucide-react';
+import React from 'react';
+import { X, Activity, Brain, Shield, Clock } from 'lucide-react';
 
-interface LogMessage {
-    role: string;
-    content: string;
-    timestamp?: string; // Optional if not provided by backend
+interface AutopsyData {
+    alpha: number;
+    sentiment_score: number;
+    sentiment_headline: string;
+    risk_size: string; // e.g. "12.5%"
+    timestamp: string;
+    symbol: string;
+    side: 'BUY' | 'SELL';
+    price?: number;
 }
 
 interface AutopsyPanelProps {
-    logs: LogMessage[];
+    isOpen: boolean;
+    onClose: () => void;
+    data: AutopsyData | null;
 }
 
-const AutopsyPanel: React.FC<AutopsyPanelProps> = ({ logs }) => {
-    const [selectedLog, setSelectedLog] = useState<LogMessage | null>(null);
+const AutopsyPanel: React.FC<AutopsyPanelProps> = ({ isOpen, onClose, data }) => {
+    if (!isOpen || !data) return null;
 
-    // Identify trade logs to show "View Autopsy" button
-    const isTradeLog = (msg: LogMessage) => {
-        return msg.content.includes('ORDER_FILLED') || msg.content.includes('SENT ORDER') || msg.content.includes('EXECUTION');
-    };
+    const isSafeAlpha = data.alpha > 3.0;
+    const isDangerAlpha = data.alpha < 2.0;
+    const alphaColor = isSafeAlpha ? 'text-emerald-400' : isDangerAlpha ? 'text-red-500' : 'text-yellow-400';
 
     return (
-        <div className="flex flex-col h-full bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-            {/* Header */}
-            <div className="p-4 border-b border-border flex justify-between items-center bg-muted/20">
-                <div className="flex items-center gap-2">
-                    <Terminal className="w-4 h-4 text-primary" />
-                    <h3 className="font-semibold text-sm font-mono">SYSTEM LOGS & AUTOPSY</h3>
-                </div>
-                <div className="flex gap-2">
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                        LIVE
-                    </span>
-                </div>
-            </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <div
+                className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity duration-300"
+                onClick={onClose}
+            ></div>
 
-            {/* Logs List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2 font-mono text-sm">
-                {logs.length === 0 && (
-                    <div className="text-center text-muted-foreground py-10 opacity-50">
-                        Waiting for system telemetry...
+            {/* Modal Content */}
+            <div className="relative bg-slate-900/90 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+
+                {/* Header */}
+                <div className="bg-slate-950 p-6 flex justify-between items-start border-b border-slate-800">
+                    <div>
+                        <h2 className="text-3xl font-black text-slate-100 tracking-wider">
+                            {data.side} <span className="text-emerald-500">{data.symbol}</span>
+                        </h2>
+                        <p className="text-slate-500 text-sm font-mono mt-1">TRADE INSPECTION</p>
                     </div>
-                )}
-                {logs.map((log, i) => (
-                    <div key={i} className="flex gap-3 group hover:bg-muted/10 p-2 rounded transition-colors">
-                        <span className="text-muted-foreground w-12 shrink-0 text-xs mt-0.5">
-                            {log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : 'now'}
-                        </span>
-                        <div className="flex-1">
-                            <span className={`uppercase text-xs font-bold mr-2 ${log.role === 'RISK' ? 'text-orange-500' :
-                                    log.role === 'EXECUTION' ? 'text-green-500' :
-                                        log.role === 'ANALYST' ? 'text-blue-500' : 'text-purple-500'
-                                }`}>
-                                [{log.role}]
-                            </span>
-                            <span className="text-foreground/90">{log.content}</span>
+                    <button
+                        onClick={onClose}
+                        className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white"
+                    >
+                        <X size={24} />
+                    </button>
+                </div>
+
+                {/* The Grid (2x2) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-800/50">
+
+                    {/* Quadrant 1: Physics */}
+                    <div className="bg-slate-900/95 p-6 flex flex-col gap-2 hover:bg-slate-900 transition-colors group">
+                        <div className="flex items-center gap-2 text-slate-400 mb-2">
+                            <Activity size={18} />
+                            <span className="text-xs font-bold uppercase tracking-widest">Physics Alpha</span>
                         </div>
-                        {isTradeLog(log) && (
-                            <button
-                                onClick={() => setSelectedLog(log)}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-primary/10 text-primary hover:bg-primary/20 px-2 py-1 rounded flex items-center gap-1"
-                            >
-                                <Search className="w-3 h-3" />
-                                View Autopsy
-                            </button>
+                        <div className={`text-4xl font-mono font-bold ${alphaColor}`}>
+                            {data.alpha.toFixed(2)}
+                        </div>
+                        <p className="text-xs text-slate-500">
+                            {isSafeAlpha
+                                ? "Stable Regime. Heavy tails absent."
+                                : isDangerAlpha
+                                    ? "CRITICAL: Infinite Variance Detected."
+                                    : "Caution: Approaching phase transition."}
+                        </p>
+                    </div>
+
+                    {/* Quadrant 2: Brain (Sentiment) */}
+                    <div className="bg-slate-900/95 p-6 flex flex-col gap-2 hover:bg-slate-900 transition-colors group">
+                        <div className="flex items-center gap-2 text-slate-400 mb-2">
+                            <Brain size={18} />
+                            <span className="text-xs font-bold uppercase tracking-widest">Sentiment Core</span>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                            <span className={`text-4xl font-mono font-bold ${data.sentiment_score > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {data.sentiment_score > 0 ? '+' : ''}{data.sentiment_score}
+                            </span>
+                            <span className="text-xs text-slate-500 font-bold uppercase">Score</span>
+                        </div>
+                        <p className="text-sm text-slate-300 italic font-serif leading-relaxed border-l-2 border-slate-700 pl-3 mt-1">
+                            "{data.sentiment_headline}"
+                        </p>
+                    </div>
+
+                    {/* Quadrant 3: Shield (Risk Size) */}
+                    <div className="bg-slate-900/95 p-6 flex flex-col gap-2 hover:bg-slate-900 transition-colors group">
+                        <div className="flex items-center gap-2 text-slate-400 mb-2">
+                            <Shield size={18} />
+                            <span className="text-xs font-bold uppercase tracking-widest">Approved Sizing</span>
+                        </div>
+                        <div className="text-4xl font-mono font-bold text-blue-400">
+                            {data.risk_size}
+                        </div>
+                        <p className="text-xs text-slate-500">
+                            Computed via Fractional Kelly & Volatility Scaling.
+                        </p>
+                    </div>
+
+                    {/* Quadrant 4: Execution (Time) */}
+                    <div className="bg-slate-900/95 p-6 flex flex-col gap-2 hover:bg-slate-900 transition-colors group">
+                        <div className="flex items-center gap-2 text-slate-400 mb-2">
+                            <Clock size={18} />
+                            <span className="text-xs font-bold uppercase tracking-widest">Execution Time</span>
+                        </div>
+                        <div className="text-2xl font-mono text-slate-200">
+                            {data.timestamp}
+                        </div>
+                        {data.price && (
+                            <div className="mt-auto pt-2 border-t border-slate-800 flex justify-between items-center text-sm">
+                                <span className="text-slate-500">Info Price</span>
+                                <span className="font-mono text-emerald-400">${data.price}</span>
+                            </div>
                         )}
                     </div>
-                ))}
-            </div>
 
-            {/* Autopsy Modal */}
-            {selectedLog && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-card w-full max-w-lg border border-border rounded-xl shadow-2xl p-6 relative m-4">
-                        <button
-                            onClick={() => setSelectedLog(null)}
-                            className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
-
-                        <div className="flex items-center gap-2 mb-6 text-destructive">
-                            <AlertTriangle className="w-6 h-6" />
-                            <h2 className="text-xl font-bold">Trade Autopsy</h2>
-                        </div>
-
-                        <div className="space-y-4">
-                            <div className="p-4 bg-muted/30 rounded-lg border border-border">
-                                <label className="text-xs text-muted-foreground uppercase font-bold block mb-1">Raw Log Content</label>
-                                <code className="text-sm text-foreground font-mono block break-words">
-                                    {selectedLog.content}
-                                </code>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="p-3 bg-secondary/20 rounded border border-border">
-                                    <label className="text-xs text-muted-foreground block">Agent</label>
-                                    <span className="font-bold">{selectedLog.role}</span>
-                                </div>
-                                <div className="p-3 bg-secondary/20 rounded border border-border">
-                                    <label className="text-xs text-muted-foreground block">Result</label>
-                                    <span className="font-bold text-green-400">EXECUTED</span>
-                                </div>
-                            </div>
-
-                            {/* Hypothetical Data Extraction */}
-                            <div className="mt-4">
-                                <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                                    <Search className="w-4 h-4" />
-                                    Decision Context
-                                </h4>
-                                <ul className="text-sm space-y-2 text-muted-foreground list-disc pl-5">
-                                    <li>Signal Confidence: <span className="text-foreground font-mono">High (0.92)</span></li>
-                                    <li>Risk Veto: <span className="text-foreground font-mono">PASSED</span></li>
-                                    <li>Market Regime: <span className="text-foreground font-mono">Gaussian</span></li>
-                                    <li>Slippage Est: <span className="text-foreground font-mono">0.02%</span></li>
-                                </ul>
-                            </div>
-                        </div>
-
-                        <div className="mt-8 flex justify-end">
-                            <button
-                                onClick={() => setSelectedLog(null)}
-                                className="btn-primary"
-                            >
-                                Close Report
-                            </button>
-                        </div>
-                    </div>
                 </div>
-            )}
+
+            </div>
         </div>
     );
 };
