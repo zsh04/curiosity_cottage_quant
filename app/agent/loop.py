@@ -3,6 +3,7 @@ import logging
 import traceback
 from app.agent.graph import app_graph
 from app.services.state_stream import get_state_broadcaster
+from app.services.global_state import is_system_halted
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,12 @@ async def run_agent_service():
     logger.info("🧠 Cognitive Engine: Online")
 
     while True:
+        # --- EMERGENCY HALT CHECK ---
+        if is_system_halted():
+            logger.warning("🛑 System HALTED by Emergency Kill Switch. Pausing...")
+            await asyncio.sleep(10)
+            continue
+
         try:
             logger.info("🧠 Cognitive Engine: Heartbeat...")
             logger.info("--- 🧠 Agent Loop: Thinking ---")
