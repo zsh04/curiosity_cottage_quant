@@ -19,8 +19,9 @@ class Settings(BaseSettings):
         False  # Safety Switch (True = Live/Paper API, False = Dry Run)
     )
     ALPACA_API_KEY: str = ""
-    ALPACA_SECRET_KEY: str = ""
+    ALPACA_API_SECRET: str = ""
     ALPACA_ENDPOINT: str = "https://paper-api.alpaca.markets"  # Default to paper
+    ALPACA_DATA_FEED: str = "iex"
 
     # --- LLM ---
     OLLAMA_BASE_URL: str = "http://localhost:11434"
