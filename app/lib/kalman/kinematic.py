@@ -63,6 +63,10 @@ class KinematicKalmanFilter:
         self.x = np.zeros(3)
         self.initialized = False
 
+        # Initialization buffer for intelligent warmup
+        self.init_buffer = []
+        self.init_buffer_size = 3  # Use 3 measurements for initial estimates
+
     def update(self, measurement: float) -> StateEstimate:
         """
         Performs one step of Predict-Update cycle.
@@ -73,9 +77,35 @@ class KinematicKalmanFilter:
         Returns:
             StateEstimate: The posterior estimate of Price, Velocity, Accel.
         """
+        # SMART INITIALIZATION: Use first 3 measurements to estimate initial dynamics
         if not self.initialized:
-            self.x = np.array([measurement, 0.0, 0.0])
+            self.init_buffer.append(measurement)
+
+            if len(self.init_buffer) < self.init_buffer_size:
+                # Not enough data yet, return current measurement with zero dynamics
+                self.x = np.array([measurement, 0.0, 0.0])
+                return StateEstimate(self.x[0], self.x[1], self.x[2], self.P)
+
+            # We have 3 measurements: p0, p1, p2
+            # Estimate initial velocity from finite differences
+            p0, p1, p2 = self.init_buffer
+
+            # Velocity estimate: (p2 - p0) / (2 * dt)
+            # Using central difference for better accuracy
+            dt = self.dt
+            v0 = (p2 - p0) / (2 * dt)
+
+            # Acceleration estimate: (p2 - 2*p1 + p0) / dt^2
+            # Second-order finite difference
+            a0 = (p2 - 2 * p1 + p0) / (dt**2)
+
+            # Initialize state with estimated dynamics
+            self.x = np.array([measurement, v0, a0])
             self.initialized = True
+
+            # Clear buffer
+            self.init_buffer = []
+
             return StateEstimate(self.x[0], self.x[1], self.x[2], self.P)
 
         # --- Predict Step ---

@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import sessionmaker, Session
 import os
 
@@ -10,8 +11,18 @@ DATABASE_URL = os.getenv(
 # Create engine
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, echo=False)
 
-# Session factory
+# Async Engine (For Phase 4 Scalability)
+# Ensure we use the asyncpg driver
+ASYNC_DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+async_engine = create_async_engine(ASYNC_DATABASE_URL, pool_pre_ping=True, echo=False)
+
+# Session factory (Sync)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Session factory (Async)
+async_session_maker = async_sessionmaker(
+    async_engine, class_=AsyncSession, expire_on_commit=False
+)
 
 
 def get_db() -> Session:
@@ -21,6 +32,12 @@ def get_db() -> Session:
         yield db
     finally:
         db.close()
+
+
+async def get_async_db() -> AsyncSession:
+    """Dependency for Async consumers"""
+    async with async_session_maker() as session:
+        yield session
 
 
 def init_db():

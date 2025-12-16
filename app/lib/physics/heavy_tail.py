@@ -64,17 +64,22 @@ class HeavyTailEstimator:
 
     @staticmethod
     def hill_estimator(
-        data: Union[pd.Series, np.ndarray], tail_percentile: float = 0.05
+        data: Union[pd.Series, np.ndarray], tail_percentile: Optional[float] = None
     ) -> float:
         """
         Calculates the Hill Estimator for the tail exponent (Alpha).
+
+        OPTIMIZATION: Uses adaptive tail size based on sample size for statistical stability.
+        - Small samples (< 100): Use more data (10%)
+        - Medium samples (100-500): Use 5%
+        - Large samples (> 500): Use 3% for precision
 
         Formula:
         Alpha = 1 / ( (1/k) * Sum( ln(X_i / X_min) ) )
 
         Args:
             data: Financial time series (returns or prices).
-            tail_percentile: The percentage of data to consider as the "tail" (e.g., top 5%).
+            tail_percentile: Optional fixed percentile. If None, uses adaptive sizing.
 
         Returns:
             float: The estimated Alpha (tail exponent).
@@ -89,25 +94,54 @@ class HeavyTailEstimator:
         sorted_data = np.sort(abs_data)[::-1]
 
         n = len(sorted_data)
+
+        # ADAPTIVE TAIL SIZE for statistical robustness
+        if tail_percentile is None:
+            if n < 100:
+                tail_percentile = 0.10  # 10% for small samples
+            elif n < 500:
+                tail_percentile = 0.05  # 5% for medium samples
+            else:
+                tail_percentile = 0.03  # 3% for large samples
+
         k = int(n * tail_percentile)
 
-        if k < 2:
-            return 3.0  # Insufficient data for tail estimation, assume Gaussian default
+        # MINIMUM TAIL SIZE: Ensure at least 10 observations for reliability
+        # Hill estimator becomes unreliable with very few tail samples
+        min_tail_size = 10
+        if k < min_tail_size:
+            if n >= min_tail_size:
+                k = min_tail_size
+            else:
+                # Not enough data for reliable estimation
+                return 3.0  # Default to Gaussian
 
         # Select the tail
         tail = sorted_data[:k]
         x_min = sorted_data[k]  # The threshold
 
-        # Hill calc
-        # ln(X_i / X_min) = ln(X_i) - ln(X_min)
-        log_ratios = np.log(tail / x_min)
-        hill_val = np.mean(log_ratios)
+        if x_min <= 0:
+            # Avoid log of zero or negative
+            return 3.0
 
-        if hill_val == 0:
+        # Hill calculation
+        # ln(X_i / X_min) = ln(X_i) - ln(X_min)
+        try:
+            log_ratios = np.log(tail / x_min)
+            hill_val = np.mean(log_ratios)
+        except (RuntimeWarning, ValueError):
+            return 3.0
+
+        if hill_val <= 0:
             return 3.0
 
         alpha = 1.0 / hill_val
-        return alpha
+
+        # Sanity check: Alpha should be in reasonable range
+        # Clamp to [0.5, 10.0] to avoid numerical instabilities
+        alpha = np.clip(alpha, 0.5, 10.0)
+
+        return float(alpha)
 
     @staticmethod
     def get_regime(alpha: float) -> RegimeMetrics:
