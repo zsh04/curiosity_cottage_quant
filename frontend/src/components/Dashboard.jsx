@@ -56,14 +56,14 @@ const Dashboard = () => {
 
                     // Update system state with incoming data
                     setSystemState((prevState) => ({
-                        market: {
+                        market: packet.market ? {
                             ...prevState.market,
                             ...packet.market
-                        },
-                        signal: {
+                        } : prevState.market,
+                        signal: packet.signal ? {
                             ...prevState.signal,
                             ...packet.signal
-                        },
+                        } : prevState.signal,
                         sentiment: packet.sentiment || prevState.sentiment,
                         forecast: packet.forecast || prevState.forecast,
                         // Prepend new packet to logs (keep last 50)
