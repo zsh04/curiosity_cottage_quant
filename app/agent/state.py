@@ -35,6 +35,7 @@ class AgentState(TypedDict):
     # --- Physics ---
     current_alpha: float
     regime: str
+    chronos_forecast: dict
 
     # --- Signal (The Analyst's Input) ---
     signal_side: str

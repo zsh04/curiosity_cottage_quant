@@ -8,12 +8,13 @@ class Portfolio:
     Handles positions, cash, and order generation from signals.
     """
 
-    def __init__(self, initial_capital=100000.0, start_date=None):
+    def __init__(self, initial_capital=100000.0, start_date=None, data_feed=None):
         self.initial_capital = initial_capital
         self.current_cash = initial_capital
         self.positions = {}  # { 'AAPL': 100 }
         self.holdings = {}  # { 'AAPL': { 'quantity': 100, 'market_value': ... } }
         self.start_date = start_date
+        self.data_feed = data_feed
 
         # History for Reporting
         self.history = []  # List of {'timestamp': t, 'total_equity': v}
@@ -54,22 +55,62 @@ class Portfolio:
         Acts on a SignalEvent to generate an OrderEvent.
         Naive implementation: Buy 100 shares on Long, Sell all on Close.
         """
-        target_qty = 100  # Fixed size for MVP
-        # Physics strategy might want dynamic sizing later
+        # RISK CHECK: Use event.strength from Risk Node
+        strength = getattr(
+            event, "strength", 1.0
+        )  # Default to 1.0 if missing, but usually Risk sets it 0.0-1.0
+
+        # 1. VETO
+        if strength <= 0.0:
+            print(f"🚫 SIGNAL VETOED BY RISK: {event.symbol} Strength={strength}")
+            return
 
         if event.direction == "LONG":
-            # Only buy if we have cash? Naive check
-            if self.current_cash >= (
-                target_qty * 100
-            ):  # Approx check, using 100 as dummy price if needed
-                order = OrderEvent(
-                    timestamp=event.timestamp,
-                    symbol=event.symbol,
-                    order_type="MARKET",
-                    quantity=target_qty,
-                    direction="BUY",
-                )
-                event_queue.put(order)
+            # 2. Dynamic Sizing
+            target_value = (
+                self.current_cash * strength
+            )  # e.g. 20% of CASH or NAV? User said holdings['cash'] * strength.
+            # Note: Risk approved size is usually "size_notional".
+            # If strength is "fraction of portfolio", this works.
+            # If strength is "approved_size" (absolute $), then target_value = strength.
+            # Assuming 'strength' is the 'approved_size' (absolute value) passed from Risk Node if mapped that way,
+            # OR 'strength' is confidence/fraction.
+            # Analysing previous step: Risk Node sets `approved_size` (Absolute $).
+            # Strategy Wrapper creates SignalEvent.
+            # app/backtest/strategy_wrapper.py creates SignalEvent.
+            # Let's assume strength = fraction for now as per user formula: target_value = cash * strength logic.
+            # User Request: "target_value = self.current_holdings['cash'] * event.strength"
+            # Proceeding with specific user instruction.
+
+            # Need Price
+            price = 0.0
+            if self.data_feed:
+                price = self.data_feed.get_current_price(event.symbol)
+            else:
+                # Fallback if no feed (shouldn't happen with new changes)
+                price = self.holdings.get(event.symbol, {}).get("last_price", 0.0)
+
+            if price > 0:
+                qty = int(target_value / price)
+
+                if qty > 0:
+                    order = OrderEvent(
+                        timestamp=event.timestamp,
+                        symbol=event.symbol,
+                        order_type="MARKET",
+                        quantity=qty,
+                        direction="BUY",
+                    )
+                    event_queue.put(order)
+                    print(
+                        f"⚖️ PORTFOLIO: Generated BUY for {qty} {event.symbol} (${target_value:.2f})"
+                    )
+                else:
+                    print(
+                        f"⚠️ PORTFOLIO: Calculated Qty is 0 for {event.symbol} (Val=${target_value:.2f} Price=${price:.2f})"
+                    )
+            else:
+                print(f"⚠️ PORTFOLIO: No price for {event.symbol}, cannot size.")
 
         elif event.direction == "EXIT":
             curr_qty = self.positions.get(event.symbol, 0)

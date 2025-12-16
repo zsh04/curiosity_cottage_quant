@@ -70,9 +70,9 @@ class SentimentAdapter:
             # Construct payload (FinBERT expects {"text": str or List[str]})
             payload = {"text": text}
 
-            # POST to /predict endpoint (standardized)
+            # POST to /analyze endpoint (FinBERT service main.py)
             response = requests.post(
-                f"{self.base_url}/predict",
+                f"{self.base_url}/analyze",
                 json=payload,
                 timeout=self.timeout,
             )
