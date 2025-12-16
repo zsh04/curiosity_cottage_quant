@@ -29,6 +29,11 @@ dependencies = [
     "ollama",
     "loguru",
     "alpaca-trade-api",
+    "opentelemetry-api>=1.20.0",
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-exporter-otlp>=1.20.0",
+    "opentelemetry-instrumentation-logging>=0.41b0",
+    "opentelemetry-instrumentation-asgi>=0.41b0",
 ]
 
 [tool.hatch.build.targets.wheel]
