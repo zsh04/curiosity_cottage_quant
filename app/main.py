@@ -8,6 +8,7 @@ from app.core.telemetry import setup_telemetry
 from api.routes.system import SystemController
 from api.routes.signals import SignalsController
 from api.routes.actions import ActionsController
+from app.api.routes.telemetry import TelemetryController
 
 # Database
 from app.dal.database import init_db
@@ -43,6 +44,7 @@ app = Litestar(
         SystemController,
         SignalsController,
         ActionsController,
+        TelemetryController,
     ],
     path="/api",  # Base path for all routes
     cors_config=cors_config,
