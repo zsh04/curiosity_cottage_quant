@@ -2,8 +2,13 @@ from litestar import Controller, get
 from litestar.di import Provide
 from dataclasses import dataclass
 from typing import Dict, Any
+from sqlalchemy.orm import Session
 from app.services.state_service import StateService
 from app.dal.database import get_db
+
+
+async def provide_state_service(db_session: Session) -> StateService:
+    return StateService(db_session)
 
 
 @dataclass
@@ -24,7 +29,10 @@ class SystemMetrics:
 class SystemController(Controller):
     path = "/system"
     tags = ["system"]
-    dependencies = {"state_service": Provide(lambda: StateService(next(get_db())))}
+    dependencies = {
+        "state_service": Provide(provide_state_service),
+        "db_session": Provide(get_db),
+    }
 
     @get("/status")
     async def get_system_status(self) -> SystemStatus:
