@@ -61,7 +61,8 @@ const ProTerminal = () => {
             },
         });
 
-        const candlestickSeries = chart.addCandlestickSeries({
+        const candlestickSeries = chart.addSeries({
+            type: 'Candlestick',
             upColor: '#A3BE8C',
             downColor: '#BF616A',
             borderDownColor: '#BF616A',
@@ -71,10 +72,12 @@ const ProTerminal = () => {
         });
 
         // Sample data (will be replaced with live data)
-        candlestickSeries.setData([
+        const sampleData = [
             { time: '2024-12-16', open: 450, high: 455, low: 448, close: 453 },
             { time: '2024-12-17', open: 453, high: 457, low: 451, close: 455 },
-        ]);
+        ];
+
+        candlestickSeries.setData(sampleData);
 
         chartRef.current = chart;
 
@@ -132,8 +135,8 @@ const ProTerminal = () => {
                     {/* Mode Indicator */}
                     <div
                         className={`px-3 py-1 rounded text-xs font-bold ${systemMode === 'PAPER'
-                                ? 'bg-[#EBCB8B] text-[#0A0E14]'
-                                : 'bg-[#BF616A] text-white'
+                            ? 'bg-[#EBCB8B] text-[#0A0E14]'
+                            : 'bg-[#BF616A] text-white'
                             }`}
                     >
                         {systemMode === 'PAPER' ? '📄 PAPER TRADING' : '🔴 LIVE TRADING'}
