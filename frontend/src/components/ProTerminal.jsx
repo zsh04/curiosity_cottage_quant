@@ -41,7 +41,7 @@ const ProTerminal = () => {
             width: chartContainerRef.current.clientWidth,
             height: 500,
             layout: {
-                background: { color: '#0A0E14' },
+                backgroundColor: '#0A0E14',
                 textColor: '#E5E9F0',
             },
             grid: {
@@ -61,8 +61,7 @@ const ProTerminal = () => {
             },
         });
 
-        const candlestickSeries = chart.addSeries({
-            type: 'Candlestick',
+        const candlestickSeries = chart.addCandlestickSeries({
             upColor: '#A3BE8C',
             downColor: '#BF616A',
             borderDownColor: '#BF616A',
