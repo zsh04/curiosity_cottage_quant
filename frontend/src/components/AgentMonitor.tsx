@@ -8,9 +8,21 @@ interface LogMessage {
     timestamp: string;
     type: LogType;
     message: string;
+    // Metadata for inspection
+    alpha?: number;
+    sentiment_score?: number;
+    sentiment_headline?: string;
+    risk_size?: string;
+    symbol?: string;
+    side?: 'BUY' | 'SELL';
+    price?: number;
 }
 
-const AgentMonitor: React.FC = () => {
+interface AgentMonitorProps {
+    onLogClick?: (log: LogMessage) => void;
+}
+
+const AgentMonitor: React.FC<AgentMonitorProps> = ({ onLogClick }) => {
     const [logs, setLogs] = useState<LogMessage[]>([]);
     const logsEndRef = useRef<HTMLDivElement>(null);
 
@@ -41,12 +53,28 @@ const AgentMonitor: React.FC = () => {
         const randomType = types[Math.floor(Math.random() * types.length)];
         const randomMsg = messages[Math.floor(Math.random() * messages.length)];
 
+        // Add mock metadata for inspection
+        const isExecution = randomMsg.includes('EXECUTION');
+        const isRisk = randomMsg.includes('RISK');
+        const isPhysics = randomMsg.includes('PHYSICS');
+
+        const mockMeta = (isExecution || isRisk || isPhysics) ? {
+            alpha: Math.random() * 4,
+            sentiment_score: (Math.random() * 2) - 1,
+            sentiment_headline: "Tech sector rallies on AI chip demand...",
+            risk_size: `${(Math.random() * 20).toFixed(1)}%`,
+            symbol: "NVDA",
+            side: Math.random() > 0.5 ? 'BUY' : 'SELL',
+            price: 452.30
+        } : {};
+
         return {
             id: Date.now(),
             timestamp: new Date().toLocaleTimeString(),
             type: randomType,
             message: randomMsg,
-        };
+            ...mockMeta
+        } as LogMessage;
     };
 
     // Simulation Effect
@@ -110,7 +138,11 @@ const AgentMonitor: React.FC = () => {
                     <div className="text-gray-600 text-center mt-10 italic">Waiting for agents...</div>
                 )}
                 {logs.map((log) => (
-                    <div key={log.id} className="flex gap-3 hover:bg-gray-900/50 p-1 rounded transition-colors">
+                    <div
+                        key={log.id}
+                        className={`flex gap-3 hover:bg-gray-900/50 p-1 rounded transition-colors ${onLogClick ? 'cursor-pointer hover:bg-slate-800/50 active:bg-slate-800' : ''}`}
+                        onClick={() => onLogClick && onLogClick(log)}
+                    >
                         <span className="text-gray-500 min-w-[60px]">{log.timestamp}</span>
                         <span className={`font-bold min-w-[60px] ${getTypeColor(log.type)}`}>
                             [{log.type}]

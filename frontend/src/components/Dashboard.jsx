@@ -1,14 +1,57 @@
-import React from 'react';
+import React, { useState } from 'react';
 import PhysicsGauge from './PhysicsGauge';
 import SentimentTriad from './SentimentTriad';
 import AgentMonitor from './AgentMonitor';
+import ModelMonitor from './ModelMonitor';
+import CerebroChart from './CerebroChart';
+import AutopsyPanel from './AutopsyPanel';
 
 const Dashboard = () => {
+    const [selectedLog, setSelectedLog] = useState(null);
+
+    const handleHalt = () => {
+        alert("HALT SIGNAL SENT: Disabling Live Trading...");
+        // Actual API call would go here
+    };
+
+    // Mock Data for CerebroChart
+    const generateChartData = () => {
+        const data = [];
+        const now = new Date();
+
+        // Generate 20 history points
+        for (let i = 20; i > 0; i--) {
+            const time = new Date(now.getTime() - i * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            data.push({
+                time,
+                price: 450 + Math.sin(i * 0.5) * 2 + Math.random(),
+                isForecast: false
+            });
+        }
+
+        // Generate 10 forecast points
+        let lastPrice = data[data.length - 1].price || 450;
+        for (let i = 0; i < 10; i++) {
+            const time = new Date(now.getTime() + i * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const noise = Math.random() * 2;
+            data.push({
+                time,
+                median: lastPrice + i * 0.2 + noise,
+                p10: lastPrice + i * 0.1 - (i * 0.5),
+                p90: lastPrice + i * 0.3 + (i * 0.6),
+                isForecast: true
+            });
+        }
+        return data;
+    };
+
+    const chartData = generateChartData();
+
     return (
         <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-emerald-500/30">
 
             {/* --- Sticky Header --- */}
-            <header className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md">
+            <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md">
                 <div className="container mx-auto px-6 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
@@ -16,8 +59,19 @@ const Dashboard = () => {
                             CURIOSITY COTTAGE <span className="text-emerald-500 text-xs align-top">v2.0</span>
                         </h1>
                     </div>
-                    <div className="text-xs font-mono text-slate-500">
-                        SYSTEM_MODE: <span className="text-emerald-400">AUTONOMOUS</span>
+
+                    <div className="flex items-center gap-6">
+                        <div className="text-xs font-mono text-slate-500 hidden md:block">
+                            SYSTEM_MODE: <span className="text-emerald-400">AUTONOMOUS</span>
+                        </div>
+
+                        {/* Kill Switch */}
+                        <button
+                            onClick={handleHalt}
+                            className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2 px-4 rounded shadow-[0_0_15px_rgba(220,38,38,0.5)] animate-pulse hover:animate-none transition-all"
+                        >
+                            EMERGENCY HALT
+                        </button>
                     </div>
                 </div>
             </header>
@@ -30,29 +84,26 @@ const Dashboard = () => {
                     <section className="lg:col-span-3 flex flex-col gap-6">
 
                         {/* Physics Gauge Card */}
-                        <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl backdrop-blur-sm flex-1 flex flex-col">
+                        <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl backdrop-blur-sm flex-[2] flex flex-col">
                             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Physics Veto</h2>
                             <div className="flex-1 flex items-center justify-center">
                                 <PhysicsGauge alpha={2.4} />
                             </div>
                         </div>
 
-                        {/* Risk Stats Card */}
-                        <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl h-1/3">
-                            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Risk Telemetry</h2>
-                            <div className="space-y-4 font-mono text-sm">
-                                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                                    <span className="text-slate-500">Exposure</span>
-                                    <span className="text-slate-200">$12,450</span>
-                                </div>
-                                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                                    <span className="text-slate-500">Daily Drawdown</span>
-                                    <span className="text-emerald-400">-0.45%</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-slate-500">Kelly Frac</span>
-                                    <span className="text-yellow-400">0.32</span>
-                                </div>
+                        {/* Model Monitor (Latency) */}
+                        <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl flex-[3] flex flex-col overflow-hidden">
+                            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">System Latency</h2>
+                            <div className="flex-1">
+                                <ModelMonitor />
+                            </div>
+                        </div>
+
+                        {/* Legacy Risk Stats (Compact) */}
+                        <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl flex-1 flex flex-col justify-center">
+                            <div className="flex justify-between items-center text-xs font-mono">
+                                <span className="text-slate-500 uppercase tracking-wider">Exposure</span>
+                                <span className="text-slate-200">$12,450</span>
                             </div>
                         </div>
 
@@ -69,12 +120,11 @@ const Dashboard = () => {
                             <SentimentTriad />
                         </div>
 
-                        {/* Forecast Placeholder Card */}
-                        <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl flex-1 relative overflow-hidden group">
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-800/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                        {/* Forecast Chart (Cerebro) */}
+                        <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl flex-[3] relative overflow-hidden flex flex-col">
                             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Chronos Forecast</h2>
-                            <div className="h-full flex items-center justify-center text-slate-600 font-mono text-xs">
-                                [ WAITING FOR PROBABILISTIC INFERENCE ]
+                            <div className="flex-1 w-full h-full">
+                                <CerebroChart data={chartData} />
                             </div>
                         </div>
 
@@ -82,11 +132,19 @@ const Dashboard = () => {
 
                     {/* --- Column 3: System Logs (Span 4) --- */}
                     <section className="lg:col-span-4 h-full">
-                        <AgentMonitor />
+                        <AgentMonitor onLogClick={setSelectedLog} />
                     </section>
 
                 </div>
             </main>
+
+            {/* --- Overlay Modal --- */}
+            <AutopsyPanel
+                isOpen={!!selectedLog}
+                onClose={() => setSelectedLog(null)}
+                data={selectedLog}
+            />
+
         </div>
     );
 };
