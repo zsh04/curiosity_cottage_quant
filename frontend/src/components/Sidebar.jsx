@@ -1,7 +1,16 @@
 
-import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 
 const Sidebar = () => {
+    const location = useLocation();
+
+    const items = [
+        { name: 'Dashboard', path: '/' },
+        { name: 'Market Data', path: '/market' },
+        { name: 'Agents', path: '/agents' },
+        { name: 'Settings', path: '/settings' }
+    ];
+
     return (
         <aside style={{
             width: '260px',
@@ -21,23 +30,26 @@ const Sidebar = () => {
             </div>
 
             <nav style={{ flex: 1 }}>
-                <ul style={{ listStyle: 'none' }}>
-                    {['Dashboard', 'Market Data', 'Agents', 'Settings'].map((item, index) => (
-                        <li key={item} style={{ marginBottom: 'var(--space-sm)' }}>
-                            <a href="#" style={{
-                                display: 'block',
-                                padding: 'var(--space-sm) var(--space-md)',
-                                borderRadius: 'var(--radius-md)',
-                                color: index === 0 ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                                background: index === 0 ? 'hsla(var(--h-primary), var(--s-primary), var(--l-primary), 0.1)' : 'transparent',
-                                textDecoration: 'none',
-                                fontWeight: index === 0 ? 600 : 400,
-                                transition: 'all 0.2s'
-                            }}>
-                                {item}
-                            </a>
-                        </li>
-                    ))}
+                <ul style={{ listStyle: 'none', padding: 0 }}>
+                    {items.map((item) => {
+                        const isActive = location.pathname === item.path;
+                        return (
+                            <li key={item.name} style={{ marginBottom: 'var(--space-sm)' }}>
+                                <Link to={item.path} style={{
+                                    display: 'block',
+                                    padding: 'var(--space-sm) var(--space-md)',
+                                    borderRadius: 'var(--radius-md)',
+                                    color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                                    background: isActive ? 'hsla(var(--h-primary), var(--s-primary), var(--l-primary), 0.1)' : 'transparent',
+                                    textDecoration: 'none',
+                                    fontWeight: isActive ? 600 : 400,
+                                    transition: 'all 0.2s'
+                                }}>
+                                    {item.name}
+                                </Link>
+                            </li>
+                        );
+                    })}
                 </ul>
             </nav>
 

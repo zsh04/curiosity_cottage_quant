@@ -7,6 +7,12 @@ sys.path.append(os.getcwd())
 
 from app.agent.graph import app_graph
 from app.agent.state import AgentState, TradingStatus
+from app.dal.database import get_db
+from app.services.state_service import StateService
+from app.services.global_state import (
+    initialize_global_state_service,
+    set_current_snapshot_id,
+)
 
 # --- Configuration ---
 TEST_SYMBOL = "SPY"
@@ -38,8 +44,24 @@ def main():
     }
 
     try:
+        # Initialize database session and state service
+        db = next(get_db())
+        state_service = StateService(db)
+
+        # Initialize global state for nodes to access
+        initialize_global_state_service(db)
+
+        # PRE-EXECUTION: Save initial snapshot
+        snapshot_id = state_service.save_snapshot(initial_state)
+        set_current_snapshot_id(snapshot_id)
+        print(f"📸 Initial snapshot saved: ID {snapshot_id}")
+
         # Ignite Graph
         final_state = app_graph.invoke(initial_state)
+
+        # POST-EXECUTION: Save final snapshot
+        final_snapshot_id = state_service.save_snapshot(final_state)
+        print(f"📸 Final snapshot saved: ID {final_snapshot_id}")
 
         # --- The Autopsy ---
         print("\n" + "=" * 30)

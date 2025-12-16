@@ -8,11 +8,15 @@ from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExport
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
 
 # Import Controllers
 from api.routes.system import SystemController
 from api.routes.signals import SignalsController
 from api.routes.actions import ActionsController
+
+# Database
+from app.dal.database import init_db
 
 
 # Observability Setup (Grafana Cloud / OTLP)
@@ -24,10 +28,6 @@ def setup_telemetry():
     if endpoint:
         resource = Resource(attributes={SERVICE_NAME: service_name})
 
-        # Parse headers from string "key=value,key2=value2" if needed,
-        # but OTLPSpanExporter usually handles dictionary or parsing if library supports it.
-        # Here we assume a prepared headers dictionary or simplistic parsing if just one.
-        # Grafana Cloud typically provides a header like 'Authorization=Basic ...'
         header_dict = {}
         if headers:
             try:
@@ -43,13 +43,18 @@ def setup_telemetry():
         provider = TracerProvider(resource=resource)
         provider.add_span_processor(BatchSpanProcessor(exporter))
         trace.set_tracer_provider(provider)
-        return OpenTelemetryConfig(tracer_provider=provider)
+        # We don't need to return the config object for middleware approach
+        # checks if provider is set
+        return True
 
-    return None
+    return False
 
 
-otel_config = setup_telemetry()
-plugins = [otel_config] if otel_config else []
+# Initialize OTel Global Tracer
+otel_enabled = setup_telemetry()
+
+# Initialize Database
+init_db()
 
 
 @get("/health")
@@ -75,7 +80,8 @@ app = Litestar(
     ],
     path="/api",  # Base path for all routes
     cors_config=cors_config,
-    plugins=plugins,
+    # Use standard OTel Middleware which picks up global tracer
+    middleware=[OpenTelemetryMiddleware] if otel_enabled else [],
     debug=True,
 )
 

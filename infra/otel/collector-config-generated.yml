@@ -1,0 +1,38 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+
+exporters:
+  debug:
+    verbosity: normal
+  otlphttp/grafana:
+    endpoint: "${GRAFANA_ENDPOINT}"
+    headers:
+      Authorization: "Basic ODMwNzIwOmdsY19leUp2SWpvaU1UQXlPRGt6TkNJc0ltNGlPaUpqWTNGamNDSXNJbXNpT2lKMVEza3lWRkkxT0RSV1ZXVTFhR1k0TmtJeE9FNXNNWEVpTENKdElqcDdJbklpT2lKd2NtOWtMWFZ6TFhkbGMzUXRNQ0o5ZlE9PQ=="
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug, otlphttp/grafana]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug, otlphttp/grafana]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug, otlphttp/grafana]

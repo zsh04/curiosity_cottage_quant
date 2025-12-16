@@ -1,6 +1,9 @@
 import logging
+import time
+from typing import Optional
 from app.agent.state import AgentState, TradingStatus, OrderSide
 from app.lib.physics import Regime
+from app.services.global_state import get_global_state_service, get_current_snapshot_id
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +30,6 @@ class RiskManager:
             return state
 
         # 2. Physics Veto
-        # If the Analyst or background process set regime to critical, we halt.
         regime = state.get("regime", "Unknown")
         if regime == Regime.CRITICAL.value:
             state["status"] = TradingStatus.HALTED_PHYSICS
@@ -49,24 +51,14 @@ class RiskManager:
         Bayesian Sizing Logic.
         Base Size = Risk 1% of NAV with 2% Stop.
         """
-        nav = state.get("nav", 100000.0)  # Default if missing
+        nav = state.get("nav", 100000.0)
         alpha = state.get("current_alpha", 2.0)
         confidence = state.get("signal_confidence", 0.0)
 
         # 1. Base Size
-        # "Risk 1% of NAV / 0.02 stop" -> (NAV * 0.01) / 0.02 = NAV * 0.5
-        # This basically means 50% leverage if confidence is 1.0 and alpha is perfect.
         base_size = (nav * 0.01) / 0.02
 
         # 2. Physics Scalar
-        # Scale down if Alpha is low (risky).
-        # Alpha < 1.5 is entering heavy tail territory.
-        # If Alpha >= 2.5 (Gaussian), scalar = 1.0.
-        # If Alpha = 1.5, scalar = 0.0.
-        # wait, the request said: max(0.0, alpha - 1.5).
-        # So at Alpha=2.0 (Lévy), scalar = 0.5. At Alpha=1.5, scalar=0.0.
-        # But we also clamp at 1.0? "min(1.0, ...)" implicitly if we follow common sense,
-        # but request formula is just "min(1.0, max(0.0, alpha - 1.5))".
         physics_scalar = min(1.0, max(0.0, alpha - 1.5))
 
         # 3. Final Calculation
@@ -77,30 +69,63 @@ class RiskManager:
 
 def risk_node(state: AgentState) -> AgentState:
     manager = RiskManager()
+    start_time = time.time()
+    success = True
+    error_msg = None
 
-    # 1. Update Governance Status
-    state = manager.check_governance(state)
+    try:
+        # 1. Update Governance Status
+        state = manager.check_governance(state)
 
-    status = state.get("status", TradingStatus.ACTIVE)
-    signal_side = state.get("signal_side", OrderSide.FLAT.value)
+        status = state.get("status", TradingStatus.ACTIVE)
+        signal_side = state.get("signal_side", OrderSide.FLAT.value)
 
-    # 2. The Logic Branch
-    if status != TradingStatus.ACTIVE:
+        # 2. The Logic Branch
+        if status != TradingStatus.ACTIVE:
+            state["approved_size"] = 0.0
+        elif signal_side in [OrderSide.BUY.value, OrderSide.SELL.value]:
+            # Active + Signal -> Check Sizing
+            size = manager.size_position(state)
+            state["approved_size"] = size
+
+            alpha = state.get("current_alpha", 0.0)
+            log_msg = f"RISK: ✅ Approved ${size:.2f} (Alpha: {alpha:.2f})"
+            print(log_msg)
+            if "messages" not in state:
+                state["messages"] = []
+            state["messages"].append(log_msg)
+        else:
+            # FLAT or Invalid
+            state["approved_size"] = 0.0
+
+    except Exception as e:
+        success = False
+        error_msg = f"RISK: 💥 CRASH: {e}"
+        print(error_msg)
+        logger.exception(error_msg)
         state["approved_size"] = 0.0
-        # Optional: Log that we are halted? Governance check already logs breaches.
-    elif signal_side in [OrderSide.BUY.value, OrderSide.SELL.value]:
-        # Active + Signal -> Check Sizing
-        size = manager.size_position(state)
-        state["approved_size"] = size
-
-        alpha = state.get("current_alpha", 0.0)
-        log_msg = f"RISK: ✅ Approved ${size:.2f} (Alpha: {alpha:.2f})"
-        print(log_msg)
         if "messages" not in state:
             state["messages"] = []
-        state["messages"].append(log_msg)
-    else:
-        # FLAT or Invalid
-        state["approved_size"] = 0.0
+        state["messages"].append(error_msg)
+
+    finally:
+        # TRACK RISK NODE PERFORMANCE
+        latency = (time.time() - start_time) * 1000
+        state_service = get_global_state_service()
+        snapshot_id = get_current_snapshot_id()
+        if state_service and snapshot_id:
+            state_service.save_agent_metrics(
+                snapshot_id=snapshot_id,
+                agent_name="risk",
+                latency_ms=latency,
+                success=success,
+                output_data={
+                    "approved_size": state.get("approved_size"),
+                    "status": str(state.get("status")),
+                    "alpha": state.get("current_alpha"),
+                    "regime": state.get("regime"),
+                },
+                error=error_msg,
+            )
 
     return state

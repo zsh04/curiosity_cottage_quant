@@ -1,11 +1,15 @@
 import logging
 import numpy as np
+import time
+from typing import Optional
 
 from app.agent.state import AgentState, OrderSide, TradingStatus
 from app.adapters.market import MarketAdapter
 from app.adapters.llm import LLMAdapter
+from app.adapters.sentiment import SentimentAdapter
 from app.lib.kalman import KinematicKalmanFilter
 from app.lib.memory import FractalMemory
+from app.services.global_state import get_global_state_service, get_current_snapshot_id
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +24,14 @@ class AnalystAgent:
     def __init__(self):
         self.market = MarketAdapter()
         self.llm = LLMAdapter()
+        self.sentiment = SentimentAdapter()
         self.kf = KinematicKalmanFilter()
 
     def analyze(self, state: AgentState) -> AgentState:
         symbol = state.get("symbol", "SPY")
+        start_time = time.time()
+        success = True
+        error_msg = None
 
         try:
             # --- Step 1: Sensory (Data Collection) ---
@@ -71,6 +79,10 @@ class AnalystAgent:
             velocity = est.velocity
             acceleration = est.acceleration
 
+            # TRACK PHYSICS OUTPUT
+            state["velocity"] = velocity
+            state["acceleration"] = acceleration
+
             # Get Regime from state if exists, else "Unknown"
             regime = state.get("regime", "Unknown")
 
@@ -83,7 +95,42 @@ class AnalystAgent:
                 f"Regime: {regime}"
             )
 
+            # TRACK LLM INVOCATION
+            llm_start = time.time()
             signal_data = self.llm.get_trade_signal(context_str)
+            llm_latency = (time.time() - llm_start) * 1000
+
+            # Save Gemma2 metrics
+            state_service = get_global_state_service()
+            snapshot_id = get_current_snapshot_id()
+            if state_service and snapshot_id:
+                state_service.save_model_metrics(
+                    snapshot_id=snapshot_id,
+                    model_name="gemma2_9b",
+                    latency_ms=llm_latency,
+                    thought_process=signal_data.get("raw_response"),
+                    prediction={
+                        "signal": signal_data.get("signal_side"),
+                        "confidence": signal_data.get("signal_confidence"),
+                    },
+                    tokens_in=signal_data.get("tokens_input"),
+                    tokens_out=signal_data.get("tokens_output"),
+                    confidence=signal_data.get("signal_confidence"),
+                )
+
+            # TRACK SENTIMENT (Optional - can be used for additional context)
+            sentiment_result = self.sentiment.analyze(context_str)
+            if state_service and snapshot_id:
+                state_service.save_model_metrics(
+                    snapshot_id=snapshot_id,
+                    model_name="finbert",
+                    latency_ms=sentiment_result.get("latency_ms", 0),
+                    prediction={
+                        "label": sentiment_result.get("label"),
+                        "score": sentiment_result.get("score"),
+                    },
+                    confidence=sentiment_result.get("score"),
+                )
 
             # --- Step 5: Output (Decision Mapping) ---
             raw_signal = signal_data.get("signal_side", "FLAT").upper()
@@ -114,6 +161,7 @@ class AnalystAgent:
             state["messages"].append(log_msg)
 
         except Exception as e:
+            success = False
             error_msg = f"ANALYST: 💥 CRASH: {e}"
             print(error_msg)
             logger.exception(error_msg)
@@ -125,6 +173,26 @@ class AnalystAgent:
             if "messages" not in state:
                 state["messages"] = []
             state["messages"].append(error_msg)
+
+        finally:
+            # TRACK AGENT PERFORMANCE
+            latency = (time.time() - start_time) * 1000
+            state_service = get_global_state_service()
+            snapshot_id = get_current_snapshot_id()
+            if state_service and snapshot_id:
+                state_service.save_agent_metrics(
+                    snapshot_id=snapshot_id,
+                    agent_name="analyst",
+                    latency_ms=latency,
+                    success=success,
+                    output_data={
+                        "signal_side": state.get("signal_side"),
+                        "confidence": state.get("signal_confidence"),
+                        "velocity": state.get("velocity"),
+                        "acceleration": state.get("acceleration"),
+                    },
+                    error=error_msg,
+                )
 
         return state
 
