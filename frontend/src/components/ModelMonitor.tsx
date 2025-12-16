@@ -1,167 +1,110 @@
-import React, { useState } from 'react';
-import { Brain, ChevronDown, ChevronUp, Activity } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Brain, Activity, Zap } from 'lucide-react';
 
-interface ModelInvocation {
-    timestamp: string;
-    latency_ms: number;
-    prediction: any;
-    confidence: number | null;
+interface ModelMetric {
+    name: string;
+    latency: number;
+    history: number[];
+    status: 'OK' | 'DEGRADED' | 'DOWN';
 }
 
-interface ModelData {
-    avg_latency_ms: number;
-    invocations: ModelInvocation[];
-    last_thought: string | null;
-}
+const ModelMonitor: React.FC = () => {
+    const [models, setModels] = useState<ModelMetric[]>([
+        { name: 'FinBERT', latency: 120, history: [120, 115, 125, 118, 122, 119, 121, 124, 118, 120], status: 'OK' },
+        { name: 'Chronos', latency: 450, history: [410, 420, 435, 440, 425, 430, 445, 450, 448, 450], status: 'DEGRADED' },
+        { name: 'Gemma2', latency: 85, history: [80, 82, 85, 83, 81, 84, 86, 82, 85, 85], status: 'OK' },
+    ]);
 
-interface ModelsData {
-    [modelName: string]: ModelData;
-}
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setModels(prev => prev.map(model => {
+                // Simulate latency fluctuation
+                const change = Math.floor(Math.random() * 20) - 10;
+                const newLatency = Math.max(20, model.latency + change);
 
-interface ModelMonitorProps {
-    models: ModelsData;
-}
+                let status: 'OK' | 'DEGRADED' | 'DOWN' = 'OK';
+                if (newLatency > 500) status = 'DOWN';
+                else if (newLatency > 200) status = 'DEGRADED';
 
-export function ModelMonitor({ models }: ModelMonitorProps) {
-    const [expandedModel, setExpandedModel] = useState<string | null>(null);
+                const newHistory = [...model.history.slice(1), newLatency];
 
-    const toggleExpand = (modelName: string) => {
-        setExpandedModel(expandedModel === modelName ? null : modelName);
+                return {
+                    ...model,
+                    latency: newLatency,
+                    history: newHistory,
+                    status
+                };
+            }));
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, []);
+
+    const getStatusColor = (status: string, latency: number) => {
+        if (status === 'DOWN' || latency > 1000) return 'text-red-500 bg-red-500/10 border-red-500/30';
+        if (status === 'DEGRADED' || latency > 200) return 'text-yellow-400 bg-yellow-400/10 border-yellow-400/30';
+        return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30';
     };
 
-    const modelIcons: Record<string, string> = {
-        gemma2_9b: '🧠',
-        finbert: '📊',
-        chronos: '📈',
-    };
+    const renderSparkline = (data: number[], colorClass: string) => {
+        const min = Math.min(...data);
+        const max = Math.max(...data);
+        const range = max - min || 1;
+        const height = 20;
+        const width = 60;
+        const step = width / (data.length - 1);
 
-    const modelLabels: Record<string, string> = {
-        gemma2_9b: 'Gemma2 9B (LLM)',
-        finbert: 'FinBERT (Sentiment)',
-        chronos: 'Chronos-2 (Forecast)',
+        const points = data.map((val, i) => {
+            const x = i * step;
+            const y = height - ((val - min) / range) * height;
+            return `${x},${y}`;
+        }).join(' ');
+
+        // Extract color hex roughly from tailwind class or use currentcolor
+        // Ideally we pass specific hex, but here we let SVG inherit or use generic
+        return (
+            <svg width={width} height={height} className="opacity-50 overflow-visible">
+                <polyline
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    points={points}
+                    vectorEffect="non-scaling-stroke"
+                />
+            </svg>
+        );
     };
 
     return (
-        <div className="bg-card border border-border rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
-                <Brain className="w-5 h-5 text-primary" />
-                <h3 className="text-lg font-semibold">Model Performance</h3>
-            </div>
+        <div className="flex gap-4 w-full h-full">
+            {models.map((model) => {
+                const styleClass = getStatusColor(model.status, model.latency);
 
-            <div className="space-y-3">
-                {Object.keys(models).length === 0 ? (
-                    <div className="text-muted-foreground text-sm text-center py-4">
-                        No model data available
-                    </div>
-                ) : (
-                    Object.entries(models).map(([modelName, data]) => {
-                        const isExpanded = expandedModel === modelName;
-                        const latestInvocation = data.invocations[0];
+                return (
+                    <div key={model.name} className={`flex-1 flex flex-col justify-between p-3 rounded-lg border ${styleClass} transition-all duration-300`}>
 
-                        return (
-                            <div
-                                key={modelName}
-                                className="border border-border/50 rounded-md overflow-hidden"
-                            >
-                                {/* Header */}
-                                <div
-                                    className="p-4 hover:bg-accent/5 cursor-pointer transition-colors"
-                                    onClick={() => toggleExpand(modelName)}
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-lg">
-                                                {modelIcons[modelName] || '🤖'}
-                                            </span>
-                                            <span className="font-medium">
-                                                {modelLabels[modelName] || modelName}
-                                            </span>
-                                        </div>
-                                        {isExpanded ? (
-                                            <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                                        ) : (
-                                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                                        )}
-                                    </div>
-
-                                    <div className="grid grid-cols-3 gap-4 mt-3 text-sm">
-                                        <div>
-                                            <div className="text-muted-foreground text-xs">
-                                                Avg Latency
-                                            </div>
-                                            <div className="font-mono text-foreground">
-                                                {data.avg_latency_ms.toFixed(1)}ms
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div className="text-muted-foreground text-xs">
-                                                Invocations
-                                            </div>
-                                            <div className="font-mono text-foreground">
-                                                {data.invocations.length}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div className="text-muted-foreground text-xs">
-                                                Last Confidence
-                                            </div>
-                                            <div className="font-mono text-foreground">
-                                                {latestInvocation?.confidence != null
-                                                    ? (latestInvocation.confidence * 100).toFixed(0) + '%'
-                                                    : 'N/A'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Expanded Section - LLM Reasoning */}
-                                {isExpanded && data.last_thought && (
-                                    <div className="border-t border-border/50 p-4 bg-accent/5">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <Activity className="w-4 h-4 text-primary" />
-                                            <span className="text-sm font-medium">Last Reasoning</span>
-                                        </div>
-                                        <div className="bg-background border border-border rounded p-3 text-xs font-mono whitespace-pre-wrap max-h-64 overflow-y-auto">
-                                            {data.last_thought}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Expanded Section - Recent Invocations */}
-                                {isExpanded && data.invocations.length > 0 && (
-                                    <div className="border-t border-border/50 p-4 bg-accent/5">
-                                        <div className="text-sm font-medium mb-2">
-                                            Recent Invocations
-                                        </div>
-                                        <div className="space-y-2 max-h-48 overflow-y-auto">
-                                            {data.invocations.slice(0, 5).map((inv, idx) => (
-                                                <div
-                                                    key={idx}
-                                                    className="text-xs flex justify-between items-center border-l-2 border-primary/30 pl-2"
-                                                >
-                                                    <span className="text-muted-foreground font-mono">
-                                                        {new Date(inv.timestamp).toLocaleTimeString()}
-                                                    </span>
-                                                    <div className="flex gap-3">
-                                                        <span className="text-foreground">
-                                                            {inv.latency_ms.toFixed(0)}ms
-                                                        </span>
-                                                        {inv.confidence != null && (
-                                                            <span className="text-primary">
-                                                                {(inv.confidence * 100).toFixed(0)}%
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+                        <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-2">
+                                {model.name === 'FinBERT' && <Activity size={16} />}
+                                {model.name === 'Chronos' && <Zap size={16} />}
+                                {model.name === 'Gemma2' && <Brain size={16} />}
+                                <span className="font-bold text-xs uppercase tracking-wider">{model.name}</span>
                             </div>
-                        );
-                    })
-                )}
-            </div>
+                            <div className="flex flex-col items-end">
+                                <span className="text-sm font-mono font-bold">{model.latency}ms</span>
+                                <span className="text-[10px] opacity-70">{model.status}</span>
+                            </div>
+                        </div>
+
+                        <div className="mt-2 text-right">
+                            {renderSparkline(model.history, styleClass)}
+                        </div>
+
+                    </div>
+                );
+            })}
         </div>
     );
-}
+};
+
+export default ModelMonitor;
