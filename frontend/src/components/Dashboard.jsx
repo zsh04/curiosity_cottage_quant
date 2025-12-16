@@ -1,229 +1,92 @@
-
-import React, { useEffect, useState } from 'react';
-import Card from './Card';
-
-const StatWidget = ({ label, value, trend, trendUp }) => (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>{label}</span>
-        <div style={{ display: 'flex', alignItems: 'baseline', marginTop: 'var(--space-xs)' }}>
-            <span style={{ fontSize: '2rem', fontWeight: 600, color: 'var(--color-text-main)' }}>{value}</span>
-            {trend && (
-                <span style={{
-                    marginLeft: 'var(--space-sm)',
-                    fontSize: '0.875rem',
-                    color: trendUp ? 'var(--color-success)' : 'var(--color-danger)'
-                }}>
-                    {trendUp ? '↑' : '↓'} {trend}
-                </span>
-            )}
-        </div>
-    </div>
-);
+import React from 'react';
+import PhysicsGauge from './PhysicsGauge';
+import SentimentTriad from './SentimentTriad';
+import AgentMonitor from './AgentMonitor';
 
 const Dashboard = () => {
-    const [metrics, setMetrics] = useState(null);
-    const [status, setStatus] = useState(null);
-    const [signals, setSignals] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    const handleAction = async (action) => {
-        try {
-            const res = await fetch(`/api/actions/${action}`, { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                alert(`Action Triggered: ${data.message}`);
-            } else {
-                alert('Action Failed');
-            }
-        } catch (err) {
-            console.error(err);
-            alert('Failed to trigger action');
-        }
-    };
-
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const [metricsRes, statusRes, signalsRes] = await Promise.all([
-                    fetch('/api/system/metrics'),
-                    fetch('/api/system/status'),
-                    fetch('/api/signals')
-                ]);
-
-                if (metricsRes.ok && statusRes.ok && signalsRes.ok) {
-                    const metricsData = await metricsRes.json();
-                    const statusData = await statusRes.json();
-                    const signalsData = await signalsRes.json();
-                    setMetrics(metricsData);
-                    setStatus(statusData);
-                    setSignals(signalsData);
-                }
-            } catch (error) {
-                console.error("Failed to fetch dashboard data", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchData();
-        const interval = setInterval(fetchData, 5000); // Poll every 5s
-        return () => clearInterval(interval);
-    }, []);
-
-    if (loading) {
-        return <div style={{ padding: 'var(--space-xl)', color: 'var(--color-text-muted)' }}>Loading System Data...</div>;
-    }
-
     return (
-        <div>
-            <header style={{ marginBottom: 'var(--space-xl)' }}>
-                <h1 className="animate-fade-in">Control Center</h1>
-                <p style={{ color: 'var(--color-text-muted)' }}>
-                    System Status: <span style={{ color: status?.status === 'Online' ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                        ● {status?.status || 'Unknown'}
-                    </span>
-                    <span style={{ marginLeft: 'var(--space-md)' }}>v{status?.version}</span>
-                </p>
+        <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-emerald-500/30">
+
+            {/* --- Sticky Header --- */}
+            <header className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md">
+                <div className="container mx-auto px-6 h-16 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+                        <h1 className="text-lg font-bold tracking-[0.2em] text-slate-100">
+                            CURIOSITY COTTAGE <span className="text-emerald-500 text-xs align-top">v2.0</span>
+                        </h1>
+                    </div>
+                    <div className="text-xs font-mono text-slate-500">
+                        SYSTEM_MODE: <span className="text-emerald-400">AUTONOMOUS</span>
+                    </div>
+                </div>
             </header>
 
-            {/* Stats Grid */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                gap: 'var(--space-lg)',
-                marginBottom: 'var(--space-xl)'
-            }}>
-                <Card>
-                    <StatWidget
-                        label="Total PnL (24h)"
-                        value={metrics ? `$${metrics.pnl_24h.toLocaleString()}` : '---'}
-                        trend={metrics ? `${metrics.pnl_trend_pct}%` : null}
-                        trendUp={metrics?.pnl_trend_pct >= 0}
-                    />
-                </Card>
-                <Card>
-                    <StatWidget label="Active Agents" value={status?.active_agents ?? '0'} trend="Stable" trendUp={true} />
-                </Card>
-                <Card>
-                    <StatWidget
-                        label="System Load"
-                        value={metrics ? `${metrics.system_load_pct}%` : '---'}
-                        trend="1.2%"
-                        trendUp={false}
-                    />
-                </Card>
-                <Card>
-                    <StatWidget label="Open Positions" value={metrics?.open_positions ?? '0'} />
-                </Card>
-            </div>
+            {/* --- Main Mission Control Grid --- */}
+            <main className="container mx-auto p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-7rem)]">
 
-            {/* Main Content Grid */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: '2fr 1fr',
-                gap: 'var(--space-lg)'
-            }}>
-                {/* Left Column: Charts/Logs */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
-                    <Card title="Live Market Activity">
-                        <div style={{
-                            height: '300px',
-                            background: 'linear-gradient(180deg, var(--color-bg-paper) 0%, transparent 100%)',
-                            borderRadius: 'var(--radius-md)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--color-text-muted)'
-                        }}>
-                            [Market Chart Visualization Placeholder]
+                    {/* --- Column 1: Physics & Safety (Span 3) --- */}
+                    <section className="lg:col-span-3 flex flex-col gap-6">
+
+                        {/* Physics Gauge Card */}
+                        <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl backdrop-blur-sm flex-1 flex flex-col">
+                            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Physics Veto</h2>
+                            <div className="flex-1 flex items-center justify-center">
+                                <PhysicsGauge alpha={2.4} />
+                            </div>
                         </div>
-                    </Card>
 
-                    <Card title="Recent Signals" className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                            <thead>
-                                <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                                    <th style={{ padding: 'var(--space-sm)', color: 'var(--color-text-muted)' }}>Time</th>
-                                    <th style={{ padding: 'var(--space-sm)', color: 'var(--color-text-muted)' }}>Symbol</th>
-                                    <th style={{ padding: 'var(--space-sm)', color: 'var(--color-text-muted)' }}>Action</th>
-                                    <th style={{ padding: 'var(--space-sm)', color: 'var(--color-text-muted)' }}>Confidence</th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                {Array.isArray(signals) && signals.map((row, i) => (
-                                    <tr key={i} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                                        <td style={{ padding: 'var(--space-sm)' }}>{row.time}</td>
-                                        <td style={{ padding: 'var(--space-sm)', fontWeight: 600 }}>{row.symbol}</td>
-                                        <td style={{ padding: 'var(--space-sm)' }}>
-                                            <span style={{
-                                                color: row.action === 'LONG' ? 'var(--color-success)' :
-                                                    row.action === 'SHORT' ? 'var(--color-danger)' : 'var(--color-text-muted)'
-                                            }}>
-                                                {row.action}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: 'var(--space-sm)' }}>{row.confidence}</td>
-                                    </tr>
-                                ))}
-                                {(!signals || signals.length === 0) && (
-                                    <tr>
-                                        <td colSpan="4" style={{ padding: 'var(--space-md)', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                                            No signals found
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </Card>
-                </div>
-
-                {/* Right Column: Controls/Status */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
-                    <Card title="Quick Actions">
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                            <button
-                                className="btn-primary"
-                                onClick={() => handleAction('halt')}
-                            >
-                                Emergency Halt
-                            </button>
-                            <button
-                                className="btn-primary"
-                                style={{ background: 'var(--color-bg-paper)', border: '1px solid var(--border-color)', color: 'var(--color-text-main)' }}
-                                onClick={() => handleAction('rebalance')}
-                            >
-                                Rebalance Portfolio
-                            </button>
-                            <button
-                                className="btn-primary"
-                                style={{ background: 'var(--color-bg-paper)', border: '1px solid var(--border-color)', color: 'var(--color-text-main)' }}
-                                onClick={() => handleAction('export-logs')}
-                            >
-                                Export Logs
-                            </button>
-                        </div>
-                    </Card>
-
-                    <Card title="System Health">
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-                            {['Data Feed', 'Execution Engine', 'Risk Manager'].map(service => (
-                                <div key={service} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span>{service}</span>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
-                                        <span style={{
-                                            width: '8px', height: '8px', borderRadius: '50%',
-                                            background: 'var(--color-success)',
-                                            boxShadow: '0 0 8px var(--color-success)'
-                                        }} />
-                                        <span style={{ fontSize: '0.875rem', color: 'var(--color-success)' }}>Running</span>
-                                    </div>
+                        {/* Risk Stats Card */}
+                        <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl h-1/3">
+                            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Risk Telemetry</h2>
+                            <div className="space-y-4 font-mono text-sm">
+                                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                                    <span className="text-slate-500">Exposure</span>
+                                    <span className="text-slate-200">$12,450</span>
                                 </div>
-                            ))}
+                                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                                    <span className="text-slate-500">Daily Drawdown</span>
+                                    <span className="text-emerald-400">-0.45%</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-slate-500">Kelly Frac</span>
+                                    <span className="text-yellow-400">0.32</span>
+                                </div>
+                            </div>
                         </div>
-                    </Card>
+
+                    </section>
+
+                    {/* --- Column 2: Cognitive Layer (Span 5) --- */}
+                    <section className="lg:col-span-5 flex flex-col gap-6">
+
+                        {/* Sentiment Triad Card */}
+                        <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl flex-[2] flex flex-col items-center justify-center">
+                            <div className="w-full text-left mb-2">
+                                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Market Sentiment</h2>
+                            </div>
+                            <SentimentTriad />
+                        </div>
+
+                        {/* Forecast Placeholder Card */}
+                        <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 shadow-xl flex-1 relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-800/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Chronos Forecast</h2>
+                            <div className="h-full flex items-center justify-center text-slate-600 font-mono text-xs">
+                                [ WAITING FOR PROBABILISTIC INFERENCE ]
+                            </div>
+                        </div>
+
+                    </section>
+
+                    {/* --- Column 3: System Logs (Span 4) --- */}
+                    <section className="lg:col-span-4 h-full">
+                        <AgentMonitor />
+                    </section>
+
                 </div>
-            </div>
+            </main>
         </div>
     );
 };
