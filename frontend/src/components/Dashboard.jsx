@@ -112,6 +112,50 @@ const Dashboard = () => {
         }
     };
 
+    // Generate chart data from history and forecast
+    const generateChartData = (history, forecast, currentPrice) => {
+        const data = [];
+        const now = new Date();
+
+        // Historical data from price history
+        if (history && history.length > 0) {
+            const recentHistory = history.slice(-20); // Last 20 points
+            recentHistory.forEach((price, index) => {
+                const time = new Date(now.getTime() - (recentHistory.length - index) * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                data.push({
+                    time,
+                    price: price,
+                    isForecast: false
+                });
+            });
+        }
+
+        // Add current price
+        if (currentPrice && currentPrice > 0) {
+            data.push({
+                time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                price: currentPrice,
+                isForecast: false
+            });
+        }
+
+        // Forecast data
+        if (forecast && forecast.median && forecast.median.length > 0) {
+            forecast.median.forEach((median, index) => {
+                const time = new Date(now.getTime() + (index + 1) * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                data.push({
+                    time,
+                    median: median,
+                    p10: forecast.p10?.[index] || median * 0.98,
+                    p90: forecast.p90?.[index] || median * 1.02,
+                    isForecast: true
+                });
+            });
+        }
+
+        return data.length > 0 ? data : [{ time: 'No Data', price: 0 }];
+    };
+
     return (
         <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-emerald-500/30">
 
@@ -122,8 +166,8 @@ const Dashboard = () => {
                         {/* Connection Status Indicator */}
                         <div
                             className={`w-3 h-3 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)] ${isConnected
-                                    ? 'bg-emerald-500 animate-pulse'
-                                    : 'bg-red-500'
+                                ? 'bg-emerald-500 animate-pulse'
+                                : 'bg-red-500'
                                 }`}
                         ></div>
                         <h1 className="text-lg font-bold tracking-[0.2em] text-slate-100">
@@ -188,7 +232,10 @@ const Dashboard = () => {
                             <div className="w-full text-left mb-2">
                                 <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Market Sentiment</h2>
                             </div>
-                            <SentimentTriad data={systemState.sentiment} />
+                            <SentimentTriad
+                                label={systemState.sentiment?.label || 'Neutral'}
+                                score={systemState.sentiment?.score || 0.5}
+                            />
                         </div>
 
                         {/* Forecast Chart (Cerebro) */}
@@ -196,9 +243,7 @@ const Dashboard = () => {
                             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Chronos Forecast</h2>
                             <div className="flex-1 w-full h-full">
                                 <CerebroChart
-                                    history={systemState.market.history}
-                                    forecast={systemState.forecast}
-                                    currentPrice={systemState.market.price}
+                                    data={generateChartData(systemState.market.history, systemState.forecast, systemState.market.price)}
                                 />
                             </div>
                         </div>
