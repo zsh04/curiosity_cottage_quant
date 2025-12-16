@@ -60,12 +60,18 @@ async def run_agent_service():
                 "status": "active",
                 "market": {
                     "symbol": final_state.get("symbol", "SPY"),
-                    "price": final_state.get("current_price", 0.0),
+                    "price": final_state.get("price", 0.0),
                     "alpha": final_state.get("current_alpha", 0.0),  # From heavy tail
                     "regime": final_state.get("regime", "Unknown"),
                     "velocity": final_state.get("velocity", 0.0),  # From Kalman
                     "acceleration": final_state.get("acceleration", 0.0),  # From Kalman
+                    "history": final_state.get(
+                        "historic_returns", []
+                    ),  # Price history for charts
                 },
+                "forecast": final_state.get(
+                    "chronos_forecast", {}
+                ),  # Chronos predictions
                 "signal": {
                     "side": final_state.get("signal_side", "FLAT"),
                     "confidence": final_state.get("signal_confidence", 0.0),
