@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     LLM_MODEL: str = "llama3"
 
+    # --- Microservices ---
+    CHRONOS_URL: str = "http://cc_chronos:8002"
+    FINBERT_URL: str = "http://cc_finbert:8001"
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=True, extra="ignore"
     )

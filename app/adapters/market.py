@@ -6,19 +6,23 @@ from datetime import datetime, timedelta, timezone
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockLatestTradeRequest, StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
+from opentelemetry import trace
+
+from app.adapters.tiingo import TiingoAdapter
 
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 
 class MarketAdapter:
     """
     Production Market Data Adapter using Alpaca SDK.
-    Fetches real-time snapshots and historical bars.
+    Fetches real-time snapshots, historical bars, and news.
     """
 
     def __init__(self):
         """
-        Initialize Alpaca Historical Data Client.
+        Initialize Alpaca Historical Data Client and Tiingo.
         Reads API credentials from environment variables.
         """
         api_key = os.getenv("ALPACA_API_KEY")
@@ -30,6 +34,13 @@ class MarketAdapter:
             )
 
         self.client = StockHistoricalDataClient(api_key=api_key, secret_key=secret_key)
+
+        # Initialize Tiingo for news
+        try:
+            self.tiingo = TiingoAdapter()
+        except ValueError as e:
+            logger.warning(f"TiingoAdapter initialization failed: {e}")
+            self.tiingo = None
 
     def get_current_price(self, symbol: str) -> float:
         """
@@ -109,3 +120,62 @@ class MarketAdapter:
         except Exception as e:
             logger.error(f"Failed to fetch historic returns for {symbol}: {e}")
             return []
+
+    @tracer.start_as_current_span("market_get_news")
+    def get_news(self, symbol: str, limit: int = 5) -> List[str]:
+        """
+        Fetch recent news headlines for a symbol.
+        Uses Tiingo as primary source with Alpaca as fallback.
+
+        Args:
+            symbol: Stock ticker
+            limit: Maximum number of headlines to return
+
+        Returns:
+            List[str]: List of headline strings, or [] if both sources fail
+        """
+        span = trace.get_current_span()
+        span.set_attribute("market.symbol", symbol)
+        span.set_attribute("market.news_limit", limit)
+
+        headlines = []
+
+        # Primary: Tiingo
+        if self.tiingo:
+            try:
+                span.set_attribute("market.news_source", "tiingo")
+                news_items = self.tiingo.fetch_news(tickers=symbol, limit=limit)
+                if news_items:
+                    headlines = [
+                        item.get("title", "")
+                        for item in news_items
+                        if item.get("title")
+                    ]
+                    logger.info(
+                        f"📰 Tiingo: Fetched {len(headlines)} headlines for {symbol}"
+                    )
+                    span.set_attribute("market.news_count", len(headlines))
+                    span.set_attribute("market.news_success", True)
+                    return headlines[:limit]
+            except Exception as e:
+                logger.warning(f"Tiingo news fetch failed for {symbol}: {e}")
+                span.set_attribute("market.tiingo_error", str(e))
+
+        # Fallback: Alpaca News API
+        try:
+            span.set_attribute("market.news_source", "alpaca_fallback")
+            # Alpaca News API endpoint
+            # Note: This requires alpaca-py with news support
+            # For now, return empty as we don't have Alpaca news configured
+            logger.warning(f"Alpaca news fallback not yet implemented for {symbol}")
+            return []
+        except Exception as e:
+            logger.warning(f"Alpaca news fetch failed for {symbol}: {e}")
+            span.set_attribute("market.alpaca_error", str(e))
+
+        # Both failed
+        if not headlines:
+            logger.warning(f"⚠️  No news available for {symbol} from any source")
+            span.set_attribute("market.news_success", False)
+
+        return []
