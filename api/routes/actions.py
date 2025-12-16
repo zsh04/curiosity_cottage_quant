@@ -1,5 +1,9 @@
 from litestar import Controller, post
 from dataclasses import dataclass
+from app.services.global_state import set_system_halt
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -14,9 +18,21 @@ class ActionsController(Controller):
 
     @post("/halt")
     async def trigger_halt(self) -> ActionResponse:
-        """Trigger emergency system halt."""
-        print("!!! EMERGENCY HALT TRIGGERED !!!")
-        return ActionResponse(success=True, message="System Halted Successfully")
+        """Trigger emergency system halt (Kill Switch)."""
+        logger.warning("🛑 EMERGENCY HALT TRIGGERED BY USER")
+        set_system_halt(True)
+        return ActionResponse(
+            success=True, message="🛑 Kill Switch Engaged. Agent Loop Paused."
+        )
+
+    @post("/resume")
+    async def trigger_resume(self) -> ActionResponse:
+        """Resume system from emergency halt."""
+        logger.info("▶️ RESUME TRIGGERED: Releasing Emergency Halt")
+        set_system_halt(False)
+        return ActionResponse(
+            success=True, message="✅ System Resumed. Agent Loop Active."
+        )
 
     @post("/rebalance")
     async def trigger_rebalance(self) -> ActionResponse:

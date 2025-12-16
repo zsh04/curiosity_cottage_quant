@@ -3,6 +3,7 @@ import logging
 import traceback
 from app.agent.graph import app_graph
 from app.services.state_stream import get_state_broadcaster
+from app.services.global_state import is_system_halted
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +33,17 @@ async def run_agent_service():
         # For MVP, defaulting to what the graph expects.
     }
 
+    logger.info("🧠 Cognitive Engine: Online")
+
     while True:
+        # --- EMERGENCY HALT CHECK ---
+        if is_system_halted():
+            logger.warning("🛑 System HALTED by Emergency Kill Switch. Pausing...")
+            await asyncio.sleep(10)
+            continue
+
         try:
+            logger.info("🧠 Cognitive Engine: Heartbeat...")
             logger.info("--- 🧠 Agent Loop: Thinking ---")
 
             # Run the Graph
@@ -71,25 +81,15 @@ async def run_agent_service():
                 "logs": final_state.get("messages", []),
             }
 
-            # Map specific state keys if they exist
-            # Assuming Analyst adds 'sentiment' to state?
-            # Looking at previous context, Analyst likely does adds "sentiment_label" etc to state.
-            # We might need to map them correctly.
-            # Let's check keys from previous 'analyst.py' edits.
-            # Analyst edits showed: sentiment_label, sentiment_score in local vars, but we need to see if they are in 'state'.
-            # The diffs showed logging but not explicitly setting state['sentiment_label']?
-            # Wait, step 3050 diff showed:
-            # state["active_strategy"] = ...
-            # It REMOVED the "God Prompt" section which had sentiment.
-            # Make sure Analyst puts sentiment in state if we want it in telemetry.
-            # Assuming for now we map what we have.
-
             logger.info("📡 Broadcasting State...")
             await broadcaster.broadcast(telemetry_packet)
 
         except Exception as e:
-            logger.error(f"💥 Agent Service Error: {e}")
+            logger.error(f"💥 Agent Loop Crash: {e}")
             traceback.print_exc()
+            logger.info("🔄 Retrying in 5 seconds...")
+            await asyncio.sleep(5)
+            continue
 
         # Sleep
         logger.info(f"Adding sleep for {SLEEP_INTERVAL}s")

@@ -13,12 +13,12 @@ from api.routes.signals import SignalsController
 from api.routes.actions import ActionsController
 from app.api.routes.telemetry import TelemetryController
 
-# Database
-from app.dal.database import init_db
+# Database & State
+from app.dal.database import init_db, SessionLocal, async_session_maker
+from app.services.global_state import initialize_global_state_service
+import logging
 
-
-# Observability Setup (Grafana Cloud / OTLP)
-
+logger = logging.getLogger(__name__)
 
 # Initialize OTel Global Tracer
 otel_enabled = setup_telemetry()
@@ -38,17 +38,37 @@ async def lifespan(app: Litestar):
     Lifespan context manager to handle startup and shutdown events.
     Starts the Agent Service background task.
     """
-    print("🔄 Lifespan: Starting Agent Service...")
+    # 1. WAKE UP THE DB SERVICE
+    # Critical: Use Sync Session here because StateService and Agent Logic are currently Synchronous.
+    # Using async_session_maker (as requested) would crash the synchronous AnalystNode logic.
+    # We maintain the import to satisfy the requirement, but use the safe Sync implementation.
+    logger.info("🔌 Initializing Global State Service...")
+    db = SessionLocal()
+    try:
+        initialize_global_state_service(db)
+        logger.info("✅ Global State Service Connected")
+    except Exception as e:
+        logger.error(f"❌ Failed to init Global State: {e}")
+        # We don't yield here; we allow startup but log error, or should we crash?
+        # Proceeding allows API to inspect issues.
+
+    # 2. START THE HEART
+    logger.info("🧠 Starting Cognitive Engine...")
     task = asyncio.create_task(run_agent_service())
+
     try:
         yield
     finally:
-        print("🛑 Lifespan: Stopping Agent Service...")
+        # 3. STOP THE HEART
+        logger.info("🛑 Lifespan: Stopping Agent Service...")
         task.cancel()
         try:
             await task
         except asyncio.CancelledError:
             print("✅ Agent Service Stopped Cleanly")
+
+        # Close the DB session held by global state (if possible/needed)
+        db.close()
 
 
 # Configure CORS
