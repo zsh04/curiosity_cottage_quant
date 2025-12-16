@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from litestar import Litestar, get
 from litestar.config.cors import CORSConfig
 from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
@@ -31,9 +32,23 @@ async def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
-def on_startup() -> None:
-    """Start the Agent Loop in the background."""
-    asyncio.create_task(run_agent_service())
+@asynccontextmanager
+async def lifespan(app: Litestar):
+    """
+    Lifespan context manager to handle startup and shutdown events.
+    Starts the Agent Service background task.
+    """
+    print("🔄 Lifespan: Starting Agent Service...")
+    task = asyncio.create_task(run_agent_service())
+    try:
+        yield
+    finally:
+        print("🛑 Lifespan: Stopping Agent Service...")
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            print("✅ Agent Service Stopped Cleanly")
 
 
 # Configure CORS
@@ -58,7 +73,7 @@ app = Litestar(
     # Use standard OTel Middleware which picks up global tracer
     middleware=[OpenTelemetryMiddleware] if otel_enabled else [],
     debug=True,
-    on_startup=[on_startup],
+    lifespan=[lifespan],
 )
 
 if __name__ == "__main__":
