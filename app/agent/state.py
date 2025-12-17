@@ -60,3 +60,6 @@ class AgentState(TypedDict):
 
     # --- Quantum Batch (New) ---
     candidates: List[dict]
+
+    # --- Portfolio Awareness (Phase 13) ---
+    current_positions: List[dict]

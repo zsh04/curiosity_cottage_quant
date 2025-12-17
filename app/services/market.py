@@ -117,3 +117,14 @@ class MarketService:
         except Exception as e:
             logger.error(f"MarketService: Scan failed: {e}")
             return {}
+
+    def get_startup_bars(self, symbol: str, limit: int = 100) -> List[float]:
+        """
+        Fetch historical bars specifically for system warm-up (Physics/Kalman/LSTM).
+        """
+        try:
+            logger.info(f"🔥 Warming up data for {symbol} (Limit: {limit})...")
+            return self.market_adapter.get_price_history(symbol, limit=limit)
+        except Exception as e:
+            logger.error(f"MarketService: Warm-up fetch failed: {e}")
+            return []

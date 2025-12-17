@@ -11,9 +11,14 @@ from app.services.physics import PhysicsService
 from app.services.forecasting import ForecastingService
 from app.services.reasoning import ReasoningService
 from app.services.memory import MemoryService
+from app.strategies.lstm import LSTMPredictionStrategy
 from app.lib.physics import Regime
-
-from app.services.global_state import get_global_state_service, get_current_snapshot_id
+from app.services.global_state import (
+    get_global_state_service,
+    get_current_snapshot_id,
+    save_model_checkpoint,
+    load_latest_checkpoint,
+)
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -32,6 +37,24 @@ class AnalystAgent:
         self.reasoning = ReasoningService()
         self.memory = MemoryService()  # Quantum Memory
 
+        # Strategy & Persistence
+        self.lstm_model = LSTMPredictionStrategy()
+        try:
+            # TRY DB LOAD
+            blob = load_latest_checkpoint("analyst_lstm")
+            if blob:
+                self.lstm_model.load_state_bytes(blob)
+                logger.info("ANALYST: Loaded LSTM state from Database.")
+            else:
+                # FALLBACK TO FILE (Migration support)
+                logger.info("ANALYST: No DB checkpoint found. Trying file...")
+                self.lstm_model.load_state("data/models/lstm_analyst.pkl")
+
+        except Exception as e:
+            logger.warning(f"Failed to load LSTM state: {e}")
+
+        self.cycle_count = 0
+
     async def _analyze_single(self, symbol: str) -> Dict[str, Any]:
         """
         Performs deep analysis on a single asset.
@@ -49,6 +72,28 @@ class AnalystAgent:
         }
 
         try:
+            # --- PHASE 0: WARM-UP (If needed) ---
+            # Ideally, we warm up once per symbol or system start.
+            # We track this locally or via Physics Service which is stateful.
+            # If PhysicsService says not initialized, we warm up.
+            if not self.physics.is_initialized:
+                startup_bars = await asyncio.to_thread(
+                    self.market.get_startup_bars, symbol, limit=100
+                )
+                # Warmup Physics
+                await asyncio.to_thread(self.physics.calculate_kinematics, startup_bars)
+
+                # Warmup/Init LSTM (feed returns)
+                # LSTM expects DataFrame usually or raw prices.
+                # Let's verify calculate_signal signature: expects DataFrame with "close".
+                import pandas as pd
+
+                if startup_bars:
+                    df_warmup = pd.DataFrame({"close": startup_bars})
+                    # We just call calculate_signal which handles warmup internally if uninitialized
+                    self.lstm_model.calculate_signal(df_warmup)
+                    logger.info(f"🔥 ANALYST: Warm-up complete for {symbol}")
+
             # --- Step 1: SENSES (Market Data) ---
             market_snapshot = await asyncio.to_thread(
                 self.market.get_market_snapshot, symbol
@@ -78,6 +123,27 @@ class AnalystAgent:
                 **qho_analysis,
             }
 
+            # --- Step 2.5: STRATEGY (LSTM Model) ---
+            # Update/Predict with latest data
+            lstm_signal = 0.0
+            if history:
+                import pandas as pd
+
+                df_latest = pd.DataFrame({"close": history})
+                lstm_signal = self.lstm_model.calculate_signal(df_latest)
+
+            # Persistence Check
+            self.cycle_count += 1
+            if self.cycle_count % 100 == 0:
+                # Save to DB
+                blob = self.lstm_model.get_state_bytes()
+                if blob:
+                    # This runs in main thread, which blocks, but saving byte checkoint to DB is fast usually
+                    # To avoid blocking, we could run in executor, but sqlalchemy session is not thread-safe usually
+                    # unless scoped. For now, running sync is safer for integrity.
+                    await asyncio.to_thread(save_model_checkpoint, "analyst_lstm", blob)
+                    logger.info("💾 ANALYST: Saved LSTM checkpoint to Database.")
+
             # --- Step 3: FUTURE (Forecasting) ---
             forecast = await asyncio.to_thread(
                 self.forecasting.predict_trend, history, 10
@@ -100,6 +166,7 @@ class AnalystAgent:
                 "physics": physics_context,
                 "forecast": forecast,
                 "sentiment": sentiment_snapshot,
+                "strategies": {"lstm_signal": lstm_signal},  # Inject LSTM signal
             }
 
             signal_result = await asyncio.to_thread(
@@ -141,11 +208,15 @@ class AnalystAgent:
     async def analyze(self, state: AgentState) -> AgentState:
         """
         Quantum Batch Analysis.
-        1. Inspects 'candidates' from Macro Node.
+        1. Inspects 'watchlist' (from Parallel Field Scanner) or 'candidates'.
         2. Spawns '_analyze_single' for each candidate in parallel.
         3. Collapses Wavefunction: Selects the highest confidence signal.
+        4. Stores full superposition state in 'analysis_reports'.
         """
-        candidates = state.get("candidates", [])
+        # Phase 16: Priority to Watchlist (from Macro Node)
+        candidates = state.get("watchlist", [])
+        if not candidates:
+            candidates = state.get("candidates", [])
 
         # Fallback: If no batch, analyze the single symbol provided in state
         if not candidates:
@@ -169,13 +240,25 @@ class AnalystAgent:
         # Merge Results
         enriched_candidates = []
         for i, res in enumerate(results):
+            # Candidate dict from input (watchlist item)
             candidate = candidates[i].copy()
+
             if isinstance(res, dict):
+                # Update with analysis results
                 candidate.update(res)
             else:
                 candidate["error"] = str(res)
                 candidate["signal_confidence"] = -1.0
+                logger.error(
+                    f"ANALYST: Analysis failed for {candidate.get('symbol')}: {res}"
+                )
+
             enriched_candidates.append(candidate)
+
+        # --- SUPERPOSITION OUTPUT ---
+        # Store full reports for downstream reasoning/risk
+        state["analysis_reports"] = enriched_candidates
+        state["candidates"] = enriched_candidates  # Backwards compatibility
 
         # --- SELECTION Logic (Wavefunction Collapse) ---
         # Sort by Confidence Descending
@@ -217,7 +300,7 @@ class AnalystAgent:
             f"ANALYST: 🏆 Winner Selected: {winner['symbol']} (Conf: {winner.get('signal_confidence', 0):.2f})"
         )
 
-        # Update Top-Level State (The collapsed reality)
+        # Update Top-Level State (The collapsed reality for Execution)
         state["symbol"] = winner["symbol"]
         state["signal_side"] = winner.get("signal_side", "FLAT")
         state["signal_confidence"] = winner.get("signal_confidence", 0.0)
@@ -234,9 +317,6 @@ class AnalystAgent:
         # Also store the raw history if available, for Execution constraints?
         if "history" in winner:
             state["history"] = winner["history"]
-
-        # Store the full superposition in state for visibility
-        state["candidates"] = enriched_candidates
 
         # Telemetry
         latency = (time.time() - start_time) * 1000

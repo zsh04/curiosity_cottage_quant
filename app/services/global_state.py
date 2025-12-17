@@ -61,3 +61,59 @@ def is_system_halted() -> bool:
     Returns True if halted, False if operational.
     """
     return _halt_flag
+
+
+def save_model_checkpoint(agent_name: str, blob: bytes):
+    """
+    Save a model checkpoint to the database.
+    """
+    if not _global_state_service:
+        return
+
+    try:
+        from sqlalchemy import text
+        # Using raw SQL for simplicity if model definition is not yet in codebase O/R mapping
+        # Ideally should use SQLAlchemy Core or ORM.
+        # Assuming table 'model_checkpoints' exists.
+
+        # We need to access the session from the service
+        session = _global_state_service.db
+
+        query = text("""
+            INSERT INTO model_checkpoints (agent_name, blob, created_at)
+            VALUES (:agent, :blob, NOW())
+        """)
+
+        session.execute(query, {"agent": agent_name, "blob": blob})
+        session.commit()
+    except Exception as e:
+        # Avoid crashing the trading loop on DB error
+        print(f"ERROR: Failed to save checkpoint for {agent_name}: {e}")
+
+
+def load_latest_checkpoint(agent_name: str) -> Optional[bytes]:
+    """
+    Load the latest model checkpoint from the database.
+    """
+    if not _global_state_service:
+        return None
+
+    try:
+        from sqlalchemy import text
+
+        session = _global_state_service.db
+
+        query = text("""
+            SELECT blob FROM model_checkpoints
+            WHERE agent_name = :agent
+            ORDER BY created_at DESC
+            LIMIT 1
+        """)
+
+        result = session.execute(query, {"agent": agent_name}).fetchone()
+        if result:
+            return result[0]  # Returns bytes
+        return None
+    except Exception as e:
+        print(f"ERROR: Failed to load checkpoint for {agent_name}: {e}")
+        return None

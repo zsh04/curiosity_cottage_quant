@@ -210,3 +210,90 @@ Quantum Interference: {interference:.4f}
             "signal_confidence": signal_conf,
             "reasoning": result.get("reasoning", "Analysis failed."),
         }
+
+    @tracer.start_as_current_span("reasoning_arbitrate_tournament")
+    def arbitrate_tournament(self, candidates: list) -> Dict[str, Any]:
+        """
+        The Tournament of Minds.
+        Compares multiple Analysis Reports and selects the single best candidate.
+
+        Args:
+            candidates: List of dicts (full analysis reports).
+
+        Returns:
+            {
+                "winner_symbol": str,
+                "rationale": str
+            }
+        """
+        if not candidates:
+            return {"winner_symbol": None, "rationale": "No candidates to arbitrate."}
+
+        # Filter out candidates with low confidence or bad physics automatically?
+        # No, let the LLM see the "Board" and decide, but we highlight the risks.
+
+        # 1. Format the Board
+        board_text = ""
+        for i, c in enumerate(candidates, 1):
+            board_text += (
+                f"Candidate {i}: {c.get('symbol')} | "
+                f"Side: {c.get('signal_side')} (Conf: {c.get('signal_confidence', 0):.2f}) | "
+                f"Phys: Vel={c.get('velocity', 0):.3f}, Acc={c.get('acceleration', 0):.3f}, "
+                f"Regime={c.get('regime')} (α={c.get('current_alpha', 0):.2f}) | "
+                f"Reason: {c.get('reasoning')}\n"
+            )
+
+        # 2. Construct the Chief Risk Officer Prompt
+        prompt = f"""
+You are the Chief Risk Officer (CRO). A set of trading candidates has been proposed by your analysts.
+Your job is to run a TOURNAMENT to select the SINGLE BEST trade.
+
+--- THE CANDIDATES ---
+{board_text}
+--- MISSION ---
+Select the ONE winner based on:
+1. Confluence: Does Physics + Forecast + Sentiment align?
+2. Safety: Avoid 'Critical' regimes or infinite variance (Alpha < 1.7).
+3. Clarity: Prefer high confidence signals with clear reasoning.
+
+If NO candidate is safe or compelling, select "NONE".
+
+--- OUTPUT FORMAT ---
+Respond ONLY with this JSON:
+{{
+  "winner_symbol": "SYMBOL" or "NONE",
+  "rationale": "Concise justification for why this candidate beat the others."
+}}
+"""
+        logger.info(
+            f"🧠 Reasoning: Starting Tournament with {len(candidates)} candidates."
+        )
+
+        # 3. Invoke LLM
+        # We use a distinct prompt type for observability
+        span = trace.get_current_span()
+        span.set_attribute("llm.prompt_type", "tournament")
+
+        start_time = time.time()
+        result = self.llm.get_trade_signal(
+            prompt
+        )  # Re-using get_trade_signal as it returns JSON
+        inference_time_ms = (time.time() - start_time) * 1000
+
+        winner = result.get("winner_symbol")
+        # Handle case where LLM returns "NONE" string vs None type
+        if winner == "NONE":
+            winner = None
+
+        span.set_attribute("llm.tournament_winner", str(winner))
+
+        business_metrics.record_histogram_with_exemplar(
+            business_metrics.llm_inference_time,
+            inference_time_ms,
+            {"model": "gemma2:9b", "type": "tournament"},
+        )
+
+        return {
+            "winner_symbol": winner,
+            "rationale": result.get("rationale", "Tournament Concluded."),
+        }

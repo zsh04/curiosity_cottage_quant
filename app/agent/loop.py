@@ -25,12 +25,14 @@ async def run_agent_service():
     # If the graph has checkpointers, it will resume.
     # If not, we are re-running the pipeline "From Scratch" each tick (common for polling agents).
 
+    # Initialize Execution Client for Portfolio Awareness
+    from app.execution.alpaca_client import AlpacaExecutionClient
+
+    alpaca = AlpacaExecutionClient()
+
+    # Initial inputs
     inputs = {
         "messages": [],
-        # Add other initial keys if needed, e.g. "symbol": "SPY"
-        # Assuming the graph defaults or the user configures it elsewhere.
-        # Ideally, we should fetch active symbols from DB.
-        # For MVP, defaulting to what the graph expects.
     }
 
     logger.info("🧠 Cognitive Engine: Online")
@@ -44,6 +46,20 @@ async def run_agent_service():
 
         try:
             logger.info("🧠 Cognitive Engine: Heartbeat...")
+
+            # Phase 13: Fetch Current Portfolio for Risk Node
+            try:
+                positions = alpaca.get_positions()
+                # Format for AgentState check if needed, Alpaca returns list of Position objects
+                # We convert to dict for State
+                inputs["current_positions"] = [p.dict() for p in positions]
+                logger.info(
+                    f"💼 Portfolio: {len(inputs['current_positions'])} positions loaded."
+                )
+            except Exception as e:
+                logger.error(f"Failed to fetch portfolio: {e}")
+                inputs["current_positions"] = []
+
             logger.info("--- 🧠 Agent Loop: Thinking ---")
 
             # Run the Graph

@@ -118,8 +118,8 @@ def macro_node(state: AgentState) -> Dict[str, Any]:
     # --- Step 3: Vectorized Analysis (Pandas) ---
     try:
         # Filters
-        MIN_VOL = 500_000
-        MIN_PRICE = 10.0
+        MIN_VOL = 10_000_000  # $10M Volume
+        MIN_PRICE = 5.0
 
         # Calculate Returns
         df["pct_change"] = 0.0
@@ -138,68 +138,64 @@ def macro_node(state: AgentState) -> Dict[str, Any]:
             logger.warning(
                 "MACRO: No assets passed liquidity filter. Using raw DF sorted by vol."
             )
-            liquid_df = df.sort_values("volume", ascending=False).head(3)
+            # Fallback to top volume
+            liquid_df = df.sort_values("volume", ascending=False).head(5)
 
-        # --- QUANTUM TUNNELING (WKB Approximation) ---
-        # P_tunnel ~ exp( - sqrt( V - E ) )
-        # Here: V = Upper BB, E = Price (Position).
-        # Actually in QM, E is energy, V is potential.
-        # If Price < UpperBB, we are "inside" the well.
-        # Barrier width/height proxy: (UpperBB - Price).
-        # Normalization factor: Volatility (The "Planck Constant" of the market?)
+        # --- PARALLEL PHYSICS: Calculate Hurst Exponent ---
+        # We calculate H for all liquid candidates to find Signal Potential
+        from app.lib.memory import FractalMemory
 
-        # Gap = V - E
-        liquid_df["barrier_gap"] = liquid_df["upper_bb"] - liquid_df["price"]
+        # Helper for parallel execution
+        def calc_hurst_safe(row):
+            sym = row["symbol"]
+            hist = snapshots[sym].get("history", [])
+            if len(hist) < 30:
+                return 0.5
+            try:
+                return FractalMemory.calculate_hurst(hist)
+            except Exception:
+                return 0.5
 
-        # If Gap < 0 (Price > BB), Tunneling is 1.0 (Breakout)
-        # If Gap > 0, P decays exponentially.
-        # Formula: P = exp( - Gap / Volatility )
-        # Using numpy implicitly via pandas/numpy arithmetic if available, or apply
+        # Execute in ThreadPool
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            # liquid_df is a DataFrame, iterate rows
+            # We map the function to the list of rows (dicts) or just iterate indices
+            # Turning DF to records for map might be cleaner or just loop
+            records = liquid_df.to_dict("records")
+            hurst_results = list(executor.map(calc_hurst_safe, records))
 
-        import numpy as np
+        liquid_df["hurst"] = hurst_results
 
-        # Clip gap to min 0 for sqrt (or linear decay)
-        # Using linear decay in exponent for simplicity: P = exp(-gap/vol)
-        # Ideally: P = exp( - sqrt(gap) ) per WKB?
-        # Let's use simple exponential decay as heuristic.
-        # Add small epsilon to vol to avoid div/0
+        # --- QUANTUM SCORING: Signal Potential ---
+        # Signal Potential = |H - 0.5|
+        # We value H=0.8 (Trend) same as H=0.2 (Reversion).
+        # We dislike H=0.5 (Random).
 
-        liquid_df["tunnel_prob"] = np.where(
-            liquid_df["barrier_gap"] <= 0,
-            1.0,
-            np.exp(-liquid_df["barrier_gap"] / (liquid_df["volatility"] + 1e-6)),
-        )
+        liquid_df["signal_potential"] = (liquid_df["hurst"] - 0.5).abs()
 
-        # Composite Score: Energy (Momentum) * TunnelProb (feasibility)
-        liquid_df["quantum_score"] = liquid_df["energy"] * liquid_df["tunnel_prob"]
+        # Sort by Signal Potential Descending
+        ranked_df = liquid_df.sort_values("signal_potential", ascending=False)
 
-        # Sort by Quantum Score Descending
-        ranked_df = liquid_df.sort_values("quantum_score", ascending=False)
+        # Top 5 Watchlist
+        watchlist_df = ranked_df.head(5)
+        watchlist = watchlist_df.to_dict(orient="records")
 
-        # --- Step 4: Selection (Tunneling) ---
-        top_row = ranked_df.iloc[0]
-        winner_symbol = top_row["symbol"]
-        winner_change = top_row["pct_change"]
+        # Winner is the #1 Signal Potential
+        winner_row = watchlist[0] if watchlist else {}
+        winner_symbol = winner_row.get("symbol", "SPY")
 
         logger.info(
-            f"MACRO: 🏆 Winner {winner_symbol} | Change: {winner_change:.2%} | "
-            f"TunnelP: {top_row['tunnel_prob']:.2f} | Score: {top_row['quantum_score']:.0f}"
+            f"MACRO: 🏆 Winner {winner_symbol} | H: {winner_row.get('hurst', 0.5):.2f} | "
+            f"Pot: {winner_row.get('signal_potential', 0):.2f}"
         )
-
-        # --- Step 5: Format Candidates (Superposition) ---
-        # Convert top N back to list of dicts for the State
-        top_candidates = ranked_df.head(5).to_dict(orient="records")
-
-        # We need to ensure the Analyst has the FULL snapshot for the winner
-        # In a true batch system, we'd pass all snapshots.
-        # For now, we update 'market_data' for the primary flow, but attach 'candidates' for future batch nodes.
 
         return {
             "symbol": winner_symbol,
-            "candidates": top_candidates,
+            "watchlist": watchlist,  # Pass the list of high-potential assets
+            "candidates": watchlist,  # Backwards compatibility
             "status": "active",
         }
 
     except Exception as e:
         logger.exception(f"MACRO: DataFrame Vectorization Failed: {e}")
-        return {"market_data": {"symbol": "SPY"}, "candidates": []}
+        return {"symbol": "SPY", "watchlist": [], "candidates": []}

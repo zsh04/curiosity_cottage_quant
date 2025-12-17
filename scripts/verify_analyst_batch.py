@@ -1,15 +1,13 @@
 import asyncio
-import time
 import logging
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 import sys
 import os
-import random
 
-# Add project root to path
+# Add project root to path (Force local import)
 sys.path.insert(0, os.getcwd())
 
-from app.agent.nodes.analyst import analyst_node, AnalystAgent
+from app.agent.nodes.analyst import analyst_node
 from app.agent.state import AgentState, TradingStatus
 
 # Setup Logging
@@ -17,142 +15,111 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("VERIFY_ANALYST")
 
 
-async def mock_to_thread(func, *args, **kwargs):
-    """
-    Simulate work and IO latency.
-    """
-    # Simulate API call latency + Processing
-    await asyncio.sleep(0.1)
-
-    # Map function to mock return
-    func_name = getattr(func, "__name__", str(func))
-
-    if "get_market_snapshot" in func_name:
-        symbol = args[0]
-        return {
-            "symbol": symbol,
-            "price": 100.0,
-            "history": [100.0] * 50,
-            "sentiment": {"label": "neutral", "score": 0.5},
-        }
-    if "calculate_kinematics" in func_name:
-        return {"velocity": 0.1, "acceleration": 0.05}
-    if "analyze_regime" in func_name:
-        return {"regime": "Gaussian", "alpha": 2.1}
-    if "calculate_hurst_and_mode" in func_name:
-        return {"hurst": 0.55, "strategy_mode": "MeanReversion"}
-    if "predict_trend" in func_name:
-        return {"trend": "up", "forecast_array": []}
-    if "retrieve_similar" in func_name:
-        return []
-
-    if "generate_signal" in func_name:
-        # Determine confidence based on context symbol (trick)
-        # We need a way to make one symbol the winner.
-        # But this mock is generic.
-        # Let's rely on random or patched logic?
-        # Actually logic is inside ReasoningService.
-        # We'll just return a random-ish confidence to test sorting.
-        return {
-            "signal_side": "BUY",
-            "signal_confidence": random.uniform(0.1, 0.9),
-            "reasoning": "Mock Reasoning",
-        }
-
-    return {}
+# Mock AgentState
+def create_mock_state():
+    return {
+        "status": TradingStatus.ACTIVE,
+        "symbol": "DEFAULT",
+        "watchlist": [
+            {"symbol": "TSLA", "signal_potential": 0.4},
+            {"symbol": "AAPL", "signal_potential": 0.1},
+            {"symbol": "NVDA", "signal_potential": 0.3},
+        ],
+        "candidates": [],  # Old key, should be ignored/updated
+        "history": [],
+        "messages": [],
+    }  # type: ignore
 
 
-def verify_batch():
+# Mock dependencies
+@patch("app.agent.nodes.analyst.MarketService")
+@patch("app.agent.nodes.analyst.PhysicsService")
+@patch("app.agent.nodes.analyst.ForecastingService")
+@patch("app.agent.nodes.analyst.ReasoningService")
+def test_analyst_batch(MockReasoning, MockForecast, MockPhysics, MockMarket):
     print("🚀 Starting Analyst Batch Verification...")
 
-    candidates = [
-        {"symbol": "ALPHA"},
-        {"symbol": "BETA"},
-        {"symbol": "GAMMA", "signal_confidence": 0.99},
-        {"symbol": "DELTA"},
-        {"symbol": "EPSILON"},
-    ]
-
-    state = {
-        "status": TradingStatus.ACTIVE,
-        "messages": [],
-        "candidates": candidates,
+    # Setup Mocks
+    market_mock = MockMarket.return_value
+    market_mock.get_market_snapshot.side_effect = lambda sym: {
+        "symbol": sym,
+        "price": 100.0,
+        "history": [100.0] * 20,
+        "sentiment": {},
     }
+    market_mock.get_startup_bars.return_value = [100.0] * 100
 
-    # Mock Services
-    with (
-        patch("app.agent.nodes.analyst.MarketService") as MockMarket,
-        patch("app.agent.nodes.analyst.PhysicsService") as MockPhysics,
-        patch("app.agent.nodes.analyst.ForecastingService") as MockForecast,
-        patch("app.agent.nodes.analyst.ReasoningService") as MockReason,
-        patch("app.agent.nodes.analyst.MemoryService") as MockMemory,
-    ):
-        # Configure Market Mock to return correct symbol
-        def mock_get_snapshot(symbol):
-            return {
-                "symbol": symbol,
-                "price": 100.0,
-                "history": [10.0] * 10,
-                "sentiment": {"label": "neutral", "score": 0.5},
-            }
+    physics_mock = MockPhysics.return_value
+    physics_mock.is_initialized = True
+    physics_mock.calculate_kinematics.return_value = {
+        "velocity": 1.0,
+        "acceleration": 0.1,
+    }
+    physics_mock.analyze_regime.return_value = {"regime": "Gaussian", "alpha": 2.5}
+    physics_mock.calculate_hurst_and_mode.return_value = {
+        "hurst": 0.6,
+        "strategy_mode": "Trend",
+    }
+    physics_mock.calculate_qho_levels.return_value = {}
 
-        MockMarket.return_value.get_market_snapshot.side_effect = mock_get_snapshot
-
-        # Configure Physics/Forecast to return valid dicts avoiding attribute errors
-        MockPhysics.return_value.calculate_kinematics.return_value = {
-            "velocity": 0,
-            "acceleration": 0,
+    # Reasoning Mock with varying confidence to test sorting
+    def mock_reasoning(ctx):
+        sym = ctx["market"]["symbol"]
+        conf = 0.5
+        if sym == "TSLA":
+            conf = 0.9
+        if sym == "AAPL":
+            conf = 0.1
+        if sym == "NVDA":
+            conf = 0.7
+        return {
+            "signal_side": "BUY",
+            "signal_confidence": conf,
+            "reasoning": f"Simulated analysis for {sym}",
         }
-        MockPhysics.return_value.analyze_regime.return_value = {
-            "regime": "Gaussian",
-            "alpha": 2.0,
-        }
-        MockPhysics.return_value.calculate_hurst_and_mode.return_value = {
-            "hurst": 0.5,
-            "strategy_mode": "MR",
-        }
-        MockForecast.return_value.predict_trend.return_value = {}
-        MockMemory.return_value.retrieve_similar.return_value = []
 
-        # Mock generate_signal to return High Confidence for GAMMA
-        def side_effect_reasoning(context):
-            sym = context["market"]["symbol"]
-            conf = 0.5
-            if sym == "GAMMA":
-                conf = 0.95
-            if sym == "ALPHA":
-                conf = 0.1
-            return {
-                "signal_side": "BUY",
-                "signal_confidence": conf,
-                "reasoning": f"Analysis for {sym}",
-            }
+    MockReasoning.return_value.generate_signal.side_effect = mock_reasoning
 
-        MockReason.return_value.generate_signal.side_effect = side_effect_reasoning
+    # Run
+    state = create_mock_state()
+    result_state = analyst_node(state)
 
-        # Start Timer
-        start_t = time.time()
-        result_state = analyst_node(state)
-        end_t = time.time()
+    # Checks
+    print("\n📊 Verification Results:")
 
-        duration = end_t - start_t
-        print(f"⏱️ Batch Execution Time: {duration:.4f}s")
+    # 1. Check Superposition Output
+    reports = result_state.get("analysis_reports", [])
+    print(f"📦 Analysis Reports Count: {len(reports)}")
+    if len(reports) == 3:
+        print("✅ Correct number of analysis reports generated.")
+    else:
+        print(f"❌ Expected 3 reports, got {len(reports)}")
 
-        print(f"🏆 Selected Symbol: {result_state['symbol']}")
-        print(f"Conf: {result_state['signal_confidence']}")
+    # 2. Check Parallel Mapping
+    symbols_processed = [r["symbol"] for r in reports]
+    print(f"🔍 Symbols Processed: {symbols_processed}")
+    if set(symbols_processed) == {"TSLA", "AAPL", "NVDA"}:
+        print("✅ All watchlist symbols processed.")
+    else:
+        print("❌ Missing symbols in processing.")
 
-        if (
-            result_state["symbol"] == "GAMMA"
-            and result_state["signal_confidence"] == 0.95
-        ):
-            print("✅ Selection Logic Confirmed (Picked GAMMA)")
-        else:
-            print(f"❌ Selection Failed. Got {result_state['symbol']}")
+    # 3. Check Collapse (Winner Selection)
+    winner = result_state.get("symbol")
+    conf = result_state.get("signal_confidence")
+    print(f"🏆 Selected Winner: {winner} (Conf: {conf})")
 
-        print(f"📦 Output Candidates Enriched: {len(result_state['candidates'])}")
-        if "signal_side" in result_state["candidates"][0]:
-            print("✅ Candidates Enriched")
+    # Expect TSLA because we mocked it with 0.9 confidence
+    if winner == "TSLA" and conf == 0.9:
+        print("✅ Winner selected correctly based on confidence.")
+    else:
+        print(f"❌ Winner selection logic failed. Expected TSLA, got {winner}")
+
+    # 4. Check State Population
+    if "velocity" in result_state and "regime" in result_state:
+        print("✅ Top-level state populated with Winner details.")
+    else:
+        print("❌ Top-level state missing physical details.")
 
 
 if __name__ == "__main__":
-    verify_batch()
+    test_analyst_batch()
