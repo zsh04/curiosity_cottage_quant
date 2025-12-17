@@ -1,8 +1,9 @@
 import pytest
 import numpy as np
 from app.agent.state import AgentState
-from app.agent.macro_agent import macro_agent, calculate_hurst_exponent
-from app.agent.risk_agent import risk_agent, calculate_hill_alpha
+from app.lib.memory import FractalMemory
+from app.lib.physics.heavy_tail import HeavyTailEstimator
+# from app.agent.macro.agent import MacroAgent # Requires DB mocking, skipping integration test for now or keeping it simple
 
 
 class TestCognitiveCore:
@@ -11,7 +12,10 @@ class TestCognitiveCore:
         np.random.seed(42)
         # Random Walk -> Returns are Gaussian
         prices = 100.0 + np.cumsum(np.random.normal(0, 1, 1000))
-        h = calculate_hurst_exponent(prices.tolist())
+        returns = np.diff(prices)
+        # Refactor: Use static method FractalMemory.calculate_hurst
+        # Pass returns (increments) to test for memory. H=0.5 means white noise (no memory).
+        h = FractalMemory.calculate_hurst(returns.tolist())
         # Gaussian Random Walk has H ~ 0.5
         assert 0.4 < h < 0.6, f"Expected H ~ 0.5, got {h}"
 
@@ -24,15 +28,13 @@ class TestCognitiveCore:
         signs = np.random.choice([-1, 1], 5000)
         returns = returns * signs
 
-        alpha = calculate_hill_alpha(returns)
+        # Refactor: Use static method HeavyTailEstimator.hill_estimator
+        alpha = HeavyTailEstimator.hill_estimator(returns)
         # Expect Alpha ~ 1.5
         assert 1.3 < alpha < 1.7, f"Expected Alpha ~ 1.5, got {alpha}"
 
     def test_macro_agent_integration(self):
         """Test Macro Agent Run (Mocked)"""
-        # We need to mock DataAggregator or handle the fact it tries to call APIs.
-        # Since we can't easily mock module-level imports without 'unittest.mock',
-        # we settle for testing the logic functions or assuming valid API keys in CI?
-        # CI might lack API keys.
-        # 'macro_agent' calls 'get_market_context()'.
+        # Integration test requires DB.
+        # Skipping to prevent irrelevant failures during unit testing.
         pass

@@ -42,6 +42,7 @@ class LLMAdapter:
         )
         self.model = (
             model
+            or os.getenv("OLLAMA_MODEL", None)  # Prioritize OLLAMA_MODEL env var
             or getattr(settings, "LLM_MODEL", None)
             or os.getenv("LLM_MODEL", "gemma2:9b")
         )
@@ -179,7 +180,14 @@ Respond in this exact JSON format:
 
         # Parse JSON response
         try:
-            parsed = json.loads(raw_response)
+            # Clean up markdown code blocks if present
+            cleaned_response = raw_response.strip()
+            if cleaned_response.startswith("```"):
+                cleaned_response = (
+                    cleaned_response.replace("```json", "").replace("```", "").strip()
+                )
+
+            parsed = json.loads(cleaned_response)
         except json.JSONDecodeError:
             logger.warning(f"Failed to parse LLM JSON: {raw_response[:100]}")
             parsed = {

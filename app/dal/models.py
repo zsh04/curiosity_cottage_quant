@@ -9,10 +9,42 @@ from sqlalchemy import (
     Boolean,
     Index,
 )
+
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
+from pgvector.sqlalchemy import Vector
 
 Base = declarative_base()
+
+
+class MarketStateEmbedding(Base):
+    """
+    Stores the 'Quantum State' (Physics + Sentiment) as a high-dimensional vector.
+    Used for RAG (retrieval-augmented generation) by the Analyst Node.
+    """
+
+    __tablename__ = "market_state_embeddings"
+    __table_args__ = (
+        Index(
+            "idx_market_embeddings_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_with={"m": 16, "ef_construction": 64},
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+        Index("idx_market_embeddings_symbol_time", "symbol", "timestamp"),
+        {"schema": "public"},
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    symbol = Column(String(10), nullable=False)
+
+    # Metadata stored as JSONB for flexible queries
+    metadata_ = Column("metadata", JSON, default={})
+
+    # The Quantum State Vector (1536 dims for openai/text-embedding-3-small)
+    embedding = Column(Vector(1536))
 
 
 class AgentStateSnapshot(Base):

@@ -59,3 +59,18 @@ class AlpacaClient:
         )
 
         return self.client.submit_order(req)
+
+    def list_positions(self):
+        """
+        Get all open positions.
+        """
+        if not self.client:
+            if self._enabled:
+                logger.error("Alpaca Client not initialized caught in list_positions")
+            return []
+
+        try:
+            return self.client.get_all_positions()
+        except Exception as e:
+            logger.error(f"Failed to list positions: {e}")
+            return []

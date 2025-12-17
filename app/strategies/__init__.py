@@ -4,6 +4,7 @@ from app.strategies.trend import KalmanMomentumStrategy
 from app.strategies.mean_reversion import BollingerReversionStrategy
 from app.strategies.breakout import FractalBreakoutStrategy
 from app.strategies.lstm import LSTMPredictionStrategy
+from app.strategies.quantum import QuantumOscillatorStrategy
 
 
 STRATEGY_REGISTRY = [
@@ -12,4 +13,5 @@ STRATEGY_REGISTRY = [
     BollingerReversionStrategy(),  # Statistics
     FractalBreakoutStrategy(),  # Geometry
     LSTMPredictionStrategy(),  # AI / Memory
+    QuantumOscillatorStrategy(),  # Quantum Mechanics
 ]

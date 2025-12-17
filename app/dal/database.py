@@ -43,6 +43,18 @@ async def get_async_db() -> AsyncSession:
 def init_db():
     """Initialize database tables"""
     from app.dal.models import Base
+    import time
+    from sqlalchemy.exc import OperationalError
 
-    Base.metadata.create_all(bind=engine)
-    print("✅ Database tables created/verified")
+    max_retries = 10
+    for i in range(max_retries):
+        try:
+            Base.metadata.create_all(bind=engine)
+            print("✅ Database tables created/verified")
+            return
+        except OperationalError as e:
+            if i == max_retries - 1:
+                print(f"❌ Failed to connect to DB after {max_retries} attempts.")
+                raise e
+            print(f"⚠️ DB Connection failed, retrying in 2s... ({e})")
+            time.sleep(2)

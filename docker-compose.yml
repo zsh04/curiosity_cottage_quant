@@ -16,11 +16,14 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:password@cc_db:5432/quant_db
       - OTEL_SERVICE_NAME=cc_engine
-      - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES}
-      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
-      - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
+      - OTEL_RESOURCE_ATTRIBUTES=service.namespace=curiosity_cottage,service.name=cc_engine
+      # Route telemetry through OTel collector (cc_pulse)
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://cc_pulse:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
       - OLLAMA_BASE_URL=http://cc_brain:11434
       - OLLAMA_MODEL=gemma2:9b
+      - LLM_MODEL=gemma2:9b
+      - TIINGO_API_KEY=${TIINGO_API_KEY}
       - FINBERT_API_URL=http://cc_finbert:8000
       - ALPACA_API_KEY=${ALPACA_API_KEY}
       - ALPACA_API_SECRET=${ALPACA_API_SECRET}
@@ -32,6 +35,10 @@ services:
       - cc_chronos
       - cc_pulse
       - cc_finbert
+    ports:
+      - "8000:8000"  # API and WebSocket
+    volumes:
+      - ./:/app
     networks:
       - cc_net
 
@@ -135,11 +142,9 @@ services:
   # --- Service 6: Gateway (BFF) ---
   cc_gateway:
     container_name: cc_gateway
-    image: node:20-alpine
-    working_dir: /app
-    volumes:
-      - ./bff:/app
-    command: sh -c "npm install && npm run dev"
+    build:
+      context: ./bff
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
     environment:
@@ -155,13 +160,12 @@ services:
   # --- Service 7: Face (UI Terminal) ---
   cc_terminal:
     container_name: cc_terminal
-    image: node:20-alpine
-    working_dir: /app
-    volumes:
-      - ./frontend:/app
-    command: sh -c "npm install --legacy-peer-deps && npm run dev"
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     ports:
-      - "5173:5173"
+      # Map host 5173 to container 80 (Nginx)
+      - "5173:80"
     environment:
       - OTEL_SERVICE_NAME=cc_terminal
       - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES}

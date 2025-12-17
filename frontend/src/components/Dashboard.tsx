@@ -6,12 +6,65 @@ import ModelMonitor from './ModelMonitor';
 import CerebroChart from './CerebroChart';
 import AutopsyPanel from './AutopsyPanel';
 
-const Dashboard = () => {
-    const [selectedLog, setSelectedLog] = useState(null);
-    const [isConnected, setIsConnected] = useState(false);
+interface LogMessage {
+    timestamp: string;
+    level: string;
+    message: string;
+    source?: string;
+}
+
+interface MarketData {
+    alpha: number;
+    velocity: number;
+    acceleration: number;
+    regime: string;
+    price: number;
+    symbol: string;
+    history: number[];
+}
+
+interface SignalData {
+    side: string;
+    confidence: number;
+    reasoning: string;
+    strategy: string;
+    score: number;
+}
+
+interface SentimentData {
+    label: string;
+    score: number;
+}
+
+interface ForecastData {
+    median: number[];
+    p10?: number[];
+    p90?: number[];
+}
+
+interface SystemState {
+    market: MarketData;
+    signal: SignalData;
+    sentiment: SentimentData;
+    forecast: ForecastData | null;
+    logs: LogMessage[];
+}
+
+interface ChartDataPoint {
+    time: string;
+    price?: number;
+    median?: number;
+    p10?: number;
+    p90?: number;
+    isForecast: boolean;
+}
+
+const Dashboard: React.FC = () => {
+    const [selectedLog, setSelectedLog] = useState<LogMessage | null>(null);
+    const [isConnected, setIsConnected] = useState<boolean>(false);
 
     // System State from Live Backend
-    const [systemState, setSystemState] = useState({
+    const [systemState, setSystemState] = useState<SystemState>({
         market: {
             alpha: 3.0,
             velocity: 0.0,
@@ -39,8 +92,8 @@ const Dashboard = () => {
     // WebSocket Connection
     useEffect(() => {
         const WS_URL = 'ws://localhost:8000/api/ws/stream';
-        let ws = null;
-        let reconnectTimeout = null;
+        let ws: WebSocket | null = null;
+        let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
         const connect = () => {
             ws = new WebSocket(WS_URL);
@@ -50,20 +103,20 @@ const Dashboard = () => {
                 setIsConnected(true);
             };
 
-            ws.onmessage = (event) => {
+            ws.onmessage = (event: MessageEvent) => {
                 try {
                     const packet = JSON.parse(event.data);
 
                     // Update system state with incoming data
                     setSystemState((prevState) => ({
-                        market: {
+                        market: packet.market ? {
                             ...prevState.market,
                             ...packet.market
-                        },
-                        signal: {
+                        } : prevState.market,
+                        signal: packet.signal ? {
                             ...prevState.signal,
                             ...packet.signal
-                        },
+                        } : prevState.signal,
                         sentiment: packet.sentiment || prevState.sentiment,
                         forecast: packet.forecast || prevState.forecast,
                         // Prepend new packet to logs (keep last 50)
@@ -74,7 +127,7 @@ const Dashboard = () => {
                 }
             };
 
-            ws.onerror = (error) => {
+            ws.onerror = (error: Event) => {
                 console.error('WebSocket error:', error);
             };
 
@@ -107,9 +160,53 @@ const Dashboard = () => {
             });
             const result = await response.json();
             alert(result.message || 'HALT SIGNAL SENT');
-        } catch (error) {
+        } catch (error: any) {
             alert('Failed to send halt signal: ' + error.message);
         }
+    };
+
+    // Generate chart data from history and forecast
+    const generateChartData = (history: number[], forecast: ForecastData | null, currentPrice: number): ChartDataPoint[] => {
+        const data: ChartDataPoint[] = [];
+        const now = new Date();
+
+        // Historical data from price history
+        if (history && history.length > 0) {
+            const recentHistory = history.slice(-20); // Last 20 points
+            recentHistory.forEach((price, index) => {
+                const time = new Date(now.getTime() - (recentHistory.length - index) * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                data.push({
+                    time,
+                    price: price,
+                    isForecast: false
+                });
+            });
+        }
+
+        // Add current price
+        if (currentPrice && currentPrice > 0) {
+            data.push({
+                time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                price: currentPrice,
+                isForecast: false
+            });
+        }
+
+        // Forecast data
+        if (forecast && forecast.median && forecast.median.length > 0) {
+            forecast.median.forEach((median, index) => {
+                const time = new Date(now.getTime() + (index + 1) * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                data.push({
+                    time,
+                    median: median,
+                    p10: forecast.p10?.[index] || median * 0.98,
+                    p90: forecast.p90?.[index] || median * 1.02,
+                    isForecast: true
+                });
+            });
+        }
+
+        return data.length > 0 ? data : [{ time: 'No Data', price: 0, isForecast: false }];
     };
 
     return (
@@ -122,8 +219,8 @@ const Dashboard = () => {
                         {/* Connection Status Indicator */}
                         <div
                             className={`w-3 h-3 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)] ${isConnected
-                                    ? 'bg-emerald-500 animate-pulse'
-                                    : 'bg-red-500'
+                                ? 'bg-emerald-500 animate-pulse'
+                                : 'bg-red-500'
                                 }`}
                         ></div>
                         <h1 className="text-lg font-bold tracking-[0.2em] text-slate-100">
@@ -188,7 +285,10 @@ const Dashboard = () => {
                             <div className="w-full text-left mb-2">
                                 <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Market Sentiment</h2>
                             </div>
-                            <SentimentTriad data={systemState.sentiment} />
+                            <SentimentTriad
+                                label={systemState.sentiment?.label || 'Neutral'}
+                                score={systemState.sentiment?.score || 0.5}
+                            />
                         </div>
 
                         {/* Forecast Chart (Cerebro) */}
@@ -196,9 +296,7 @@ const Dashboard = () => {
                             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Chronos Forecast</h2>
                             <div className="flex-1 w-full h-full">
                                 <CerebroChart
-                                    history={systemState.market.history}
-                                    forecast={systemState.forecast}
-                                    currentPrice={systemState.market.price}
+                                    data={generateChartData(systemState.market.history, systemState.forecast, systemState.market.price)}
                                 />
                             </div>
                         </div>

@@ -8,10 +8,13 @@ class TestKinematicKalmanFilter:
         kf = KinematicKalmanFilter()
         assert not kf.initialized
 
-        est = kf.update(100.0)
+        # Warmup requires 3 observations
+        kf.update(100.0)
+        kf.update(101.0)
+        est = kf.update(102.0)
         assert kf.initialized
-        assert est.position == 100.0
-        assert est.velocity == 0.0
+        assert est.position == 102.0
+        assert est.velocity == 1.0
         assert est.acceleration == 0.0
 
     def test_constant_velocity_convergence(self):

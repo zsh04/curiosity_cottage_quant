@@ -33,9 +33,17 @@ class AgentState(TypedDict):
     historic_returns: List[float]
 
     # --- Physics ---
+    # --- Physics ---
     current_alpha: float
     regime: str
+    hurst: float
+    strategy_mode: str
+    hurst: float
+    strategy_mode: str
     chronos_forecast: dict
+
+    # --- Meta-Reasoning ---
+    performance_metrics: dict  # Keys: trend_win_rate, reversion_win_rate
 
     # --- Signal (The Analyst's Input) ---
     signal_side: str
@@ -49,3 +57,9 @@ class AgentState(TypedDict):
     # --- Audit ---
     status: TradingStatus
     messages: List[str]
+
+    # --- Quantum Batch (New) ---
+    candidates: List[dict]
+
+    # --- Portfolio Awareness (Phase 13) ---
+    current_positions: List[dict]

@@ -1,8 +1,13 @@
 import numpy as np
 import pandas as pd
 from typing import Optional
+import pickle
+import os
+import logging
 
 from app.strategies.base import BaseStrategy
+
+logger = logging.getLogger(__name__)
 
 
 class LSTMPredictionStrategy(BaseStrategy):
@@ -188,3 +193,81 @@ class LSTMPredictionStrategy(BaseStrategy):
             return 0.0
 
         return 0.0
+
+    def get_state_bytes(self) -> bytes:
+        """
+        Get the model state as a pickled binary blob.
+        """
+        try:
+            state = {
+                "W_in": self.W_in,
+                "W_res": self.W_res,
+                "w_out": self.w_out,
+                "P": self.P,
+                "x_t": self.x_t,
+                "is_initialized": self.is_initialized,
+                "warmup_count": self.warmup_count,
+            }
+            return pickle.dumps(state)
+        except Exception as e:
+            logger.error(f"Failed to serialize LSTM state: {e}")
+            return b""
+
+    def load_state_bytes(self, blob: bytes):
+        """
+        Load the model state from a binary blob.
+        """
+        if not blob:
+            return
+
+        try:
+            state = pickle.loads(blob)
+
+            self.W_in = state["W_in"]
+            self.W_res = state["W_res"]
+            self.w_out = state["w_out"]
+            self.P = state["P"]
+            self.x_t = state["x_t"]
+            self.is_initialized = state.get("is_initialized", False)
+            self.warmup_count = state.get("warmup_count", 0)
+
+            logger.info("Dataset loaded from DB blob.")
+        except Exception as e:
+            logger.error(f"Failed to load LSTM state from blob: {e}")
+
+    def save_state(self, filepath: str):
+        """
+        Save the model state (weights and reservoir) to disk.
+        Deprecated: Use DB persistence instead.
+        """
+        try:
+            # We can reuse get_state_bytes to save to file for legacy support
+            blob = self.get_state_bytes()
+            if not blob:
+                return
+
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+            with open(filepath, "wb") as f:
+                f.write(blob)
+            logger.info(f"💾 LSTM Model saved to {filepath}")
+        except Exception as e:
+            logger.error(f"Failed to save LSTM model: {e}")
+
+    def load_state(self, filepath: str):
+        """
+        Load the model state from disk.
+        Deprecated: Use DB persistence instead.
+        """
+        if not os.path.exists(filepath):
+            logger.warning(f"LSTM Model file not found at {filepath}. Starting fresh.")
+            return
+
+        try:
+            with open(filepath, "rb") as f:
+                blob = f.read()
+            self.load_state_bytes(blob)
+            logger.info(f"📂 LSTM Model loaded from {filepath}")
+        except Exception as e:
+            logger.error(f"Failed to load LSTM model: {e}")

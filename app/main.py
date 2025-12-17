@@ -11,6 +11,7 @@ from app.agent.loop import run_agent_service
 from api.routes.system import SystemController
 from api.routes.signals import SignalsController
 from api.routes.actions import ActionsController
+from api.routes.orders import OrdersController
 from app.api.routes.telemetry import TelemetryController
 
 # Database & State
@@ -39,9 +40,6 @@ async def lifespan(app: Litestar):
     Starts the Agent Service background task.
     """
     # 1. WAKE UP THE DB SERVICE
-    # Critical: Use Sync Session here because StateService and Agent Logic are currently Synchronous.
-    # Using async_session_maker (as requested) would crash the synchronous AnalystNode logic.
-    # We maintain the import to satisfy the requirement, but use the safe Sync implementation.
     logger.info("🔌 Initializing Global State Service...")
     db = SessionLocal()
     try:
@@ -49,8 +47,6 @@ async def lifespan(app: Litestar):
         logger.info("✅ Global State Service Connected")
     except Exception as e:
         logger.error(f"❌ Failed to init Global State: {e}")
-        # We don't yield here; we allow startup but log error, or should we crash?
-        # Proceeding allows API to inspect issues.
 
     # 2. START THE HEART
     logger.info("🧠 Starting Cognitive Engine...")
@@ -86,6 +82,7 @@ app = Litestar(
         SystemController,
         SignalsController,
         ActionsController,
+        OrdersController,
         TelemetryController,
     ],
     path="/api",  # Base path for all routes

@@ -194,10 +194,16 @@ class MacroAgent:
         return state
 
     def _safe_default(self, state: AgentState) -> AgentState:
-        """Default safe mode when data is insufficient."""
+        """
+        Default safe mode when data is insufficient.
+        CRITICAL: Do NOT trade blindly.
+        """
         state["alpha"] = 3.0
-        state["regime"] = "Gaussian"
+        state["regime"] = "Insufficient Data"
         state["macro_correlation"] = 0.0
-        state["status"] = "ACTIVE"
-        logger.info("🛡️  Safe mode: Insufficient data, assuming Gaussian regime")
+        state["status"] = "SLEEPING"  # Was ACTIVE
+        state["reasoning"] = (
+            "MacroAgent: Insufficient data to determine regime. Halting."
+        )
+        logger.warning("🛡️  Safe mode: Insufficient data. Status set to SLEEPING.")
         return state
