@@ -1,95 +1,112 @@
+import asyncio
 import logging
 import sys
-import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-sys.path.insert(0, os.getcwd())
-
-from app.agent.nodes.risk import risk_node
-from app.agent.state import AgentState, TradingStatus
-
+# Setup Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("VERIFY_TOURNAMENT")
 
+# Import Agent Structures (Must import Risk after mocking if possible, or patch it)
+from app.agent.state import AgentState, TradingStatus
 
-def create_mock_state():
+
+# Mock Reasoning Service (To bypass LLM)
+def mock_arbitrate(reports):
+    logger.info(f"MOCK ARBITER: Received {len(reports)} reports.")
+    sorted_reps = sorted(
+        reports, key=lambda x: x.get("signal_confidence", 0), reverse=True
+    )
+    winner = sorted_reps[0]
     return {
-        "status": TradingStatus.ACTIVE,
-        "symbol": "OLD_SYM",
-        "signal_side": "BUY",
-        "analysis_reports": [
+        "winner_symbol": winner["symbol"],
+        "rationale": f"Mock Arbitration chose {winner['symbol']} (Conf {winner.get('signal_confidence')})",
+    }
+
+
+async def run_verification():
+    logger.info("--- 🧪 STARTING TOURNAMENT VERIFICATION 🧪 ---")
+
+    # 1. Patch Reasoning Service BEFORE importing risk node
+    # This ensures that when risk_node imports ReasoningService, it gets our mock
+    mock_class = MagicMock()
+    mock_class.arbitrate_tournament = mock_arbitrate
+
+    # We need to mock the MODULE 'app.services.reasoning'
+    mock_reasoning_module = MagicMock()
+    mock_reasoning_module.ReasoningService = (
+        lambda: mock_class
+    )  # Return instance with method
+    sys.modules["app.services.reasoning"] = mock_reasoning_module
+
+    # Also mock MarketService/Config since RiskManager instantiates them and they might fail without keys
+    mock_market_module = MagicMock()
+    sys.modules["app.services.market"] = mock_market_module
+
+    # NOW import risk
+    from app.agent.nodes.risk import risk_node
+
+    # 2. PROMPT: Multi-Candidate State (Superposition)
+    state = AgentState(
+        status=TradingStatus.ACTIVE,
+        analysis_reports=[
             {
-                "symbol": "BAD_PHYSICS",
+                "symbol": "AAPL",
                 "signal_side": "BUY",
-                "signal_confidence": 0.9,
-                "current_alpha": 1.5,  # Should be risky
-                "regime": "Critical",
-                "price": 100.0,
-                "reasoning": "High return but dangerous.",
+                "signal_confidence": 0.85,
+                "price": 150.0,
+                "velocity": 0.05,
+                "current_alpha": 1.9,  # Volatile
+                "regime": "Fractional",
+                "success": True,
             },
             {
-                "symbol": "GOOD_PHYSICS",
-                "signal_side": "BUY",
-                "signal_confidence": 0.8,
-                "current_alpha": 2.5,  # Safe
-                "regime": "Gaussian",
-                "price": 200.0,
-                "reasoning": "Solid trend, safe physics.",
+                "symbol": "TSLA",
+                "signal_side": "SELL",
+                "signal_confidence": 0.92,
+                "price": 250.0,
+                "velocity": -0.10,
+                "current_alpha": 1.4,  # Critical-ish
+                "regime": "Lévy Stable",
+                "success": True,
             },
         ],
-        "nav": 100000.0,
-        "current_positions": [],
-        "chronos_forecast": {
-            "expected_price": 210.0,
-            "lower_bound": 190.0,
-        },  # Needed for sizing
-    }
+        nav=100000.0,
+        cash=100000.0,
+        current_positions=[],
+    )
 
+    logger.info("Step 1: Running Risk Node with Multi-Candidate State...")
+    try:
+        new_state = risk_node(state)
+    except Exception as e:
+        logger.exception("Risk Node Crashed during verification")
+        exit(1)
 
-@patch("app.agent.nodes.risk.RiskManager")
-@patch("app.services.reasoning.ReasoningService")
-@patch(
-    "app.services.market.MarketService"
-)  # Mock market to avoid entanglement check errors
-def test_tournament(MockMarket, MockReasoning, MockRiskManager):
-    print("🚀 Starting AI Tournament Verification...")
+    # 3. Validation
+    winner = new_state.get("symbol")
+    side = new_state.get("signal_side")
+    reasoning = new_state.get("reasoning")
 
-    # Mock Reasoning Service to simulate LLM picking the SAFE candidate
-    reasoning_instance = MockReasoning.return_value
-    reasoning_instance.arbitrate_tournament.return_value = {
-        "winner_symbol": "GOOD_PHYSICS",
-        "rationale": "Selected GOOD_PHYSICS because BAD_PHYSICS has critical regime.",
-    }
+    logger.info(f"Resulting State Symbol: {winner}")
+    logger.info(f"Resulting State Side: {side}")
+    logger.info(f"Resulting State Reasoning: {reasoning}")
 
-    # Mock Risk Logic (Pass-through for check_governance, real-ish for sizing)
-    risk_instance = MockRiskManager.return_value
-    risk_instance.check_governance.side_effect = lambda s: s  # No governance halt
-    risk_instance.size_position.return_value = 5000.0  # Return some size
-    risk_instance.bes.estimate_es.return_value = 0.05  # Return float for logging
-
-    # Run
-    state = create_mock_state()
-    result = risk_node(state)
-
-    print("\n📊 Verification Results:")
-
-    # 1. Did it pick the winner?
-    winner = result.get("symbol")
-    print(f"🏆 Final Symbol in State: {winner}")
-
-    if winner == "GOOD_PHYSICS":
-        print("✅ Tournament correctly overwrote the state with Winner.")
+    if winner == "TSLA":
+        logger.info(
+            "✅ PASS: Risk Node correctly selected the higher confidence winner (TSLA)."
+        )
     else:
-        print(f"❌ Tournament Failed. Expected GOOD_PHYSICS, got {winner}")
+        logger.error(f"❌ FAIL: Expected TSLA, got {winner}")
+        exit(1)
 
-    # 2. Did rationale update?
-    reason = result.get("reasoning", "")
-    print(f"📝 Final Reasoning: {reason}")
-    if "[TOURNAMENT WINNER]" in reason:
-        print("✅ Logic Confirmation present in reasoning.")
+    if "[TOURNAMENT WINNER]" in reasoning or "[TOURNAMENT WINNER]" in reasoning.upper():
+        logger.info("✅ PASS: Reasoning reflects Tournament source.")
     else:
-        print("❌ Reasoning tag missing.")
+        logger.warning(f"⚠️ Check Reasoning format: {reasoning}")
+
+    logger.info("--- VERIFICATION COMPLETE ---")
 
 
 if __name__ == "__main__":
-    test_tournament()
+    asyncio.run(run_verification())

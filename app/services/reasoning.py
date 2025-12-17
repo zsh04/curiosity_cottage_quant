@@ -18,7 +18,112 @@ class ReasoningService:
     """
 
     def __init__(self):
-        self.llm = LLMAdapter()
+        from app.core.config import settings
+        from concurrent.futures import ThreadPoolExecutor
+
+        self.mode = settings.REASONING_MODE
+        self.llm = LLMAdapter()  # Default Local
+        self.cloud_llm = None
+
+        # Async Background Brain (Local Fallback)
+        self.executor = ThreadPoolExecutor(max_workers=1)
+        self.pending_tasks: Dict[str, Any] = {}  # Map 'task_id' -> Future
+
+        if self.mode in ["CLOUD", "HYBRID"]:
+            from app.adapters.gemini import GeminiAdapter
+
+            self.cloud_llm = GeminiAdapter()
+
+        logger.info(f"🧠 ReasoningService initialized in {self.mode} mode.")
+
+    def submit_local_tournament(self, candidates: list) -> str:
+        """
+        Submit a Local LLM Tournament task to the background executor.
+        Returns a 'task_id' (e.g. 'tournament_TICK_X').
+        """
+        task_id = f"tournament_{int(time.time())}"
+
+        # Guard: Only one pending tournament at a time to avoid queue buildup
+        # Clear old tasks if any
+        self.pending_tasks.clear()
+
+        logger.info(
+            f"ReasoningService: Submitting BACKGROUND Local Tournament ({task_id})"
+        )
+
+        # This function runs in the thread
+        def _run_tournament(cands):
+            # Construct Prompt (Duplicated logic from arbitrate_tournament, refactor ideally)
+            # For simplicity, we call the LOCAL logic directly here.
+            # We need to construct the prompt string inside the thread or pass it?
+            # Let's pass the prompt generation logic.
+
+            # 1. Format Board
+            board_text = ""
+            for i, c in enumerate(cands, 1):
+                board_text += (
+                    f"Candidate {i}: {c.get('symbol')} | "
+                    f"Side: {c.get('signal_side')} (Conf: {c.get('signal_confidence', 0):.2f}) | "
+                    f"Phys: Vel={c.get('velocity', 0):.3f}, Acc={c.get('acceleration', 0):.3f}, "
+                    f"Regime={c.get('regime')} (α={c.get('current_alpha', 0):.2f}) | "
+                    f"Reason: {c.get('reasoning')}\n"
+                )
+
+            prompt = f"""
+You are the Chief Risk Officer (CRO). Run a TOURNAMENT to select the SINGLE BEST trade.
+--- CANDIDATES ---
+{board_text}
+--- MISSION ---
+Select ONE winner. Output JSON: {{ "winner_symbol": "SYMBOL" or "NONE", "rationale": "reason" }}
+"""
+            # Local Inference (Blocking in this thread)
+            raw = self.llm.infer(prompt)
+            return raw
+
+        # Submit
+        future = self.executor.submit(_run_tournament, candidates)
+        self.pending_tasks[task_id] = future
+        return task_id
+
+    def check_background_result(self) -> Dict[str, Any]:
+        """
+        Check if the unique background task has completed.
+        Returns result dict if ready, else None.
+        """
+        if not self.pending_tasks:
+            return None
+
+        # Get the latest task (we only keep one active really)
+        task_id, future = next(iter(self.pending_tasks.items()))
+
+        if future.done():
+            try:
+                raw = future.result()
+                # Clear task
+                del self.pending_tasks[task_id]
+
+                # Parse
+                import json
+
+                try:
+                    cleaned = (
+                        raw.strip().replace("```json", "").replace("```", "").strip()
+                    )
+                    result = json.loads(cleaned)
+                    result["source"] = "BACKGROUND_LOCAL"
+                    return result
+                except:
+                    return {
+                        "winner_symbol": None,
+                        "rationale": "Background Local Parse Error",
+                    }
+
+            except Exception as e:
+                logger.error(f"Background Brain Failed: {e}")
+                del self.pending_tasks[task_id]
+                return None
+
+        return None
 
     def _format_history(self, history: list) -> str:
         """Helper to format historical memory for prompt."""
@@ -74,20 +179,8 @@ class ReasoningService:
     def generate_signal(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
         The "God Prompt" Execution.
-
-        Args:
-            context: A dictionary containing:
-                - market: {symbol, price, news_context, recent_news}
-                - physics: {velocity, acceleration, regime}
-                - forecast: {trend, expected_price}
-                - sentiment: {score, label}
-
-        Returns:
-            {
-                "signal_side": "BUY" | "SELL" | "FLAT",
-                "signal_confidence": float,
-                "reasoning": str
-            }
+        Synthesizes multi-modal data into a decision.
+        Uses Cloud or Local LLM based on Configuration.
         """
         # Unpack Context for Prompt Construction
         market = context.get("market", {})
@@ -96,65 +189,19 @@ class ReasoningService:
         sentiment = context.get("sentiment", {})
 
         # --- QUANTUM SENTIMENT ANALYSIS ---
-        # Extract recent news items (Requires MarketService to pass 'recent_news' list)
         recent_news = market.get("recent_news", [])
         if len(recent_news) >= 2:
             news_A = recent_news[0]
             news_B = recent_news[1]
             interference = self.calculate_interference(news_A, news_B)
         elif len(recent_news) == 1:
-            # Interference with itself? Constructive.
             interference = self.calculate_interference(recent_news[0], recent_news[0])
         else:
             interference = 0.0
 
-        # Construct the God Prompt
-        prompt_text = f"""
-You are the Chief Investment Officer of a quantitative hedge fund. 
-Your goal is to maximize alpha while strictly managing risk.
-Analyze the following multi-modal sensor data for {market.get("symbol", "ASSET")} and make a trading decision.
-
---- SENSOR DATA ---
-
-1. MARKET DATA
-   - Price: ${market.get("price", 0.0):.2f}
-   - News Context: {market.get("news_context", "No news.")}
-
-2. PHYSICS ENGINE (Kinematics & Thermodynamics)
-   - Velocity (Trend): {physics.get("velocity", 0.0):.4f}
-   - Acceleration (Momentum): {physics.get("acceleration", 0.0):.4f}
-   - Market Regime: {physics.get("regime", "Unknown")} (Alpha: {physics.get("alpha", 0.0):.2f})
-
-3. FORECAST EXTENSION (Chronos AI)
-   - Predicted Trend: {forecast.get("trend", "NEUTRAL")}
-   - Expected Price (10m): ${forecast.get("expected_price", 0.0):.2f}
-   - Confidence: {forecast.get("confidence", 0.0):.2f}
-
-4. SENTIMENT ANALYSIS (FinBERT + Quantum)
-   - Label: {sentiment.get("label", "neutral")}
-   - Score: {sentiment.get("score", 0.0):.2f}
-   - Quantum Interference: {interference:.4f} (Negative = Noise/Confusion, Positive = Resonance)
-
-5. HISTORICAL PRECEDENTS (Memory Service: Top 3 Similar Regimes)
-{self._format_history(market.get("historical_regimes", []))}
-
---- MISSION ---
-Synthesize these signals. Look for confluence.
-- If Physics shows positive velocity AND Forecast is Bullish -> STRONG BUY.
-- If Physics shows negative acceleration AND Sentiment is Negative -> SELL.
-- If Regime is 'Critical' or 'Levy Stable', be extremely cautious (FLAT/REDUCE).
-- If Quantum Interference is NEGATIVE, sentiment is conflicted/noisy. Reduce confidence.
-- If current state mirrors a historical CRASH, bias towards SELL/FLAT.
-
---- OUTPUT FORMAT ---
-Respond ONLY with this JSON structure:
-{{
-  "signal_side": "BUY" or "SELL" or "FLAT",
-  "signal_confidence": 0.0 to 1.0,
-  "reasoning": "A concise 1-sentence explanation of your decision citing specific metrics."
-}}
-"""
-        logger.info("🧠 ReasoningService: Invoking LLM for logic synthesis...")
+        logger.info(
+            f"🧠 ReasoningService: Invoking {self.mode} LLM for logic synthesis..."
+        )
 
         # Construct Data Block for LLM Adapter
         data_block = f"""
@@ -166,30 +213,32 @@ Sentiment: {sentiment.get("label", "Neutral")} (Score: {sentiment.get("score", 0
 Quantum Interference: {interference:.4f}
 """
 
-        # Set span attributes for observability
-        span = trace.get_current_span()
-        span.set_attribute("llm.model", "gemma2:9b")
-        span.set_attribute("llm.prompt_type", "god_prompt")
-        span.set_attribute("llm.symbol", market.get("symbol", "unknown"))
-
-        # Time LLM inference
         start_time = time.time()
-        # We pass data_block. If LLMAdapter expects prompts, we might need to change this,
-        # but based on previous code it was passing formatted strings.
-        # Ideally we pass 'prompt_text' if get_trade_signal supports direct prompt,
-        # but looking at original code it seemed to use a helper.
-        # I'll stick to data_block + implied system prompt in adapter, PLUS the manual Context if needed.
-        # Actually, LLMAdapter likely wraps input.
-        # For now I will pass data_block as before.
-        result = self.llm.get_trade_signal(data_block)
+        result = None
+
+        # --- HYBRID REASONING LOGIC ---
+        if self.mode == "CLOUD" and self.cloud_llm:
+            result = self.cloud_llm.get_trade_signal(data_block)
+        elif self.mode == "HYBRID" and self.cloud_llm:
+            # Try Cloud first, Fallback to Local (Async usually, but for Signal Gen we block?)
+            # Signal Gen is critical path for Primary Symbol, so we wait.
+            result = self.cloud_llm.get_trade_signal(data_block)
+            if (
+                not result
+                or result.get("signal_side") == "FLAT"
+                and "unavailable" in result.get("reasoning", "")
+            ):
+                logger.warning("Cloud LLM failed, falling back to Local...")
+                result = self.llm.get_trade_signal(data_block)
+        else:
+            # LOCAL mode
+            result = self.llm.get_trade_signal(data_block)
+
         inference_time_ms = (time.time() - start_time) * 1000
 
         # Set output attributes
         signal_side = result.get("signal_side", "FLAT")
         signal_conf = result.get("signal_confidence", 0.0)
-        span.set_attribute("llm.signal_side", signal_side)
-        span.set_attribute("llm.signal_confidence", signal_conf)
-        span.set_attribute("llm.inference_time_ms", inference_time_ms)
 
         # Record business metrics
         symbol = market.get("symbol", "unknown")
@@ -202,7 +251,7 @@ Quantum Interference: {interference:.4f}
         business_metrics.record_histogram_with_exemplar(
             business_metrics.llm_inference_time,
             inference_time_ms,
-            {"model": "gemma2:9b", "symbol": symbol},
+            {"model": self.mode, "symbol": symbol},
         )
 
         return {
@@ -216,21 +265,10 @@ Quantum Interference: {interference:.4f}
         """
         The Tournament of Minds.
         Compares multiple Analysis Reports and selects the single best candidate.
-
-        Args:
-            candidates: List of dicts (full analysis reports).
-
-        Returns:
-            {
-                "winner_symbol": str,
-                "rationale": str
-            }
+        Uses Cloud LLM to avoid local resource contention.
         """
         if not candidates:
             return {"winner_symbol": None, "rationale": "No candidates to arbitrate."}
-
-        # Filter out candidates with low confidence or bad physics automatically?
-        # No, let the LLM see the "Board" and decide, but we highlight the risks.
 
         # 1. Format the Board
         board_text = ""
@@ -266,34 +304,70 @@ Respond ONLY with this JSON:
 }}
 """
         logger.info(
-            f"🧠 Reasoning: Starting Tournament with {len(candidates)} candidates."
+            f"🧠 Reasoning: Starting {self.mode} Tournament with {len(candidates)} candidates."
         )
 
-        # 3. Invoke LLM
-        # We use a distinct prompt type for observability
-        span = trace.get_current_span()
-        span.set_attribute("llm.prompt_type", "tournament")
-
         start_time = time.time()
-        result = self.llm.get_trade_signal(
-            prompt
-        )  # Re-using get_trade_signal as it returns JSON
+
+        # --- HYBRID TOURNAMENT LOGIC ---
+        # NOTE: Tournament is heavy. Prefer Cloud.
+        if self.mode in ["CLOUD", "HYBRID"] and self.cloud_llm:
+            # Using get_trade_signal interface wrapper is awkward but works if prompt is passed as context?
+            # No, get_trade_signal constructs its own prompt.
+            # We should use generate_content directly or make get_trade_signal generic?
+            # Actually, get_trade_signal forces a specific JSON output structure valid for signals.
+            # Tournament output structure is DIFFERENT (winner_symbol vs signal_side).
+            # So we must use raw generation or add a method.
+            # GeminiAdapter.generate_content returns str. We need to parse JSON.
+
+            raw = self.cloud_llm.generate_content(prompt)
+            # Basic Parse
+            try:
+                import json
+
+                cleaned = raw.strip().replace("```json", "").replace("```", "").strip()
+                result = json.loads(cleaned)
+            except:
+                logger.error(f"Reasoning: Failed to parse Tournament JSON: {raw}")
+                result = {"winner_symbol": None, "rationale": "Cloud Parse Error"}
+
+        else:
+            # Local Fallback (High Risk of Blockage!)
+            # If Local, we use LLMAdapter.get_trade_signal? No, prompts different.
+            # LLMAdapter has .infer() method.
+            raw = self.llm.infer(prompt)
+            try:
+                import json
+
+                cleaned = raw.strip().replace("```json", "").replace("```", "").strip()
+                result = json.loads(cleaned)
+            except:
+                result = {"winner_symbol": None, "rationale": "Local Parse Error"}
+
         inference_time_ms = (time.time() - start_time) * 1000
 
         winner = result.get("winner_symbol")
-        # Handle case where LLM returns "NONE" string vs None type
         if winner == "NONE":
             winner = None
-
-        span.set_attribute("llm.tournament_winner", str(winner))
 
         business_metrics.record_histogram_with_exemplar(
             business_metrics.llm_inference_time,
             inference_time_ms,
-            {"model": "gemma2:9b", "type": "tournament"},
+            {"model": self.mode, "type": "tournament"},
         )
 
         return {
             "winner_symbol": winner,
             "rationale": result.get("rationale", "Tournament Concluded."),
         }
+
+
+# Singleton Instance
+_reasoning_service_instance = None
+
+
+def get_reasoning_service() -> ReasoningService:
+    global _reasoning_service_instance
+    if _reasoning_service_instance is None:
+        _reasoning_service_instance = ReasoningService()
+    return _reasoning_service_instance

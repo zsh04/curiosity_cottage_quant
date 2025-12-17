@@ -60,6 +60,13 @@ class AgentState(TypedDict):
 
     # --- Quantum Batch (New) ---
     candidates: List[dict]
+    analysis_reports: List[dict]  # Required for Risk Node
+    watchlist: List[dict]  # Required for Analyst Node
+
+    # --- Physics State ---
+    velocity: float  # Required for Telemetry
+    acceleration: float  # Required for Telemetry
+    history: List[float]  # Required for Charts
 
     # --- Portfolio Awareness (Phase 13) ---
     current_positions: List[dict]

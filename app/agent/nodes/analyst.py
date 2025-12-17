@@ -32,7 +32,8 @@ class AnalystAgent:
     def __init__(self):
         # Instantiate Services
         self.market = MarketService()
-        self.physics = PhysicsService()
+        # self.physics = PhysicsService()  # REMOVED: Shared instance causes bleed
+        self.physics_map: Dict[str, PhysicsService] = {}  # NEW: Per-symbol factory
         self.forecasting = ForecastingService()
         self.reasoning = ReasoningService()
         self.memory = MemoryService()  # Quantum Memory
@@ -55,7 +56,19 @@ class AnalystAgent:
 
         self.cycle_count = 0
 
-    async def _analyze_single(self, symbol: str) -> Dict[str, Any]:
+    def _get_physics_service(self, symbol: str) -> PhysicsService:
+        """
+        Factory method to get or create a unique PhysicsService for a symbol.
+        Ensures strict state isolation (Kalman Filter, Velocity, etc.)
+        """
+        if symbol not in self.physics_map:
+            logger.info(f"ANALYST: 🏭 Spawning new Physics Engine for {symbol}")
+            self.physics_map[symbol] = PhysicsService()
+        return self.physics_map[symbol]
+
+    async def _analyze_single(
+        self, symbol: str, skip_llm: bool = False
+    ) -> Dict[str, Any]:
         """
         Performs deep analysis on a single asset.
         Returns a dictionary of analysis results (Signal, Physics, Reasoning).
@@ -70,18 +83,24 @@ class AnalystAgent:
             "hurst": 0.5,
             "success": False,
         }
+        logger.info(f"DEBUG: Analyzing {symbol} with skip_llm={skip_llm}")
 
         try:
+            # Get Isolated Physics Engine
+            physics_engine = self._get_physics_service(symbol)
+
             # --- PHASE 0: WARM-UP (If needed) ---
             # Ideally, we warm up once per symbol or system start.
             # We track this locally or via Physics Service which is stateful.
             # If PhysicsService says not initialized, we warm up.
-            if not self.physics.is_initialized:
+            if not physics_engine.is_initialized:
                 startup_bars = await asyncio.to_thread(
                     self.market.get_startup_bars, symbol, limit=100
                 )
                 # Warmup Physics
-                await asyncio.to_thread(self.physics.calculate_kinematics, startup_bars)
+                await asyncio.to_thread(
+                    physics_engine.calculate_kinematics, startup_bars
+                )
 
                 # Warmup/Init LSTM (feed returns)
                 # LSTM expects DataFrame usually or raw prices.
@@ -101,19 +120,31 @@ class AnalystAgent:
 
             # Extract basics
             history = market_snapshot.get("history", [])
+            current_price = market_snapshot.get("price", 0.0)
+            logger.info(
+                f"Checking Data {symbol}: Price={current_price} Hist={len(history)}"
+            )
+
+            # --- DYNAMIC PHYSICS INJECTION ---
+            # Append live price as the latest "tick" to force non-zero velocity calculation
+            # relative to the previous close.
+            physics_history = history.copy()
+            if current_price > 0:
+                physics_history.append(current_price)
 
             # --- Step 2: PHYSICS (Kinematics & Regime) ---
             kinematics = await asyncio.to_thread(
-                self.physics.calculate_kinematics, history
+                physics_engine.calculate_kinematics, physics_history
             )
+            logger.info(f"DEBUG: {symbol} Raw Velocity: {kinematics.get('velocity')}")
             regime_analysis = await asyncio.to_thread(
-                self.physics.analyze_regime, history
+                physics_engine.analyze_regime, physics_history
             )
             hurst_analysis = await asyncio.to_thread(
-                self.physics.calculate_hurst_and_mode, history
+                physics_engine.calculate_hurst_and_mode, physics_history
             )
             qho_analysis = await asyncio.to_thread(
-                self.physics.calculate_qho_levels, history
+                physics_engine.calculate_qho_levels, physics_history
             )
 
             physics_context = {
@@ -161,17 +192,32 @@ class AnalystAgent:
             market_snapshot["historical_regimes"] = historical_regimes
 
             # --- Step 4: COGNITION (Reasoning / Signal) ---
-            reasoning_context = {
-                "market": market_snapshot,
-                "physics": physics_context,
-                "forecast": forecast,
-                "sentiment": sentiment_snapshot,
-                "strategies": {"lstm_signal": lstm_signal},  # Inject LSTM signal
-            }
+            if not skip_llm:
+                reasoning_context = {
+                    "market": market_snapshot,
+                    "physics": physics_context,
+                    "forecast": forecast,
+                    "sentiment": sentiment_snapshot,
+                    "strategies": {"lstm_signal": lstm_signal},  # Inject LSTM signal
+                }
 
-            signal_result = await asyncio.to_thread(
-                self.reasoning.generate_signal, reasoning_context
-            )
+                signal_result = await asyncio.to_thread(
+                    self.reasoning.generate_signal, reasoning_context
+                )
+            else:
+                # OPTIMIZATION: Skip LLM for non-primary candidates
+                signal_result = {
+                    "signal_side": "FLAT",
+                    "signal_confidence": 0.0,
+                    "reasoning": "LLM Skipped (Optimization)",
+                }
+                # Basic LSTM fallback for signal side
+                if lstm_signal > 0.05:
+                    signal_result["signal_side"] = "BUY"
+                    signal_result["signal_confidence"] = min(abs(lstm_signal) * 5, 0.8)
+                elif lstm_signal < -0.05:
+                    signal_result["signal_side"] = "SELL"
+                    signal_result["signal_confidence"] = min(abs(lstm_signal) * 5, 0.8)
 
             # --- Step 5.5: MEMORIZE (Fire & Forget) ---
             asyncio.create_task(
@@ -215,112 +261,95 @@ class AnalystAgent:
         """
         # Phase 16: Priority to Watchlist (from Macro Node)
         candidates = state.get("watchlist", [])
-        if not candidates:
-            candidates = state.get("candidates", [])
 
-        # Fallback: If no batch, analyze the single symbol provided in state
+        # Ensure Primary Symbol (from Loop/UI) is ALWAYS included in analysis
+        # Otherwise we broadcast stale data (Vel=0.0) for the active symbol.
+        target_symbol = state.get("symbol", "SPY")
+        primary_in_batch = any(c.get("symbol") == target_symbol for c in candidates)
+
+        if not primary_in_batch:
+            # Inject at top priority
+            candidates.insert(0, {"symbol": target_symbol})
+
         if not candidates:
-            target_symbol = state.get("symbol", "SPY")
+            # Fallback if watchlist and symbol were both empty (rare)
             logger.warning(
                 f"ANALYST: No candidates found. Fallback to single symbol: {target_symbol}"
             )
             candidates = [{"symbol": target_symbol}]
 
         symbols = [c["symbol"] for c in candidates]
-        logger.info(
-            f"🧠 ANALYST: Starting Batch Analysis for {len(symbols)} assets: {symbols}"
-        )
+        primary_symbol = state.get("symbol", "SPY")
+        tasks = []
 
-        start_time = time.time()
+        # --- PARALLEL EXECUTION (Conditional LLM) ---
+        # Phase 27: Optimization - Only use LLM for Primary Symbol to prevent local LLM overload.
+        # Secondary symbols get LSTM/Tech signals only.
+        for candidate_item in candidates:
+            symbol = candidate_item["symbol"]
+            is_primary = symbol == primary_symbol
+            should_skip_llm = not is_primary
 
-        # --- PARALLEL EXECUTION ---
-        tasks = [self._analyze_single(sym) for sym in symbols]
+            tasks.append(self._analyze_single(symbol, skip_llm=should_skip_llm))
+
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Merge Results
+        # --- MERGE & HOIST ---
         enriched_candidates = []
+        primary_data = None
+
         for i, res in enumerate(results):
-            # Candidate dict from input (watchlist item)
+            # Candidate dict from input
             candidate = candidates[i].copy()
 
             if isinstance(res, dict):
-                # Update with analysis results
                 candidate.update(res)
-            else:
-                candidate["error"] = str(res)
-                candidate["signal_confidence"] = -1.0
+                # Check match
+                if candidate.get("symbol") == primary_symbol:
+                    primary_data = candidate
+            elif isinstance(res, Exception):
                 logger.error(
-                    f"ANALYST: Analysis failed for {candidate.get('symbol')}: {res}"
+                    f"ANALYST: Error analyzing {candidate.get('symbol')}: {res}"
                 )
+                candidate["error"] = str(res)
+                candidate["success"] = False
 
             enriched_candidates.append(candidate)
 
-        # --- SUPERPOSITION OUTPUT ---
-        # Store full reports for downstream reasoning/risk
+        # Update State
         state["analysis_reports"] = enriched_candidates
         state["candidates"] = enriched_candidates  # Backwards compatibility
 
-        # --- SELECTION Logic (Wavefunction Collapse) ---
-        # Sort by Confidence Descending
-        enriched_candidates.sort(
-            key=lambda x: x.get("signal_confidence", 0.0), reverse=True
-        )
-
-        winner = None
-
-        # Resilient Collapse: Iterate to find first non-critical candidate
-        for candidate in enriched_candidates:
-            alpha = candidate.get("current_alpha", 2.0)
-            regime = candidate.get("regime", "Unknown")
-
-            # The "Iron Gate" Check (Self-Imposed by Analyst)
-            # We reject candidates in Infinite Variance regimes to prevent Risk Node Halt
-            if alpha <= 2.0 or regime == Regime.CRITICAL.value:
-                logger.warning(
-                    f"ANALYST: Vetoed candidate {candidate['symbol']} (Alpha: {alpha:.2f}, Regime: {regime}). "
-                    f"Conf: {candidate.get('signal_confidence', 0):.2f}"
-                )
-                continue
-
-            # If passed, we found our winner
-            winner = candidate
-            break
-
-        # Fallback: If ALL candidates are Critical (Market Crash), pick the top one but force FLAT?
-        # Or pick the safest one?
-        # For now, if no winner, we revert to the top candidate but warn heavily,
-        # knowing Risk might halt us. Better to be halted than trade critical.
-        if not winner:
+        # Hoist Primary Data to Top Level
+        if primary_data:
+            state["price"] = primary_data.get("price", 0.0)
+            state["velocity"] = primary_data.get("velocity", 0.0)
+            state["acceleration"] = primary_data.get("acceleration", 0.0)
+            state["current_alpha"] = primary_data.get("current_alpha", 2.0)
+            state["regime"] = primary_data.get("regime", "Unknown")
+            state["signal_side"] = primary_data.get("signal_side", "FLAT")
+            state["signal_confidence"] = primary_data.get("signal_confidence", 0.0)
+            state["reasoning"] = primary_data.get("reasoning", "Analysis Complete")
+            state["history"] = primary_data.get("history", [])
+            logger.info(f"✅ ANALYST: Hoisted {primary_symbol} Price=${state['price']}")
+        else:
             logger.warning(
-                "ANALYST: ⚠️ ALL candidates failed Physics Veto. Collapse forced to Top Candidate (Risk of Halt)."
+                f"⚠️ ANALYST: Primary symbol {primary_symbol} not in batch results."
             )
-            winner = enriched_candidates[0]
 
+        # LOGGING (Batch Summary)
+        successful = [c for c in enriched_candidates if c.get("success")]
         logger.info(
-            f"ANALYST: 🏆 Winner Selected: {winner['symbol']} (Conf: {winner.get('signal_confidence', 0):.2f})"
+            f"ANALYST: Batch Analysis Complete. {len(successful)}/{len(enriched_candidates)} successful."
         )
 
-        # Update Top-Level State (The collapsed reality for Execution)
-        state["symbol"] = winner["symbol"]
-        state["signal_side"] = winner.get("signal_side", "FLAT")
-        state["signal_confidence"] = winner.get("signal_confidence", 0.0)
-        state["reasoning"] = winner.get("reasoning", "")
-        state["price"] = winner.get("price", 0.0)
-
-        state["velocity"] = winner.get("velocity", 0.0)
-        state["acceleration"] = winner.get("acceleration", 0.0)
-        state["regime"] = winner.get("regime", "Unknown")
-        state["current_alpha"] = winner.get("current_alpha", 2.0)
-        state["hurst"] = winner.get("hurst", 0.5)
-        state["strategy_mode"] = winner.get("strategy_mode", "Unknown")
-
-        # Also store the raw history if available, for Execution constraints?
-        if "history" in winner:
-            state["history"] = winner["history"]
-
-        # Telemetry
+        # Telemetry (Metrics for Batch)
+        # We log generic batch metrics here, individual winner metrics will be logged by Risk/Execution?
+        # Or we log all candidates? Let's log count for now.
         latency = (time.time() - start_time) * 1000
-        self._log_telemetry(winner, latency, success=True)
+
+        # We skip single-winner telemetry here because we don't pick one yet.
+        # But we can log that we finished.
 
         return state
 
@@ -348,9 +377,17 @@ class AnalystAgent:
             logger.error(f"Failed to log telemetry: {e}")
 
 
+# --- GLOBAL INSTANCE FOR PERSISTENCE ---
+# We must instantiate the agent ONCE so that:
+# 1. Physics Engine state (Kalman Filter) is preserved between ticks.
+# 2. LSTM hidden states are preserved.
+# 3. Memory Service connections remain stable.
+_analyst_agent_instance = AnalystAgent()
+
+
 def analyst_node(state: AgentState) -> AgentState:
     """
     LangGraph Node Wrapper (Synchronous).
+    Uses the persistent global agent instance.
     """
-    agent = AnalystAgent()
-    return asyncio.run(agent.analyze(state))
+    return asyncio.run(_analyst_agent_instance.analyze(state))

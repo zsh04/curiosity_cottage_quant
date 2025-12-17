@@ -67,9 +67,7 @@ class OrdersController(Controller):
                     symbol=p.symbol,
                     qty=float(p.qty),
                     avg_entry_price=float(p.avg_entry_price),
-                    current_price=float(
-                        p.element_raw.get("current_price", 0)
-                    ),  # Access raw dict safely
+                    current_price=float(p.current_price),
                     unrealized_pl=float(p.unrealized_pl),
                     unrealized_plpc=float(p.unrealized_plpc),
                     market_value=float(p.market_value),

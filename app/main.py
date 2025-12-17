@@ -12,6 +12,7 @@ from api.routes.system import SystemController
 from api.routes.signals import SignalsController
 from api.routes.actions import ActionsController
 from api.routes.orders import OrdersController
+from api.routes.market import MarketController
 from app.api.routes.telemetry import TelemetryController
 
 # Database & State
@@ -83,6 +84,7 @@ app = Litestar(
         SignalsController,
         ActionsController,
         OrdersController,
+        MarketController,
         TelemetryController,
     ],
     path="/api",  # Base path for all routes

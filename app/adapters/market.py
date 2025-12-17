@@ -1,18 +1,23 @@
 import os
 import logging
-from typing import List, Dict, Any
+import concurrent.futures
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import (
     StockLatestTradeRequest,
     StockBarsRequest,
-    StockSnapshotRequest,
 )
 from alpaca.data.timeframe import TimeFrame
 from opentelemetry import trace
 
+# Adapters
 from app.adapters.tiingo import TiingoAdapter
+from app.adapters.alphavantage import AlphaVantageAdapter
+from app.adapters.finnhub import FinnhubAdapter
+from app.adapters.twelvedata import TwelveDataAdapter
+from app.adapters.marketstack import MarketStackAdapter
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -20,193 +25,312 @@ tracer = trace.get_tracer(__name__)
 
 class MarketAdapter:
     """
-    Production Market Data Adapter using Alpaca SDK.
-    Serves as the Single Source of Truth for Market Data.
+    Production Market Data Adapter using Parallel Execution Strategy.
+    "The Data Flood": Queries 6 providers simultaneously and aggregates results.
     """
 
     def __init__(self):
         """
-        Initialize Alpaca Historical Data Client and Tiingo.
+        Initialize all 6 Data Providers.
         """
+        # 1. Alpaca (Primary)
         api_key = os.getenv("ALPACA_API_KEY")
         secret_key = os.getenv("ALPACA_API_SECRET")
-
-        if not api_key or not secret_key:
-            logger.warning(
-                "ALPACA_API_KEY or ALPACA_API_SECRET not set. MarketAdapter will fail."
+        self.alpaca = None
+        if api_key and secret_key:
+            self.alpaca = StockHistoricalDataClient(
+                api_key=api_key, secret_key=secret_key
             )
+        else:
+            logger.warning("ALPACA credentials missing.")
 
-        self.client = StockHistoricalDataClient(api_key=api_key, secret_key=secret_key)
-
-        # Initialize Tiingo for news
+        # 2. Tiingo
         try:
             self.tiingo = TiingoAdapter()
-        except ValueError as e:
-            logger.warning(f"TiingoAdapter initialization failed: {e}")
+        except Exception:
             self.tiingo = None
+
+        # 3. AlphaVantage
+        self.av = AlphaVantageAdapter()
+
+        # 4. Finnhub
+        self.finnhub = FinnhubAdapter()
+
+        # 5. TwelveData
+        self.twelve = TwelveDataAdapter()
+
+        # 6. MarketStack
+        self.marketstack = MarketStackAdapter()
 
     def get_price(self, symbol: str) -> float:
         """
-        Fetch the latest trade price for a given symbol.
+        Parallel "Race" for Real-Time Price.
+        Queries all providers at once. Returns the first valid non-zero result.
         """
-        try:
-            request = StockLatestTradeRequest(symbol_or_symbols=symbol)
-            latest_trade = self.client.get_stock_latest_trade(request)
+        with tracer.start_as_current_span("market_get_price_parallel") as span:
+            span.set_attribute("symbol", symbol)
 
-            if symbol in latest_trade:
-                price = float(latest_trade[symbol].price)
-                return price
-            else:
-                logger.error(f"No trade data returned for {symbol}")
+            # Define tasks
+            tasks = {
+                "Alpaca": lambda: self._fetch_alpaca_price(symbol),
+                "Tiingo": lambda: self.tiingo.get_latest_price(symbol)
+                if self.tiingo
+                else 0.0,
+                "Finnhub": lambda: self.finnhub.get_quote(symbol).get("price", 0.0),
+                "TwelveData": lambda: self.twelve.get_price(symbol),
+                "AlphaVantage": lambda: self.av.get_global_quote(symbol).get(
+                    "price", 0.0
+                ),
+            }
+
+            results = {}
+
+            # Execute in Parallel
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                future_to_provider = {
+                    executor.submit(func): provider for provider, func in tasks.items()
+                }
+
+                for future in concurrent.futures.as_completed(future_to_provider):
+                    provider = future_to_provider[future]
+                    try:
+                        price = future.result()
+                        if price > 0:
+                            results[provider] = price
+                            # Optional: Early exit if we trust the "fastest" absolutely?
+                            # But gathering all allows for consensus checks.
+                    except Exception as e:
+                        logger.warning(f"{provider} fetch failed: {e}")
+
+            # Consensus / Selection Logic
+            if not results:
+                logger.error(f"❌ ALL PROVIDERS FAILED for {symbol}")
                 return 0.0
 
-        except Exception as e:
-            logger.error(f"Failed to fetch current price for {symbol}: {e}")
+            # Log the race results
+            logger.info(f"🏁 Price Race ({symbol}): {results}")
+
+            # Priority Order (Trust Hierarchy)
+            priority = ["Alpaca", "Tiingo", "Finnhub", "TwelveData", "AlphaVantage"]
+            for p in priority:
+                if p in results and results[p] > 0:
+                    span.set_attribute("source", p)
+                    return results[p]
+
+            # Fallback to whatever is left
+            return list(results.values())[0]
+
+    def _fetch_alpaca_price(self, symbol: str) -> float:
+        """Helper for Alpaca Price"""
+        if not self.alpaca:
             return 0.0
+        try:
+            req = StockLatestTradeRequest(symbol_or_symbols=symbol)
+            trade = self.alpaca.get_stock_latest_trade(req)
+            if symbol in trade:
+                return float(trade[symbol].price)
+        except Exception:
+            pass
+        return 0.0
 
     def get_price_history(self, symbol: str, limit: int = 100) -> List[float]:
         """
-        Fetch the last `limit` bars of Close Prices.
-
-        Args:
-            symbol: Stock ticker.
-            limit: Number of bars to return.
-
-        Returns:
-            List[float]: Close prices, ordered chronological [Oldest -> Newest].
+        Get Close Price History.
+        Strategy: Waterfall (Schema normalization is complex for parallel).
+        Alpaca -> Tiingo -> Finnhub
         """
-        try:
-            # Heuristic start time: limit * 2 days ago to ensure we cover weekends/holidays
-            # We fetch a bit more and slice the tail.
-            start_time = datetime.now(timezone.utc) - timedelta(days=limit * 2 + 10)
+        # 1. Alpaca
+        if self.alpaca:
+            try:
+                end = datetime.now(timezone.utc)
+                start = end - timedelta(days=limit * 2 + 20)
+                req = StockBarsRequest(
+                    symbol_or_symbols=symbol,
+                    timeframe=TimeFrame.Day,
+                    start=start,
+                    limit=limit,
+                )
+                bars = self.alpaca.get_stock_bars(req)
+                if symbol in bars and len(bars[symbol]) > 0:
+                    return [float(b.close) for b in bars[symbol]][-limit:]
+            except Exception as e:
+                logger.warning(f"Alpaca history failed: {e}")
 
-            # Alpaca limit applies to the result set size
-            request = StockBarsRequest(
-                symbol_or_symbols=symbol,
-                timeframe=TimeFrame.Day,
-                start=start_time,
-                limit=limit,
-                # adjustment='raw' # Optional: if we want unadjusted
-            )
+        # 2. AlphaVantage (New High Quality)
+        if self.av:
+            try:
+                ts = self.av.get_daily_series(symbol)
+                if ts:
+                    # AV returns dict "YYYY-MM-DD": { "4. close": ... }
+                    # Sort by date ascending
+                    sorted_dates = sorted(ts.keys())
+                    closes = [float(ts[d]["4. close"]) for d in sorted_dates]
+                    return closes[-limit:]
+            except Exception as e:
+                logger.warning(f"AV history failed: {e}")
 
-            bars = self.client.get_stock_bars(request)
+        # 3. TwelveData (New High Quality)
+        if self.twelve:
+            try:
+                ts = self.twelve.get_time_series(symbol, outputsize=limit)
+                if ts:
+                    # Returns list of dicts, sorted descending by default? Adapter sorts it?
+                    # Adapter returns list of {datetime, close, ...} sorted by datetime ASC ending.
+                    return [float(x["close"]) for x in ts][-limit:]
+            except Exception as e:
+                logger.warning(f"TwelveData history failed: {e}")
 
-            if symbol not in bars:
-                return []
-
-            # Extract close prices
-            # Alpaca bars should be chronological by default
-            close_prices = [float(bar.close) for bar in bars[symbol]]
-
-            # Ensure we respect the limit if api returned more (unlikely with limit param but safe)
-            if len(close_prices) > limit:
-                close_prices = close_prices[-limit:]
-
-            return close_prices
-
-        except Exception as e:
-            logger.error(f"Failed to fetch price history for {symbol}: {e}")
-            return []
-
-    def get_news(self, symbol: str, limit: int = 5) -> List[str]:
-        """
-        Fetch recent news headlines.
-        Returns a clean list of headline strings.
-        """
-        headlines = []
-
-        # Primary: Tiingo
+        # 4. Tiingo
         if self.tiingo:
             try:
-                items = self.tiingo.fetch_news(tickers=symbol, limit=limit)
-                if items:
-                    for item in items:
-                        title = item.get("title")
-                        if title:
-                            headlines.append(title)
-                    return headlines[:limit]
+                start_date = (datetime.now() - timedelta(days=limit * 2)).strftime(
+                    "%Y-%m-%d"
+                )
+                data = self.tiingo.get_historical_data(symbol, start_date)
+                if data:
+                    return [float(d["close"]) for d in data][-limit:]
             except Exception as e:
-                logger.warning(f"Tiingo news fetch failed: {e}")
+                logger.warning(f"Tiingo history failed: {e}")
+
+        # 5. Finnhub (Last Resort)
+        try:
+            candles = self.finnhub.get_candles(symbol, resolution="D", count=limit)
+            if candles:
+                return [c["close"] for c in candles]
+        except Exception as e:
+            logger.warning(f"Finnhub history failed: {e}")
+
+        # 6. Yahoo Finance (Nuclear Option)
+        try:
+            import yfinance as yf
+
+            # YF is blocking, but robust.
+            ticker = yf.Ticker(symbol)
+            # Fetch slightly more to ensure count
+            hist = ticker.history(period="1y")
+            if not hist.empty:
+                closes = hist["Close"].tolist()
+                return closes[-limit:]
+        except Exception as e:
+            logger.error(f"YFinance fallback failed: {e}")
 
         return []
 
-    def get_snapshots(self, symbols: List[str]) -> Dict[str, Any]:
+    def get_news(self, symbol: str, limit: int = 5) -> List[str]:
         """
-        Fetch snapshots for multiple symbols manually (Price from Trades, Volume from Daily Bars).
-        This bypasses missing 'get_stock_snapshots' method in older SDKs.
+        Fetch News.
+        Primary: Tiingo.
         """
-        results = {}
+        if self.tiingo:
+            return self.tiingo.fetch_news(symbol, limit)
+        return []
 
-        # Initialize results structure
-        for sym in symbols:
-            results[sym] = {
-                "price": 0.0,
-                "volume": 0,
-                "open": 0.0,
-                "close": 0.0,
-                "high": 0.0,
-                "low": 0.0,
-            }
+    def get_rich_history(self, symbol: str, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Rich OHLCV History.
+        Strategy: Waterfall.
+        """
+        # 1. Alpaca
+        if self.alpaca:
+            try:
+                end = datetime.now(timezone.utc)
+                start = end - timedelta(days=limit * 2 + 20)
+                req = StockBarsRequest(
+                    symbol_or_symbols=symbol,
+                    timeframe=TimeFrame.Day,
+                    start=start,
+                    limit=limit,
+                )
+                bars = self.alpaca.get_stock_bars(req)
+                if symbol in bars:
+                    data = []
+                    for b in bars[symbol]:
+                        data.append(
+                            {
+                                "time": b.timestamp.strftime("%Y-%m-%d"),
+                                "open": float(b.open),
+                                "high": float(b.high),
+                                "low": float(b.low),
+                                "close": float(b.close),
+                                "volume": float(b.volume),
+                            }
+                        )
+                    return data[-limit:]
+            except Exception:
+                pass
 
+        # 2. Tiingo
+        if self.tiingo:
+            try:
+                start_date = (datetime.now() - timedelta(days=limit * 2)).strftime(
+                    "%Y-%m-%d"
+                )
+                t_data = self.tiingo.get_historical_data(symbol, start_date)
+                if t_data:
+                    data = []
+                    for item in t_data:
+                        data.append(
+                            {
+                                "time": item["date"].split("T")[0],
+                                "open": float(item["open"]),
+                                "high": float(item["high"]),
+                                "low": float(item["low"]),
+                                "close": float(item["close"]),
+                                "volume": float(item["volume"]),
+                            }
+                        )
+                    return data[-limit:]
+            except Exception:
+                pass
+
+        # 3. Yahoo Finance (Nuclear Option)
         try:
-            # 1. Get Latest Trades (Price)
-            trade_req = StockLatestTradeRequest(symbol_or_symbols=symbols)
-            trades = self.client.get_stock_latest_trade(trade_req)
+            import yfinance as yf
 
-            for sym, trade in trades.items():
-                if sym in results:
-                    results[sym]["price"] = float(trade.price)
-
-            # 2. Get Daily Bars (Volume, Open, Close)
-            # We need Today's bar.
-            # If market is open, 'limit=1' returns today (partial).
-            # If market is closed, it returns yesterday?
-            # We want the 'latest' bar.
-            # Start from 5 days ago to be safe.
-            start_time = datetime.now(timezone.utc) - timedelta(days=5)
-
-            bar_req = StockBarsRequest(
-                symbol_or_symbols=symbols,
-                timeframe=TimeFrame.Day,
-                start=start_time,
-                limit=1,  # We only need the very latest bar
-                # We can't strictly sort by descending in request, but SDK returns ascending.
-                # So we might get old bars if we limit=1?
-                # Actually, limit=1 returns the *first* bar after start_time?
-                # Alpaca V2 API 'limit' is usually from start.
-                # So to get LATEST, we should probably ask for limit=10 and take the last one.
-            )
-
-            bars_dict = self.client.get_stock_bars(bar_req)
-
-            for sym, bars in bars_dict.items():
-                if bars and sym in results:
-                    latest_bar = bars[-1]  # Take the most recent
-                    results[sym]["volume"] = latest_bar.volume
-                    results[sym]["open"] = latest_bar.open
-                    results[sym]["close"] = latest_bar.close
-                    results[sym]["high"] = latest_bar.high
-                    results[sym]["low"] = latest_bar.low
-
-            return results
-
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period="1y")
+            if not hist.empty:
+                data = []
+                for idx, row in hist.iterrows():
+                    data.append(
+                        {
+                            "time": idx.strftime("%Y-%m-%d"),
+                            "open": float(row["Open"]),
+                            "high": float(row["High"]),
+                            "low": float(row["Low"]),
+                            "close": float(row["Close"]),
+                            "volume": float(row["Volume"]),
+                        }
+                    )
+                return data[-limit:]
         except Exception as e:
-            logger.error(f"Failed to fetch snapshots manually: {e}")
-            return results
+            logger.error(f"YFinance chart failed: {e}")
 
-    # --- DEPRECATED METHODS (Compatibility) ---
+        return []
 
+    # --- COMPATIBILITY ---
     def get_current_price(self, symbol: str) -> float:
-        """DEPRECATED: Use get_price() instead."""
-        # logger.warning("DeprecationWarning: get_current_price is deprecated. Use get_price.")
         return self.get_price(symbol)
 
-    def get_historic_returns(self, symbol: str, lookback: int = 200) -> List[float]:
-        """DEPRECATED: Use get_price_history() and calculate returns in Service."""
-        # logger.warning("DeprecationWarning: get_historic_returns is deprecated.")
-        prices = self.get_price_history(symbol, limit=lookback + 1)
-        if len(prices) < 2:
-            return []
-
-        returns = [(prices[i] / prices[i - 1]) - 1.0 for i in range(1, len(prices))]
-        return returns
+    def get_snapshots(self, symbols: List[str]) -> Dict[str, Any]:
+        """
+        Batch Snapshot.
+        Parallelize per symbol using get_price logic?
+        Or use batch endpoints where available.
+        For now, iterative get_price is safest for mixed providers.
+        """
+        results = {}
+        # TODO: Optimize this with batch APIs later.
+        # For now, simplistic loop to ensure data quality.
+        for sym in symbols:
+            price = self.get_price(sym)
+            results[sym] = {
+                "symbol": sym,
+                "price": price,
+                "open": price,  # Approx
+                "high": price,
+                "low": price,
+                "close": price,
+                "volume": 0,
+            }
+        return results

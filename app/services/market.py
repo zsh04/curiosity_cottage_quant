@@ -128,3 +128,14 @@ class MarketService:
         except Exception as e:
             logger.error(f"MarketService: Warm-up fetch failed: {e}")
             return []
+            return []
+
+    def get_chart_history(self, symbol: str, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Fetch OHLCV history for valid charts.
+        """
+        try:
+            return self.market_adapter.get_rich_history(symbol, limit=limit)
+        except Exception as e:
+            logger.error(f"MarketService: Chart history fetch failed: {e}")
+            return []

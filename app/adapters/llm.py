@@ -46,7 +46,7 @@ class LLMAdapter:
             or getattr(settings, "LLM_MODEL", None)
             or os.getenv("LLM_MODEL", "gemma2:9b")
         )
-        self.timeout = 120.0  # Increased to 120s for local inference lag
+        self.timeout = 300.0  # Increased to 300s for local inference lag
 
     @tracer.start_as_current_span("llm_infer")
     def infer(
