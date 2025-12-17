@@ -42,21 +42,37 @@ class AlpacaClient:
         qty: float,
         side: str,
         time_in_force: TimeInForce = TimeInForce.DAY,
+        limit_price: float = None,  # NEW: Limit Price Support
     ):
         """
-        Submit a Market Order.
+        Submit a Market or Limit Order.
         """
         if not self.client:
             raise RuntimeError(
                 "Alpaca Client not initialized (Keys missing or Init failed)"
             )
 
-        req = MarketOrderRequest(
-            symbol=symbol,
-            qty=qty,
-            side=OrderSide.BUY if side.upper() == "BUY" else OrderSide.SELL,
-            time_in_force=time_in_force,
-        )
+        target_side = OrderSide.BUY if side.upper() == "BUY" else OrderSide.SELL
+
+        if limit_price and limit_price > 0:
+            # Limit Order
+            from alpaca.trading.requests import LimitOrderRequest
+
+            req = LimitOrderRequest(
+                symbol=symbol,
+                qty=qty,
+                side=target_side,
+                time_in_force=time_in_force,
+                limit_price=limit_price,
+            )
+        else:
+            # Market Order (Fallback)
+            req = MarketOrderRequest(
+                symbol=symbol,
+                qty=qty,
+                side=target_side,
+                time_in_force=time_in_force,
+            )
 
         return self.client.submit_order(req)
 

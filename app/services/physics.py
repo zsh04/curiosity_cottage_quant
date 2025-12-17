@@ -136,7 +136,7 @@ class PhysicsService:
     def _warmup_filter(self, prices: List[float]) -> Dict[str, float]:
         """
         Warmup Kalman Filter with historical data.
-        Applies fractional differentiation for stationarity.
+        Uses Log-Prices for consistent Kinematic Tracking (x=ln(p), v=d/dt ln(p)).
         """
         if len(prices) < 10:
             logger.error("PhysicsService: Insufficient warmup data (<10 bars)")
@@ -145,16 +145,13 @@ class PhysicsService:
         # Reset Kalman Filter
         self.kf = KinematicKalmanFilter()
 
-        # Fractional Differentiation for stationarity
-        try:
-            stationary_series = FractalMemory.frac_diff(prices, d=0.4)
-        except Exception as e:
-            logger.error(f"PhysicsService: FracDiff failed: {e}")
-            stationary_series = prices  # Fallback to raw
+        # Use Log Prices for Kinematics
+        # This models Exponential Growth/Decay as Constant Velocity
+        log_prices = np.log(np.array(prices))
 
         # Replay history through filter
         final_estimate = None
-        for measurement in stationary_series:
+        for measurement in log_prices:
             final_estimate = self.kf.update(measurement)
 
         # Mark as initialized
@@ -178,12 +175,11 @@ class PhysicsService:
         Incrementally update Kalman Filter with single new price.
         Continues from previous state (preserves covariance).
         """
-        # Calculate return for stationarity
-        if self.last_price is None or self.last_price == 0:
-            measurement = 0.0
-        else:
-            # Use log return for better stationarity
-            measurement = np.log(new_price / self.last_price)
+        if new_price <= 0:
+            return {"velocity": 0.0, "acceleration": 0.0}
+
+        # Use Log Price to match warmup
+        measurement = np.log(new_price)
 
         # Update filter with new measurement
         estimate = self.kf.update(measurement)

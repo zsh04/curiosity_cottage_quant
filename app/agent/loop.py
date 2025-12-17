@@ -7,7 +7,7 @@ from app.services.global_state import is_system_halted
 
 logger = logging.getLogger(__name__)
 
-SLEEP_INTERVAL = 60  # seconds
+SLEEP_INTERVAL = 5  # seconds (Real-time Physics)
 
 
 async def run_agent_service():
@@ -26,9 +26,9 @@ async def run_agent_service():
     # If not, we are re-running the pipeline "From Scratch" each tick (common for polling agents).
 
     # Initialize Execution Client for Portfolio Awareness
-    from app.execution.alpaca_client import AlpacaExecutionClient
+    from app.execution.alpaca_client import AlpacaClient
 
-    alpaca = AlpacaExecutionClient()
+    alpaca = AlpacaClient()
 
     # Initial inputs
     inputs = {
@@ -88,6 +88,9 @@ async def run_agent_service():
                 "forecast": final_state.get(
                     "chronos_forecast", {}
                 ),  # Chronos predictions
+                "scanner": final_state.get(
+                    "watchlist", []
+                ),  # Quantum Scanner Candidates
                 "signal": {
                     "side": final_state.get("signal_side", "FLAT"),
                     "confidence": final_state.get("signal_confidence", 0.0),
@@ -102,6 +105,14 @@ async def run_agent_service():
                 # Flatten logs from messages or specific log key
                 "logs": final_state.get("messages", []),
             }
+
+            # DEBUG: Log Telemetry Price
+            current_price = telemetry_packet["market"]["price"]
+            current_symbol = telemetry_packet["market"]["symbol"]
+            current_vel = telemetry_packet["market"]["velocity"]
+            logger.info(
+                f"📡 BROADCAST: {current_symbol} Price={current_price} Vel={current_vel}"
+            )
 
             logger.info("📡 Broadcasting State...")
             await broadcaster.broadcast(telemetry_packet)

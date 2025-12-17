@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "gemma2:9b"
     OLLAMA_MODEL: str = "gemma2:9b"
 
+    # --- Reasoning Engine ---
+    REASONING_MODE: str = Field(default="LOCAL", description="CLOUD | LOCAL | HYBRID")
+    GOOGLE_API_KEY: str = ""
+
     # --- Microservices (Defaults = Localhost) ---
     # In Docker, these MUST be overridden via ENV vars to "http://cc_chronos:8000" etc.
     CHRONOS_URL: str = "http://localhost:8002"

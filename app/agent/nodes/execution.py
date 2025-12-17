@@ -39,22 +39,47 @@ class ExecutionAgent:
             price = state.get("price", 0.0)
             symbol = state.get("symbol")
             status = state.get("status")
+            alpha = state.get("current_alpha", 2.0)
+            velocity = state.get("velocity", 0.0)  # NEW: Velocity for momentum scaling
 
             # 2. Validation Guard (Risk Veto)
             if approved_size <= 0:
-                print("⛔ RISK VETO: Size is 0.00. No trade.")
+                logger.info(f"⛔ RISK VETO: Size is {approved_size}. No trade.")
                 return state
 
             if status != TradingStatus.ACTIVE:
-                print("EXECUTION: BLOCKED (System Not Active)")
+                logger.info("EXECUTION: BLOCKED (System Not Active)")
                 return state
 
             if price <= 0:
-                print(f"EXECUTION: Error - Invalid Price {price}")
+                logger.error(f"EXECUTION: Error - Invalid Price {price}")
                 return state
 
-            # 3. Calculate Quantity
+            # 3. Calculate Quantity & Limit Price
             qty = approved_size / price
+
+            # Dynamic Slippage Buffer Logic
+            # Base Buffer: 0.1% (Standard)
+            # Alpha Penalty: If Alpha < 1.5 (Volatile), add 0.5%
+            # Velocity Penalty: If Momentum is high, market moves fast. Add proportional buffer.
+            # Formula: Buffer = 0.001 + (AlphaPenalty) + (VelocityFactor)
+
+            base_buffer = 0.001
+            alpha_penalty = 0.005 if alpha < 1.5 else 0.0
+            velocity_penalty = min(
+                0.005, abs(velocity) * 0.01
+            )  # Cap at 0.5% extra for velocity
+
+            buffer_pct = base_buffer + alpha_penalty + velocity_penalty
+
+            limit_price = 0.0
+            if signal_side == "BUY":
+                limit_price = price * (1 + buffer_pct)
+            elif signal_side == "SELL":
+                limit_price = price * (1 - buffer_pct)
+
+            # Round to 2 decimals
+            limit_price = round(limit_price, 2)
 
             # 4. SAFETY SWITCH: Live/Paper vs Simulation
             if settings.LIVE_TRADING_ENABLED:
@@ -64,12 +89,17 @@ class ExecutionAgent:
                         symbol=symbol,
                         qty=round(qty, 4),  # Alpaca support fractional
                         side=signal_side,
+                        limit_price=limit_price,  # USE LIMIT
                     )
-                    log_msg = f"🚀 ORDER SENT: {signal_side} {qty:.4f} {symbol} | ID: {order.id}"
-                    print(log_msg)
+                    log_msg = (
+                        f"🚀 LIMIT ORDER SENT: {signal_side} {qty:.4f} {symbol} "
+                        f"@ ${limit_price:.2f} (Buffer: {buffer_pct:.2%}) | ID: {order.id}"
+                    )
                     logger.warning(log_msg)
 
-                    state["execution_status"] = "FILLED"
+                    state["execution_status"] = (
+                        "FILLED"  # Optimistic assumption for state
+                    )
                     state["order_id"] = str(order.id)
                     success = True
                     trade_executed = True
@@ -81,7 +111,6 @@ class ExecutionAgent:
 
                 except Exception as e:
                     error_msg = f"❌ ALPACA EXECUTION ERROR: {e}"
-                    print(error_msg)
                     logger.error(error_msg)
                     success = False
                     if "messages" not in state:
@@ -95,9 +124,8 @@ class ExecutionAgent:
 
                 log_msg = (
                     f"🧪 PAPER TRADE (SIMULATED): Would {signal_side} {qty:.4f} {symbol} "
-                    f"based on Size=${approved_size:.2f}"
+                    f"LIMIT @ ${limit_price:.2f} (Buffer: {buffer_pct:.2%} | α={alpha:.2f}, v={velocity:.4f})"
                 )
-                print(log_msg)
                 logger.info(log_msg)
 
                 state["execution_status"] = "SIMULATED"
@@ -112,7 +140,6 @@ class ExecutionAgent:
         except Exception as e:
             success = False
             error_msg = f"EXECUTION: 💥 CRASH: {e}"
-            print(error_msg)
             logger.exception(error_msg)
             if "messages" not in state:
                 state["messages"] = []
@@ -133,7 +160,8 @@ class ExecutionAgent:
                         "trade_executed": trade_executed,
                         "approved_size": state.get("approved_size"),
                         "signal_side": state.get("signal_side"),
-                        "cash_remaining": state.get("cash"),
+                        "limit_price": limit_price,
+                        "buffer_pct": buffer_pct,
                     },
                     error=error_msg,
                 )

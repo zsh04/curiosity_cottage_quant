@@ -26,6 +26,10 @@ async def test_websocket():
                 print(f"  Price: ${data.get('market', {}).get('price', 0.0)}")
                 print(f"  Alpha: {data.get('market', {}).get('alpha', 0.0)}")
                 print(f"  Signal: {data.get('signal', {}).get('side', 'N/A')}")
+                history = data.get("market", {}).get("history", [])
+                print(f"  History Points: {len(history) if history else 0}")
+                if history:
+                    print(f"  Sample Bar: {history[-1]}")
 
     except Exception as e:
         print(f"❌ Error: {e}")

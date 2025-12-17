@@ -206,67 +206,146 @@ def risk_node(state: AgentState) -> AgentState:
         signal_side = state.get("signal_side", OrderSide.FLAT.value)
 
         # 2. The Logic Branch
+        # 2. The Logic Branch
         if status != TradingStatus.ACTIVE:
             state["approved_size"] = 0.0
         else:
-            # --- PHASE 17: AI TOURNAMENT TRIGGER ---
-            # If we have a superposition (watchlist results), we run the Tournament
+            # --- PHASE 17+: AI WAVEFUNCTION COLLAPSE ---
+            # Risk Node now arbitrates the "Reality" from the Analyst's reports.
+            # It selects ONE winner to become the global state for Execution.
+
             analysis_reports = state.get("analysis_reports", [])
+            winner_cand = None
+            rationale = "Single Candidate Default"
 
-            # Helper: Lazy load reasoning service to avoid circular deps if any,
-            # though usually safe technically if imported at top.
-            # But let's instantiate.
-            from app.services.reasoning import ReasoningService
+            # Helper: Lazy load reasoning service (Singleton)
+            from app.services.reasoning import get_reasoning_service
 
-            reasoning_service = ReasoningService()
+            # Use Singleton to persist background threads
+            reasoning_service = get_reasoning_service()
 
-            if len(analysis_reports) > 1:
-                logger.info(
-                    "RISK: 🏟️ Triggering AI Tournament for Wavefunction Collapse..."
-                )
-                tournament_result = reasoning_service.arbitrate_tournament(
-                    analysis_reports
-                )
-
-                winner_sym = tournament_result.get("winner_symbol")
-                rationale = tournament_result.get("rationale")
-
+            # 0. CHECK FOR BACKGROUND BRAIN RESULTS (From previous ticks)
+            bg_result = reasoning_service.check_background_result()
+            if bg_result:
+                # We have a late-breaking decision from the Local LLM
+                logger.info("RISK: 🧠 Background Brain Result Received!")
+                winner_sym = bg_result.get("winner_symbol")
                 if winner_sym and winner_sym != "NONE":
-                    # Find the full candidate object
+                    # Check if valid in CURRENT cand list
                     winner_cand = next(
-                        (c for c in analysis_reports if c["symbol"] == winner_sym), None
+                        (r for r in analysis_reports if r["symbol"] == winner_sym),
+                        None,
                     )
                     if winner_cand:
+                        rationale = f"[BACKGROUND] {bg_result.get('reasoning', 'Async Decision')}"
                         logger.info(
-                            f"RISK: 🏆 Tournament Winner: {winner_sym} | Reason: {rationale}"
+                            f"RISK: ✅ Accepting Background Decision for {winner_sym}"
                         )
-                        # OVERWRITE STATE with the Winner's reality
-                        state["symbol"] = winner_cand["symbol"]
-                        state["signal_side"] = winner_cand.get("signal_side", "FLAT")
-                        state["signal_confidence"] = winner_cand.get(
-                            "signal_confidence", 0.0
-                        )
-                        state["price"] = winner_cand.get("price", 0.0)
-                        state["current_alpha"] = winner_cand.get("current_alpha", 2.0)
-                        state["regime"] = winner_cand.get("regime", "Unknown")
-                        state["reasoning"] = f"[TOURNAMENT WINNER] {rationale}"
-                        # Also forecast needed for sizing
-                        # Analyst usually puts 'forecast' in state?
-                        # Ah, Analyst puts discrete fields. 'chronos_forecast' isn't explicitly in top state in analyst.py yet?
-                        # Let's check analyst.py... it puts "reasoning", "velocity" etc.
-                        # It DOES NOT seem to put "chronos_forecast" into top state in previous analyst.py
-                        # Wait, risk.py expects 'chronos_forecast' for sizing.
-                        # We must ensure Analyst passes it or we re-fetch?
-                        # Analyst passes 'forecast' object in reasoning context but not top state.
-                        # FIX: We should assume Analyst puts it or we extract it from report if preserved.
                     else:
                         logger.warning(
-                            f"RISK: Winner {winner_sym} not found in reports!"
+                            f"RISK: Background winner {winner_sym} no longer in candidates. Discarding."
                         )
+                        winner_cand = None
                 else:
-                    logger.info("RISK: 🏳️ Tournament returned NO WINNER. Forcing FLAT.")
-                    signal_side = OrderSide.FLAT.value
-                    state["signal_side"] = "FLAT"
+                    logger.info("RISK: Background Brain selected NONE.")
+                    winner_cand = None
+
+            if not winner_cand and len(analysis_reports) > 1:
+                # --- CASE A: MULTIPLE CANDIDATES (HYBRID REASONING) ---
+                # Attempt Cloud Reasoning first (Fast/Intelligent)
+                logger.info("RISK: 🏟️ Tournament: Invoking Reasoning Engine...")
+
+                try:
+                    # Request arbitration
+                    arbitration_result = reasoning_service.arbitrate_tournament(
+                        [r for r in analysis_reports if r.get("symbol")],
+                        portfolio=state.get("current_positions", []),
+                    )
+
+                    if arbitration_result and arbitration_result.get("winner_symbol"):
+                        # --- CLOUD SUCCESS ---
+                        winner_sym = arbitration_result.get("winner_symbol")
+                        winner_cand = next(
+                            (r for r in analysis_reports if r["symbol"] == winner_sym),
+                            None,
+                        )
+                        if winner_cand:
+                            rationale = f"AI Decision: {arbitration_result.get('rationale', 'No reasoning')}"
+                            logger.info(
+                                f"RISK: 🧠 Reasoning Engine Selected: {winner_sym}"
+                            )
+                        else:
+                            if winner_sym != "NONE":
+                                logger.warning(
+                                    f"RISK: AI selected {winner_sym} but not found in reports."
+                                )
+                            winner_cand = None
+
+                    else:
+                        raise Exception("Empty or Invalid Result from Cloud")
+
+                except Exception as e:
+                    logger.error(f"RISK: Cloud Reasoning Failed: {e}")
+
+                    # --- FALLBACK: ASYNC BACKGROUND BRAIN ---
+                    logger.warning(
+                        "RISK: ⚠️ Fallback: Triggering Background Brain (Async Local)..."
+                    )
+
+                    # Submit to background thread (Fire and Forget for this tick)
+                    reasoning_service.submit_local_tournament(
+                        [r for r in analysis_reports if r.get("symbol")]
+                    )
+
+                    winner_cand = None
+                    rationale = "Pending Background Brain..."
+                    logger.info(
+                        "RISK: ⏳ Decision Deferred to Background Worker. Returning FLAT for now."
+                    )
+
+            elif len(analysis_reports) == 1:
+                # --- CASE B: SINGLE CANDIDATE (AUTO-SELECT) ---
+                winner_cand = analysis_reports[0]
+                logger.info(
+                    f"RISK: 🎯 Auto-Selecting Single Candidate: {winner_cand['symbol']}"
+                )
+
+            else:
+                # --- CASE C: NO CANDIDATES ---
+                if not winner_cand:  # Check if bg_result already filled it
+                    logger.warning("RISK: No analysis reports found.")
+
+            # --- APPLY COLLAPSE (Overwrite State) ---
+            if winner_cand:
+                # Logs
+                verb = (
+                    "🏆 Tournament Winner"
+                    if len(analysis_reports) > 1
+                    else "🎯 Selected"
+                )
+                logger.info(
+                    f"RISK: {verb}: {winner_cand['symbol']} | Reason: {rationale} | Vel={winner_cand.get('velocity')}"
+                )
+
+                # Update State
+                state["symbol"] = winner_cand["symbol"]
+                state["signal_side"] = winner_cand.get("signal_side", "FLAT")
+                state["signal_confidence"] = winner_cand.get("signal_confidence", 0.0)
+                state["price"] = winner_cand.get("price", 0.0)
+                state["current_alpha"] = winner_cand.get(
+                    "current_alpha", 2.0
+                )  # Critical for sizing
+                state["regime"] = winner_cand.get("regime", "Unknown")
+                state["velocity"] = winner_cand.get(
+                    "velocity", 0.0
+                )  # Critical for slippage
+                state["reasoning"] = f"[{verb.upper()}] {rationale}"
+                # Ensure forecast exists if possible (from winner or fallback)?
+                # Risk sizing needs 'chronos_forecast' potentially, but BES sizing uses it.
+                # If Analyst doesn't output it in report, we might be missing it.
+                # Assuming Analyst -> Winner Cand has it, or we rely on pre-existing state if single.
+            else:
+                state["signal_side"] = "FLAT"
 
             # Re-fetch signal side after potential Tournament overwrite
             signal_side = state.get("signal_side", OrderSide.FLAT.value)
@@ -287,7 +366,7 @@ def risk_node(state: AgentState) -> AgentState:
                 size_pct = size_notional / state.get("nav", 100000.0)
 
                 log_msg = f"⚖️ RISK: Alpha={alpha_val:.2f} | ES_95={es_val:.4f} | Size={size_pct:.2%}"
-                print(log_msg)
+                logger.info(log_msg)
                 if "messages" not in state:
                     state["messages"] = []
                 state["messages"].append(log_msg)
@@ -302,7 +381,6 @@ def risk_node(state: AgentState) -> AgentState:
     except Exception as e:
         success = False
         error_msg = f"RISK: 💥 CRASH: {e}"
-        print(error_msg)
         logger.exception(error_msg)
         state["approved_size"] = 0.0
         if "messages" not in state:
