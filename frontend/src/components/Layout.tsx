@@ -1,8 +1,11 @@
-
-import React from 'react';
+import React, { ReactNode } from 'react';
 import Sidebar from './Sidebar';
 
-const Layout = ({ children }) => {
+interface LayoutProps {
+    children: ReactNode;
+}
+
+const Layout: React.FC<LayoutProps> = ({ children }) => {
     return (
         <div style={{ minHeight: '100vh', display: 'flex' }}>
             <Sidebar />

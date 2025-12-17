@@ -16,10 +16,9 @@ from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 def setup_telemetry(service_name: str = "curiosity-cottage-engine"):
     """
     Sets up OpenTelemetry Tracing, Metrics, and Logging.
-    Exports data to the configured OTLP endpoint (e.g., Grafana Cloud).
+    Sends data to local OTel collector (cc_pulse) which forwards to Grafana Cloud.
     """
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-    headers = os.getenv("OTEL_EXPORTER_OTLP_HEADERS")
 
     if not endpoint:
         print("Telemetry: OTLP Endpoint not set. Skipping setup.")
@@ -27,37 +26,23 @@ def setup_telemetry(service_name: str = "curiosity-cottage-engine"):
 
     print(f"Telemetry: Initializing for {service_name} at {endpoint}")
 
-    # Parse headers
-    header_dict = {}
-    if headers:
-        try:
-            for h in headers.split(","):
-                k, v = h.split("=", 1)
-                header_dict[k.strip()] = v.strip()
-        except Exception as e:
-            print(f"Telemetry: Failed to parse OTel headers: {e}")
-
     # Resource
     resource = Resource(attributes={SERVICE_NAME: service_name})
 
     # --- TRACING ---
-    trace_exporter = OTLPSpanExporter(
-        endpoint=f"{endpoint}/v1/traces", headers=header_dict
-    )
+    trace_exporter = OTLPSpanExporter(endpoint=f"{endpoint}/v1/traces")
     tracer_provider = TracerProvider(resource=resource)
     tracer_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
     trace.set_tracer_provider(tracer_provider)
 
     # --- METRICS ---
-    metric_exporter = OTLPMetricExporter(
-        endpoint=f"{endpoint}/v1/metrics", headers=header_dict
-    )
+    metric_exporter = OTLPMetricExporter(endpoint=f"{endpoint}/v1/metrics")
     metric_reader = PeriodicExportingMetricReader(metric_exporter)
     meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
     metrics.set_meter_provider(meter_provider)
 
     # --- LOGGING ---
-    log_exporter = OTLPLogExporter(endpoint=f"{endpoint}/v1/logs", headers=header_dict)
+    log_exporter = OTLPLogExporter(endpoint=f"{endpoint}/v1/logs")
     logger_provider = LoggerProvider(resource=resource)
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
     _logs.set_logger_provider(logger_provider)

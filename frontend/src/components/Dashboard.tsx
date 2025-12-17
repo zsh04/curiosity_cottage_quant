@@ -6,12 +6,65 @@ import ModelMonitor from './ModelMonitor';
 import CerebroChart from './CerebroChart';
 import AutopsyPanel from './AutopsyPanel';
 
-const Dashboard = () => {
-    const [selectedLog, setSelectedLog] = useState(null);
-    const [isConnected, setIsConnected] = useState(false);
+interface LogMessage {
+    timestamp: string;
+    level: string;
+    message: string;
+    source?: string;
+}
+
+interface MarketData {
+    alpha: number;
+    velocity: number;
+    acceleration: number;
+    regime: string;
+    price: number;
+    symbol: string;
+    history: number[];
+}
+
+interface SignalData {
+    side: string;
+    confidence: number;
+    reasoning: string;
+    strategy: string;
+    score: number;
+}
+
+interface SentimentData {
+    label: string;
+    score: number;
+}
+
+interface ForecastData {
+    median: number[];
+    p10?: number[];
+    p90?: number[];
+}
+
+interface SystemState {
+    market: MarketData;
+    signal: SignalData;
+    sentiment: SentimentData;
+    forecast: ForecastData | null;
+    logs: LogMessage[];
+}
+
+interface ChartDataPoint {
+    time: string;
+    price?: number;
+    median?: number;
+    p10?: number;
+    p90?: number;
+    isForecast: boolean;
+}
+
+const Dashboard: React.FC = () => {
+    const [selectedLog, setSelectedLog] = useState<LogMessage | null>(null);
+    const [isConnected, setIsConnected] = useState<boolean>(false);
 
     // System State from Live Backend
-    const [systemState, setSystemState] = useState({
+    const [systemState, setSystemState] = useState<SystemState>({
         market: {
             alpha: 3.0,
             velocity: 0.0,
@@ -39,8 +92,8 @@ const Dashboard = () => {
     // WebSocket Connection
     useEffect(() => {
         const WS_URL = 'ws://localhost:8000/api/ws/stream';
-        let ws = null;
-        let reconnectTimeout = null;
+        let ws: WebSocket | null = null;
+        let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
         const connect = () => {
             ws = new WebSocket(WS_URL);
@@ -50,7 +103,7 @@ const Dashboard = () => {
                 setIsConnected(true);
             };
 
-            ws.onmessage = (event) => {
+            ws.onmessage = (event: MessageEvent) => {
                 try {
                     const packet = JSON.parse(event.data);
 
@@ -74,7 +127,7 @@ const Dashboard = () => {
                 }
             };
 
-            ws.onerror = (error) => {
+            ws.onerror = (error: Event) => {
                 console.error('WebSocket error:', error);
             };
 
@@ -107,14 +160,14 @@ const Dashboard = () => {
             });
             const result = await response.json();
             alert(result.message || 'HALT SIGNAL SENT');
-        } catch (error) {
+        } catch (error: any) {
             alert('Failed to send halt signal: ' + error.message);
         }
     };
 
     // Generate chart data from history and forecast
-    const generateChartData = (history, forecast, currentPrice) => {
-        const data = [];
+    const generateChartData = (history: number[], forecast: ForecastData | null, currentPrice: number): ChartDataPoint[] => {
+        const data: ChartDataPoint[] = [];
         const now = new Date();
 
         // Historical data from price history
@@ -153,7 +206,7 @@ const Dashboard = () => {
             });
         }
 
-        return data.length > 0 ? data : [{ time: 'No Data', price: 0 }];
+        return data.length > 0 ? data : [{ time: 'No Data', price: 0, isForecast: false }];
     };
 
     return (

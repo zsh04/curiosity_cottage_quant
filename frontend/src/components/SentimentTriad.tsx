@@ -18,7 +18,7 @@ interface SentimentProps {
     }
 }
 
-const SentimentTriad: React.FC<SentimentProps> = ({ label, score, probs }) => {
+const SentimentTriad: React.FC<SentimentProps> = ({ label = 'Neutral', score = 0.5, probs }) => {
 
     // If probs not provided, simulate based on label/score
     let data = [];
@@ -91,7 +91,7 @@ const SentimentTriad: React.FC<SentimentProps> = ({ label, score, probs }) => {
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                     <span className="text-xs text-muted-foreground font-mono uppercase tracking-widest">DOMINANT</span>
                     <span className={`text-xl font-bold uppercase tracking-wider ${label.toLowerCase() === 'positive' ? 'text-green-500' :
-                            label.toLowerCase() === 'negative' ? 'text-red-500' : 'text-slate-500'
+                        label.toLowerCase() === 'negative' ? 'text-red-500' : 'text-slate-500'
                         }`}>
                         {label}
                     </span>

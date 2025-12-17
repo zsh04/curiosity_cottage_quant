@@ -4,6 +4,7 @@ from app.agent.state import AgentState, TradingStatus
 # New "Sensor Fusion" Nodes
 from app.agent.nodes.analyst import analyst_node
 from app.agent.nodes.risk import risk_node
+from app.agent.nodes.macro import macro_node  # Add Macro
 
 # Assuming execution_node exists and is correct
 from app.agent.nodes.execution import execution_node
@@ -12,18 +13,17 @@ from app.agent.nodes.execution import execution_node
 workflow = StateGraph(AgentState)
 
 # Nodes
-# Note: Macro layer might be bypassed or using legacy if not refactored yet.
-# Given the user says "remove ... not require any longer", and we heavily focused on Analyst->Risk->Execution pipeline.
-# Usually Analyst is the entry point in simplified "Sensor Fusion" without Macro global view.
-# However, the previous graph had Macro as entry.
-# Without a new Macro node, I will set Analyst as Entry Point as per "Analyst Node... implements full Sensor Fusion pipeline".
-
+workflow.add_node("macro", macro_node)  # Register Macro
 workflow.add_node("analyst", analyst_node)
 workflow.add_node("risk", risk_node)
 workflow.add_node("execution", execution_node)
 
 # Edges
-workflow.set_entry_point("analyst")
+# Macro is now the entry point (Scanner)
+workflow.set_entry_point("macro")
+
+# Macro -> Analyst
+workflow.add_edge("macro", "analyst")
 
 workflow.add_edge("analyst", "risk")
 

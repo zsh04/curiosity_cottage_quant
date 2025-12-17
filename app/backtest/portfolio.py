@@ -13,6 +13,7 @@ class Portfolio:
         self.current_cash = initial_capital
         self.positions = {}  # { 'AAPL': 100 }
         self.holdings = {}  # { 'AAPL': { 'quantity': 100, 'market_value': ... } }
+        self.latest_prices = {}  # { 'AAPL': 150.0 }
         self.start_date = start_date
         self.data_feed = data_feed
 
@@ -20,7 +21,7 @@ class Portfolio:
         self.history = []  # List of {'timestamp': t, 'total_equity': v}
         self.performance_reporter = PerformanceReporter(self.history)
 
-        # Current Value Snapshot
+        # CurrentValue Snapshot
         self.current_holdings = {"CASH": initial_capital, "TOTAL_HOLDINGS_VALUE": 0.0}
 
     def update_on_market_event(self, event: MarketEvent):
@@ -28,6 +29,8 @@ class Portfolio:
         Update market value of positions based on new prices.
         """
         sym = event.symbol
+        self.latest_prices[sym] = event.close  # Update latest price registry
+
         if sym in self.positions:
             qty = self.positions[sym]
             market_val = qty * event.close
@@ -84,11 +87,14 @@ class Portfolio:
 
             # Need Price
             price = 0.0
-            if self.data_feed:
-                price = self.data_feed.get_current_price(event.symbol)
+            if self.data_feed and hasattr(self.data_feed, "get_current_price"):
+                try:
+                    price = self.data_feed.get_current_price(event.symbol)
+                except Exception:
+                    price = self.latest_prices.get(event.symbol, 0.0)
             else:
-                # Fallback if no feed (shouldn't happen with new changes)
-                price = self.holdings.get(event.symbol, {}).get("last_price", 0.0)
+                # Fallback to internal price tracker
+                price = self.latest_prices.get(event.symbol, 0.0)
 
             if price > 0:
                 qty = int(target_value / price)

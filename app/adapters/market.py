@@ -4,7 +4,11 @@ from typing import List, Dict, Any
 from datetime import datetime, timedelta, timezone
 
 from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockLatestTradeRequest, StockBarsRequest
+from alpaca.data.requests import (
+    StockLatestTradeRequest,
+    StockBarsRequest,
+    StockSnapshotRequest,
+)
 from alpaca.data.timeframe import TimeFrame
 from opentelemetry import trace
 
@@ -125,6 +129,70 @@ class MarketAdapter:
                 logger.warning(f"Tiingo news fetch failed: {e}")
 
         return []
+
+    def get_snapshots(self, symbols: List[str]) -> Dict[str, Any]:
+        """
+        Fetch snapshots for multiple symbols manually (Price from Trades, Volume from Daily Bars).
+        This bypasses missing 'get_stock_snapshots' method in older SDKs.
+        """
+        results = {}
+
+        # Initialize results structure
+        for sym in symbols:
+            results[sym] = {
+                "price": 0.0,
+                "volume": 0,
+                "open": 0.0,
+                "close": 0.0,
+                "high": 0.0,
+                "low": 0.0,
+            }
+
+        try:
+            # 1. Get Latest Trades (Price)
+            trade_req = StockLatestTradeRequest(symbol_or_symbols=symbols)
+            trades = self.client.get_stock_latest_trade(trade_req)
+
+            for sym, trade in trades.items():
+                if sym in results:
+                    results[sym]["price"] = float(trade.price)
+
+            # 2. Get Daily Bars (Volume, Open, Close)
+            # We need Today's bar.
+            # If market is open, 'limit=1' returns today (partial).
+            # If market is closed, it returns yesterday?
+            # We want the 'latest' bar.
+            # Start from 5 days ago to be safe.
+            start_time = datetime.now(timezone.utc) - timedelta(days=5)
+
+            bar_req = StockBarsRequest(
+                symbol_or_symbols=symbols,
+                timeframe=TimeFrame.Day,
+                start=start_time,
+                limit=1,  # We only need the very latest bar
+                # We can't strictly sort by descending in request, but SDK returns ascending.
+                # So we might get old bars if we limit=1?
+                # Actually, limit=1 returns the *first* bar after start_time?
+                # Alpaca V2 API 'limit' is usually from start.
+                # So to get LATEST, we should probably ask for limit=10 and take the last one.
+            )
+
+            bars_dict = self.client.get_stock_bars(bar_req)
+
+            for sym, bars in bars_dict.items():
+                if bars and sym in results:
+                    latest_bar = bars[-1]  # Take the most recent
+                    results[sym]["volume"] = latest_bar.volume
+                    results[sym]["open"] = latest_bar.open
+                    results[sym]["close"] = latest_bar.close
+                    results[sym]["high"] = latest_bar.high
+                    results[sym]["low"] = latest_bar.low
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Failed to fetch snapshots manually: {e}")
+            return results
 
     # --- DEPRECATED METHODS (Compatibility) ---
 

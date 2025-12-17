@@ -1,7 +1,7 @@
-
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
-const Sidebar = () => {
+const Sidebar: React.FC = () => {
     const location = useLocation();
 
     const items = [

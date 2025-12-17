@@ -66,8 +66,8 @@ async def run_agent_service():
                     "velocity": final_state.get("velocity", 0.0),  # From Kalman
                     "acceleration": final_state.get("acceleration", 0.0),  # From Kalman
                     "history": final_state.get(
-                        "historic_returns", []
-                    ),  # Price history for charts
+                        "history", []
+                    ),  # OHLC history for charts
                 },
                 "forecast": final_state.get(
                     "chronos_forecast", {}

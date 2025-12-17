@@ -1,6 +1,10 @@
 import pprint
 import sys
 import os
+from dotenv import load_dotenv
+
+# Load env immediately, before any imports that might initialize configuration
+load_dotenv()
 
 # Ensure app is in path
 sys.path.append(os.getcwd())
@@ -13,6 +17,7 @@ from app.services.global_state import (
     initialize_global_state_service,
     set_current_snapshot_id,
 )
+from app.core.telemetry import setup_telemetry
 
 # --- Configuration ---
 TEST_SYMBOL = "SPY"
@@ -21,6 +26,7 @@ INITIAL_NAV = 500.0
 
 def main():
     print("🚀 CC-V2 IGNITION SEQUENCE START...")
+    setup_telemetry("cc-cli-runner")
 
     # Construct Initial State
     initial_state: AgentState = {

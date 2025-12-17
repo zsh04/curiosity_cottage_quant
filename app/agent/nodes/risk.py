@@ -16,22 +16,40 @@ class RiskManager:
     2. Sizing: Bayesian sizing based on Volatility Stop + Physics Scalar.
     """
 
-    def __init__(self, max_drawdown_limit: float = 0.20):
-        self.max_drawdown_limit = max_drawdown_limit
+    MAX_DRAWDOWN_LIMIT = 0.02
+
+    def __init__(self):
         self.bes = BesSizing()
 
     def check_governance(self, state: AgentState) -> AgentState:
         """
         Hard Stops. If breached, status -> HALTED.
         """
-        # 1. Ruin Check
-        if state.get("max_drawdown", 0.0) >= self.max_drawdown_limit:
+        # 1. Update Drawdown Calculation (Live)
+        # Using a fixed starting capital reference for 'Session Drawdown' or 'Total Drawdown'
+        starting_capital = state.get("starting_capital", 100000.0)
+        current_val = state.get("nav", 100000.0)
+
+        if starting_capital > 0:
+            drawdown = (starting_capital - current_val) / starting_capital
+        else:
+            drawdown = 0.0
+
+        # Update state for visibility
+        state["max_drawdown"] = max(state.get("max_drawdown", 0.0), drawdown)
+
+        # 2. Circuit Breaker Check
+        if drawdown >= self.MAX_DRAWDOWN_LIMIT:
             state["status"] = TradingStatus.HALTED_DRAWDOWN
-            msg = f"CRITICAL: Max Drawdown {state['max_drawdown']:.1%} breached limit. FIRM FAILURE."
+            # Force size to 0 immediately
+            state["approved_size"] = 0.0
+
+            msg = f"🛑 CIRCUIT BREAKER TRIGGERED: Drawdown {drawdown:.2%} > {self.MAX_DRAWDOWN_LIMIT:.0%}"
+            logger.critical(msg)
             state["messages"].append(msg)
             return state
 
-        # 2. Physics Veto
+        # 3. Physics Veto
         regime = state.get("regime", "Unknown")
         if regime == Regime.CRITICAL.value:
             state["status"] = TradingStatus.HALTED_PHYSICS

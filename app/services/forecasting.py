@@ -2,8 +2,10 @@ from app.adapters.chronos import ChronosAdapter
 import logging
 from typing import List, Dict, Any, Optional
 import numpy as np
+from opentelemetry import trace
 
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 
 class ForecastingService:
@@ -16,6 +18,7 @@ class ForecastingService:
     def __init__(self):
         self.adapter = ChronosAdapter()
 
+    @tracer.start_as_current_span("forecasting_predict_trend")
     def predict_trend(self, prices: List[float], horizon: int = 10) -> Dict[str, Any]:
         """
         Generate a trend prediction based on Chronos forecast.

@@ -1,54 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { Gauge, Zap, TrendingUp, WifiOff } from 'lucide-react';
+import React from 'react';
+import { Gauge, Zap, TrendingUp } from 'lucide-react';
 
-interface PhysicsMetrics {
+interface PhysicsData {
     alpha: number;
     velocity: number;
     acceleration: number;
     regime: string;
-    timestamp: string | null;
 }
 
-const PhysicsGauge: React.FC = () => {
-    const [metrics, setMetrics] = useState<PhysicsMetrics>({
-        alpha: 3.0,
-        velocity: 0.0,
-        acceleration: 0.0,
-        regime: 'Unknown',
-        timestamp: null,
-    });
-    const [isOffline, setIsOffline] = useState(false);
+interface PhysicsGaugeProps {
+    data: PhysicsData;
+}
 
-    useEffect(() => {
-        const fetchPhysics = async () => {
-            try {
-                // Use /api proxy for production, direct URL for dev
-                const response = await fetch('/api/system/status/physics');
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
-                const data = await response.json();
-                setMetrics(data);
-                setIsOffline(false);
-            } catch (error) {
-                console.warn('Physics API unavailable, using last known values:', error);
-                setIsOffline(true);
-                // Retain last known values (ghost mode)
-            }
-        };
-
-        // Initial fetch
-        fetchPhysics();
-
-        // Poll every 1000ms
-        const interval = setInterval(fetchPhysics, 1000);
-
-        return () => clearInterval(interval);
-    }, []);
-
-    const { alpha, velocity, acceleration } = metrics;
+const PhysicsGauge: React.FC<PhysicsGaugeProps> = ({ data }) => {
+    const { alpha, velocity, acceleration, regime } = data;
 
     // Determine Zone
     const normalizedAlpha = Math.min(Math.max(alpha, 0), 4);
@@ -62,14 +27,6 @@ const PhysicsGauge: React.FC = () => {
 
     return (
         <div className="bg-card border border-border rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-            {/* Offline Indicator */}
-            {isOffline && (
-                <div className="absolute top-2 right-2 flex items-center gap-1 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded-full border border-border">
-                    <WifiOff className="w-3 h-3" />
-                    OFFLINE
-                </div>
-            )}
-
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <Gauge className="w-24 h-24 text-primary" />
             </div>
