@@ -34,3 +34,4 @@ opentelemetry-instrumentation-asyncpg
 pydantic-settings
 scipy>=1.10.0
 google-generativeai>=0.3.0
+onnxruntime>=1.15.0

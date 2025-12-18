@@ -25,7 +25,8 @@ async def test_analyst_isolation():
             return {
                 "symbol": "AAPL",
                 "price": 150.0,
-                "history": [100 + i for i in range(100)],  # [100, 101, ... 199]
+                # History up to 149
+                "history": [100 + i * 0.5 for i in range(100)],  # Ends at 149.5
                 "news": [],
                 "sentiment": {},
             }
@@ -33,7 +34,8 @@ async def test_analyst_isolation():
             return {
                 "symbol": "TSLA",
                 "price": 200.0,
-                "history": [300 - i for i in range(100)],  # [300, 299, ... 201]
+                # History down to 201
+                "history": [300 - i for i in range(100)],  # Ends at 201
                 "news": [],
                 "sentiment": {},
             }
@@ -50,12 +52,28 @@ async def test_analyst_isolation():
     mock_market.get_market_snapshot = get_snapshot_side_effect
     mock_market.get_startup_bars = get_startup_side_effect
 
-    # Inject Mock
+    # Inject Mock Market
     agent.market = mock_market
+
+    # Mock Other Services to avoid network/DB calls
+    agent.reasoning = MagicMock()
+    # Return a dummy signal so analysis completes
+    agent.reasoning.generate_signal.return_value = {
+        "signal_side": "FLAT",
+        "signal_confidence": 0.0,
+        "reasoning": "Mocked Reasoning",
+    }
+
+    agent.memory = MagicMock()
+    # Return empty list for retrieval
+    agent.memory.retrieve_similar.return_value = []
+
+    agent.forecasting = MagicMock()
+    agent.forecasting.predict_trend.return_value = "FLAT"
 
     # 3. Execute Parallel Batch Analysis
     logger.info("🚀 Launching Parallel Batch for AAPL and TSLA...")
-    state = {"candidates": [{"symbol": "AAPL"}, {"symbol": "TSLA"}]}
+    state = {"watchlist": [{"symbol": "AAPL"}, {"symbol": "TSLA"}]}
 
     # Run the analyze method (which spawns _analyze_single tasks)
     final_state = await agent.analyze(state)

@@ -21,18 +21,12 @@ class ReasoningService:
         from app.core.config import settings
         from concurrent.futures import ThreadPoolExecutor
 
-        self.mode = settings.REASONING_MODE
+        self.mode = "LOCAL"  # Force Local Mode (Gemini Rolled Back)
         self.llm = LLMAdapter()  # Default Local
-        self.cloud_llm = None
 
         # Async Background Brain (Local Fallback)
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.pending_tasks: Dict[str, Any] = {}  # Map 'task_id' -> Future
-
-        if self.mode in ["CLOUD", "HYBRID"]:
-            from app.adapters.gemini import GeminiAdapter
-
-            self.cloud_llm = GeminiAdapter()
 
         logger.info(f"🧠 ReasoningService initialized in {self.mode} mode.")
 
@@ -121,6 +115,7 @@ Select ONE winner. Output JSON: {{ "winner_symbol": "SYMBOL" or "NONE", "rationa
             except Exception as e:
                 logger.error(f"Background Brain Failed: {e}")
                 del self.pending_tasks[task_id]
+                business_metrics.llm_errors.add(1, {"source": "background_brain"})
                 return None
 
         return None
@@ -180,7 +175,6 @@ Select ONE winner. Output JSON: {{ "winner_symbol": "SYMBOL" or "NONE", "rationa
         """
         The "God Prompt" Execution.
         Synthesizes multi-modal data into a decision.
-        Uses Cloud or Local LLM based on Configuration.
         """
         # Unpack Context for Prompt Construction
         market = context.get("market", {})
@@ -216,23 +210,8 @@ Quantum Interference: {interference:.4f}
         start_time = time.time()
         result = None
 
-        # --- HYBRID REASONING LOGIC ---
-        if self.mode == "CLOUD" and self.cloud_llm:
-            result = self.cloud_llm.get_trade_signal(data_block)
-        elif self.mode == "HYBRID" and self.cloud_llm:
-            # Try Cloud first, Fallback to Local (Async usually, but for Signal Gen we block?)
-            # Signal Gen is critical path for Primary Symbol, so we wait.
-            result = self.cloud_llm.get_trade_signal(data_block)
-            if (
-                not result
-                or result.get("signal_side") == "FLAT"
-                and "unavailable" in result.get("reasoning", "")
-            ):
-                logger.warning("Cloud LLM failed, falling back to Local...")
-                result = self.llm.get_trade_signal(data_block)
-        else:
-            # LOCAL mode
-            result = self.llm.get_trade_signal(data_block)
+        # --- LOCAL ONLY LOGIC ---
+        result = self.llm.get_trade_signal(data_block)
 
         inference_time_ms = (time.time() - start_time) * 1000
 
@@ -265,7 +244,6 @@ Quantum Interference: {interference:.4f}
         """
         The Tournament of Minds.
         Compares multiple Analysis Reports and selects the single best candidate.
-        Uses Cloud LLM to avoid local resource contention.
         """
         if not candidates:
             return {"winner_symbol": None, "rationale": "No candidates to arbitrate."}
@@ -309,40 +287,15 @@ Respond ONLY with this JSON:
 
         start_time = time.time()
 
-        # --- HYBRID TOURNAMENT LOGIC ---
-        # NOTE: Tournament is heavy. Prefer Cloud.
-        if self.mode in ["CLOUD", "HYBRID"] and self.cloud_llm:
-            # Using get_trade_signal interface wrapper is awkward but works if prompt is passed as context?
-            # No, get_trade_signal constructs its own prompt.
-            # We should use generate_content directly or make get_trade_signal generic?
-            # Actually, get_trade_signal forces a specific JSON output structure valid for signals.
-            # Tournament output structure is DIFFERENT (winner_symbol vs signal_side).
-            # So we must use raw generation or add a method.
-            # GeminiAdapter.generate_content returns str. We need to parse JSON.
+        # --- LOCAL LOGIC ONLY (Cloud Removed) ---
+        raw = self.llm.infer(prompt)
+        try:
+            import json
 
-            raw = self.cloud_llm.generate_content(prompt)
-            # Basic Parse
-            try:
-                import json
-
-                cleaned = raw.strip().replace("```json", "").replace("```", "").strip()
-                result = json.loads(cleaned)
-            except:
-                logger.error(f"Reasoning: Failed to parse Tournament JSON: {raw}")
-                result = {"winner_symbol": None, "rationale": "Cloud Parse Error"}
-
-        else:
-            # Local Fallback (High Risk of Blockage!)
-            # If Local, we use LLMAdapter.get_trade_signal? No, prompts different.
-            # LLMAdapter has .infer() method.
-            raw = self.llm.infer(prompt)
-            try:
-                import json
-
-                cleaned = raw.strip().replace("```json", "").replace("```", "").strip()
-                result = json.loads(cleaned)
-            except:
-                result = {"winner_symbol": None, "rationale": "Local Parse Error"}
+            cleaned = raw.strip().replace("```json", "").replace("```", "").strip()
+            result = json.loads(cleaned)
+        except:
+            result = {"winner_symbol": None, "rationale": "Local Parse Error"}
 
         inference_time_ms = (time.time() - start_time) * 1000
 

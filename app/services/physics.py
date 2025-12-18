@@ -122,6 +122,10 @@ class PhysicsService:
             kf_result = self._warmup_filter(prices)
         elif new_price is not None and self.is_initialized:
             kf_result = self._update_filter(new_price)
+        elif new_price is not None and not self.is_initialized:
+            # Cold start with single point
+            logger.info("PhysicsService: Cold start with single price.")
+            kf_result = self._warmup_filter([new_price])
         elif prices is not None:  # Re-warmup
             self.is_initialized = False
             kf_result = self._warmup_filter(prices)
@@ -228,6 +232,7 @@ class PhysicsService:
                 for i in range(1, len(price_history))
                 if price_history[i - 1] != 0  # Avoid division by zero
             ]
+            logger.info(f"Hill Buffer Size: {len(returns)}")
 
             if len(returns) < 20:
                 logger.warning("PhysicsService: Too few valid returns")

@@ -1,14 +1,31 @@
 """
-FinBERT Sentiment Analysis Adapter
-Connects to cc_finbert microservice for financial sentiment classification.
+FinBERT Sentiment Analysis Adapter (Native Metal)
+Performs local ONNX inference for financial sentiment classification.
+Removes dependency on external container and leverages CPU/Neural Engine.
 """
 
 import logging
 import os
+import time
+import numpy as np
 from typing import Dict, Any, List, Union
-
-import requests
 from opentelemetry import trace
+
+# Try importing dependencies
+try:
+    import onnxruntime as ort
+    from transformers import AutoTokenizer, pipeline
+
+    HAS_ONNX = True
+except ImportError:
+    HAS_ONNX = False
+
+try:
+    from transformers import AutoTokenizer, pipeline, AutoModelForSequenceClassification
+
+    HAS_TRANSFORMERS = True
+except ImportError:
+    HAS_TRANSFORMERS = False
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -16,118 +33,172 @@ tracer = trace.get_tracer(__name__)
 
 class SentimentAdapter:
     """
-    Client for FinBERT financial sentiment analysis microservice.
+    Local Sentiment Adapter for FinBERT.
 
-    FinBERT provides:
-        - Financial domain-specific sentiment classification
-        - Labels: positive, negative, neutral
-        - Confidence scores for each prediction
+    Architecture:
+        - Mode 1 (Preferred): ONNX Runtime (Native Metal/CPU) - Fastest (<50ms)
+        - Mode 2 (Fallback): Transformers Pipeline (PyTorch) - If ONNX missing (Python 3.14+)
     """
 
-    def __init__(self, base_url: str = None):
+    def __init__(self):
         """
-        Initialize sentiment adapter.
-
-        Args:
-            base_url: FinBERT service URL (defaults to env FINBERT_URL or http://cc_finbert:8000)
+        Initialize ONNX session or PyTorch pipeline.
         """
-        # Use FINBERT_URL from config, fallback to env, then default
-        from app.core.config import settings
+        self.model_path = os.path.join("models", "finbert_onnx", "model.onnx")
+        self.tokenizer_path = os.path.join("models", "finbert_onnx")
+        self.session = None
+        self.tokenizer = None
+        self.pipeline = None
+        self.id2label = {0: "positive", 1: "negative", 2: "neutral"}  # FinBERT mapping
+        self.mode = "OFFLINE"
 
-        self.base_url = (
-            base_url
-            or getattr(settings, "FINBERT_URL", None)
-            or os.getenv("FINBERT_URL", "http://cc_finbert:8000")
-        )
-        self.timeout = 2.0  # 2-second timeout
+        if HAS_ONNX and os.path.exists(self.model_path):
+            self._init_onnx()
+        elif HAS_TRANSFORMERS:
+            self._init_pytorch()
+        else:
+            logger.warning(
+                "SentimentAdapter: Missing 'onnxruntime' AND 'transformers'. Running in fallback mode."
+            )
+
+    def _init_onnx(self):
+        try:
+            logger.info(
+                f"SentimentAdapter: Loading Native Metal Model from {self.model_path}..."
+            )
+            start_t = time.perf_counter()
+
+            # Use CoreML for Apple Silicon, CPU fallback for others
+            providers = ["CoreMLExecutionProvider", "CPUExecutionProvider"]
+            self.session = ort.InferenceSession(self.model_path, providers=providers)
+
+            # Load Tokenizer using Transformers
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                self.tokenizer_path, local_files_only=True
+            )
+
+            load_time = (time.perf_counter() - start_t) * 1000
+            logger.info(
+                f"SentimentAdapter: ONNX Model Loaded in {load_time:.2f}ms. Providers: {self.session.get_providers()}"
+            )
+            self.mode = "ONNX"
+        except Exception as e:
+            logger.error(f"SentimentAdapter: ONNX Initialization failed: {e}")
+            self.session = None
+            # Try falling back to PyTorch if ONNX fails
+            if HAS_TRANSFORMERS:
+                logger.info("SentimentAdapter: Falling back to PyTorch...")
+                self._init_pytorch()
+
+    def _init_pytorch(self):
+        """
+        Fallback for when ONNX is unavailable (e.g. Python 3.14)
+        """
+        try:
+            logger.info("SentimentAdapter: Initializing PyTorch Pipeline (Fallback)...")
+            start_t = time.perf_counter()
+
+            # Use 'ProsusAI/finbert' directly or from local cache if we had model files
+            # Since we likely only have the ONNX export locally, we might need to fetch from hub again
+            # OR try to load from the generic cache if available.
+            # Ideally we download 'ProsusAI/finbert' once.
+
+            model_name = "ProsusAI/finbert"
+            self.pipeline = pipeline(
+                "sentiment-analysis", model=model_name, tokenizer=model_name
+            )
+
+            load_time = (time.perf_counter() - start_t) * 1000
+            logger.info(f"SentimentAdapter: PyTorch Model Loaded in {load_time:.2f}ms")
+            self.mode = "PYTORCH"
+        except Exception as e:
+            logger.error(f"SentimentAdapter: PyTorch Initialization failed: {e}")
+            self.pipeline = None
+
+    def _softmax(self, x):
+        """Compute softmax values for each set of scores in x."""
+        e_x = np.exp(x - np.max(x))
+        return e_x / e_x.sum()
 
     @tracer.start_as_current_span("finbert_analyze")
     def analyze(self, text: Union[str, List[str]]) -> Dict[str, Any]:
         """
-        Analyze sentiment using FinBERT.
-
-        Args:
-            text: Single text string or list of texts for batch processing
-
-        Returns:
-            Dict with keys:
-                - sentiment: "positive" | "negative" | "neutral"
-                - score: float confidence (0.0-1.0)
-                - label: legacy alias for sentiment
-                - latency_ms: response time
-                - error: optional error message if offline
+        Analyze sentiment using available backend.
         """
+        if self.mode == "ONNX":
+            return self._analyze_onnx(text)
+        elif self.mode == "PYTORCH":
+            return self._analyze_pytorch(text)
+        else:
+            return self._fallback_response("model_offline")
+
+    def _analyze_onnx(self, text: Union[str, List[str]]) -> Dict[str, Any]:
+        start_time = time.perf_counter()
         span = trace.get_current_span()
 
-        # Handle batch vs single automatically
-        is_batch = isinstance(text, list)
-        texts_to_analyze = text if is_batch else [text]
-
-        span.set_attribute("finbert.batch", is_batch)
-        span.set_attribute("finbert.count", len(texts_to_analyze))
+        input_text = text if isinstance(text, str) else text[0]
 
         try:
-            # Construct payload (FinBERT expects {"text": str or List[str]})
-            payload = {"text": text}
-
-            # POST to /analyze endpoint (FinBERT service main.py)
-            response = requests.post(
-                f"{self.base_url}/analyze",
-                json=payload,
-                timeout=self.timeout,
+            inputs = self.tokenizer(
+                input_text,
+                return_tensors="np",
+                padding=True,
+                truncation=True,
+                max_length=512,
             )
 
-            if response.status_code != 200:
-                logger.error(
-                    f"FinBERT error: HTTP {response.status_code} - {response.text}"
-                )
-                span.set_attribute("error", True)
-                return self._fallback_response("http_error")
-
-            # Parse response
-            data = response.json()
-
-            # Standardize output format
-            result = {
-                "sentiment": data.get("label", "neutral").lower(),
-                "label": data.get("label", "neutral"),  # Legacy compatibility
-                "score": float(data.get("score", 0.0)),
-                "latency_ms": data.get("latency_ms", 0),
+            ort_inputs = {
+                k: v
+                for k, v in inputs.items()
+                if k in [x.name for x in self.session.get_inputs()]
             }
 
-            logger.debug(f"📊 FinBERT: {result['sentiment']} ({result['score']:.2f})")
+            logits = self.session.run(None, ort_inputs)[0][0]
+            probs = self._softmax(logits)
+            pred_idx = np.argmax(probs)
+            confidence = float(probs[pred_idx])
+            sentiment = self.id2label.get(pred_idx, "neutral")
 
-            span.set_attribute("finbert.sentiment", result["sentiment"])
-            span.set_attribute("finbert.score", result["score"])
+            latency_ms = (time.perf_counter() - start_time) * 1000
 
-            return result
-
-        except requests.Timeout:
-            logger.warning(f"⏱️  FinBERT timeout after {self.timeout}s")
-            span.set_attribute("error.timeout", True)
-            return self._fallback_response("timeout")
-
-        except requests.ConnectionError:
-            logger.warning("🔌 FinBERT service unreachable (cc_finbert down?)")
-            span.set_attribute("error.connection", True)
-            return self._fallback_response("offline")
+            return self._format_result(sentiment, confidence, latency_ms)
 
         except Exception as e:
-            logger.error(f"FinBERT adapter error: {e}")
-            span.set_attribute("error", True)
+            logger.error(f"SentimentAdapter: ONNX Inference failed: {e}")
             return self._fallback_response(str(e))
 
+    def _analyze_pytorch(self, text: Union[str, List[str]]) -> Dict[str, Any]:
+        start_time = time.perf_counter()
+        input_text = text if isinstance(text, str) else text[0]
+
+        try:
+            # Pipeline returns [{'label': 'positive', 'score': 0.9}]
+            # FinBERT model output labels might be 'positive', 'negative', 'neutral' directly
+            result = self.pipeline(input_text)[0]
+            sentiment = result["label"].lower()
+            confidence = float(result["score"])
+            latency_ms = (time.perf_counter() - start_time) * 1000
+
+            return self._format_result(sentiment, confidence, latency_ms)
+        except Exception as e:
+            logger.error(f"SentimentAdapter: PyTorch Inference failed: {e}")
+            return self._fallback_response(str(e))
+
+    def _format_result(self, sentiment, confidence, latency_ms):
+        span = trace.get_current_span()
+        span.set_attribute("finbert.sentiment", sentiment)
+        span.set_attribute("finbert.score", confidence)
+        span.set_attribute("finbert.backend", self.mode)
+
+        return {
+            "sentiment": sentiment,
+            "label": sentiment,
+            "score": confidence,
+            "latency_ms": latency_ms,
+            "backend": self.mode,
+        }
+
     def _fallback_response(self, error_msg: str) -> Dict[str, Any]:
-        """
-        Return safe fallback when service is unavailable.
-        Prevents trading loop crashes.
-
-        Args:
-            error_msg: Error description
-
-        Returns:
-            Neutral sentiment with error indicator
-        """
         return {
             "sentiment": "neutral",
             "label": "neutral",
@@ -137,14 +208,4 @@ class SentimentAdapter:
         }
 
     def health_check(self) -> bool:
-        """
-        Check if FinBERT service is healthy.
-
-        Returns:
-            True if service responds to /health, False otherwise
-        """
-        try:
-            response = requests.get(f"{self.base_url}/health", timeout=1.0)
-            return response.status_code == 200
-        except Exception:
-            return False
+        return self.mode != "OFFLINE"

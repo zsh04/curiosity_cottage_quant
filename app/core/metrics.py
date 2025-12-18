@@ -30,6 +30,22 @@ trade_latency = meter.create_histogram(
     name="cc.trades.latency", description="Time from signal to execution", unit="ms"
 )
 
+execution_slippage = meter.create_histogram(
+    name="cc.execution.slippage", description="Slippage buffer percentage", unit="1"
+)
+
+# ============================================================================
+# ANALYST METRICS
+# ============================================================================
+
+analyst_latency = meter.create_histogram(
+    name="cc.analyst.latency", description="Time taken for analysis loop", unit="ms"
+)
+
+candidate_count = meter.create_histogram(
+    name="cc.analyst.candidates", description="Number of candidates found", unit="1"
+)
+
 # ============================================================================
 # SIGNAL METRICS
 # ============================================================================
@@ -136,6 +152,14 @@ strategy_mode_duration = meter.create_histogram(
     name="cc.strategy.mode_duration",
     description="Duration in each strategy mode (TREND/REVERSION)",
     unit="s",
+)
+
+# ============================================================================
+# MEMORY METRICS
+# ============================================================================
+
+memory_operations = meter.create_counter(
+    name="cc.memory.operations", description="Vector DB operations", unit="1"
 )
 
 # ============================================================================

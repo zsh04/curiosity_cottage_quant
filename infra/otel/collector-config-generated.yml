@@ -5,6 +5,12 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - "http://localhost:3000"  # The Vite UI
+            - "http://localhost:5173"  # Alternative Vite port
+          allowed_headers: ["*"]
+          max_age: 7200
 
 processors:
   batch:

@@ -11,6 +11,7 @@ from app.services.physics import PhysicsService
 from app.services.forecasting import ForecastingService
 from app.services.reasoning import ReasoningService
 from app.services.memory import MemoryService
+from app.core import metrics as business_metrics
 from app.strategies.lstm import LSTMPredictionStrategy
 from app.lib.physics import Regime
 from app.services.global_state import (
@@ -133,12 +134,32 @@ class AnalystAgent:
                 physics_history.append(current_price)
 
             # --- Step 2: PHYSICS (Kinematics & Regime) ---
-            kinematics = await asyncio.to_thread(
-                physics_engine.calculate_kinematics, physics_history
-            )
+            # --- Step 2: PHYSICS (Kinematics & Regime) ---
+            # DYNAMIC UPDATE: Use new_price if initialized to preserve high-freq state
+            if physics_engine.is_initialized and current_price > 0:
+                kinematics = await asyncio.to_thread(
+                    physics_engine.calculate_kinematics, new_price=current_price
+                )
+            else:
+                # First run or reset
+                kinematics = await asyncio.to_thread(
+                    physics_engine.calculate_kinematics, prices=physics_history
+                )
+
             logger.info(f"DEBUG: {symbol} Raw Velocity: {kinematics.get('velocity')}")
+
+            # Regime Analysis needs a window.
+            # If we just updated physics, it has the buffer.
+            # We should ask it to use its buffer OR pass a sliding window.
+            # Passing physics_history (daily) dominates the alpha.
+            # We want HYBRID history: Daily Warmup + Intraday Ticks.
+            # accessing physics_engine.price_history_buffer is cleaner.
+
+            # For now, let's trust the physics engine's buffer which is updated by calculate_kinematics
+            internal_buffer = physics_engine.price_history_buffer
+
             regime_analysis = await asyncio.to_thread(
-                physics_engine.analyze_regime, physics_history
+                physics_engine.analyze_regime, internal_buffer
             )
             hurst_analysis = await asyncio.to_thread(
                 physics_engine.calculate_hurst_and_mode, physics_history
@@ -259,6 +280,7 @@ class AnalystAgent:
         3. Collapses Wavefunction: Selects the highest confidence signal.
         4. Stores full superposition state in 'analysis_reports'.
         """
+        analysis_start_time = time.time()
         # Phase 16: Priority to Watchlist (from Macro Node)
         candidates = state.get("watchlist", [])
 
@@ -320,23 +342,6 @@ class AnalystAgent:
         state["analysis_reports"] = enriched_candidates
         state["candidates"] = enriched_candidates  # Backwards compatibility
 
-        # Hoist Primary Data to Top Level
-        if primary_data:
-            state["price"] = primary_data.get("price", 0.0)
-            state["velocity"] = primary_data.get("velocity", 0.0)
-            state["acceleration"] = primary_data.get("acceleration", 0.0)
-            state["current_alpha"] = primary_data.get("current_alpha", 2.0)
-            state["regime"] = primary_data.get("regime", "Unknown")
-            state["signal_side"] = primary_data.get("signal_side", "FLAT")
-            state["signal_confidence"] = primary_data.get("signal_confidence", 0.0)
-            state["reasoning"] = primary_data.get("reasoning", "Analysis Complete")
-            state["history"] = primary_data.get("history", [])
-            logger.info(f"✅ ANALYST: Hoisted {primary_symbol} Price=${state['price']}")
-        else:
-            logger.warning(
-                f"⚠️ ANALYST: Primary symbol {primary_symbol} not in batch results."
-            )
-
         # LOGGING (Batch Summary)
         successful = [c for c in enriched_candidates if c.get("success")]
         logger.info(
@@ -344,12 +349,12 @@ class AnalystAgent:
         )
 
         # Telemetry (Metrics for Batch)
-        # We log generic batch metrics here, individual winner metrics will be logged by Risk/Execution?
-        # Or we log all candidates? Let's log count for now.
-        latency = (time.time() - start_time) * 1000
+        latency = (time.time() - analysis_start_time) * 1000
+        business_metrics.analyst_latency.record(latency)
+        business_metrics.candidate_count.record(len(candidates))
+        business_metrics.signals_total.add(len(successful))
 
-        # We skip single-winner telemetry here because we don't pick one yet.
-        # But we can log that we finished.
+        logger.info(f"⏱️ Analyst Latency: {latency:.2f}ms")
 
         return state
 
