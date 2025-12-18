@@ -5,15 +5,8 @@ from datetime import datetime
 from sqlalchemy import text
 from app.dal.database import SessionLocal
 from opentelemetry import trace
+from app.core import metrics as business_metrics
 import os
-
-# Try importing langchain_openai, fallback if not installed
-try:
-    from langchain_openai import OpenAIEmbeddings
-
-    HAS_OPENAI = True
-except ImportError:
-    HAS_OPENAI = False
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -21,28 +14,27 @@ tracer = trace.get_tracer(__name__)
 
 class MemoryService:
     """
-    Quantum Memory Service.
+    Quantum Memory Service (Cloud Cortex Edition).
     Responsibility:
     1. Embed Market States (Physics + Sentiment) into vectors.
     2. Store them in TimescaleDB (with pgvector).
     3. Retrieve similar historical outcomes (RAG) to ground LLM reasoning.
+
+    NOTE: Embeddings currently disabled (Gemini Rolled Back).
     """
 
     def __init__(self):
-        self.embedding_model = None
-        if HAS_OPENAI:
-            api_key = os.getenv("OPENAI_API_KEY")
-            if api_key:
-                # Using text-embedding-3-small (1536 dims) or ada-002 (1536 dims)
-                self.embedding_model = OpenAIEmbeddings(
-                    model="text-embedding-3-small", openai_api_key=api_key
-                )
-            else:
-                logger.warning(
-                    "MemoryService: OPENAI_API_KEY not found. Vector ops will be disabled/mocked."
-                )
-        else:
-            logger.warning("MemoryService: langchain_openai not installed.")
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            # Using standard lightweight model
+            self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+            logger.info(
+                "MemoryService: Connected to Local Embeddings (SentenceTransformer) 🧠"
+            )
+        except ImportError:
+            logger.error("MemoryService: sentence-transformers not installed.")
+            self.embedding_model = None
 
     @tracer.start_as_current_span("memory_embed_state")
     def embed_state(
@@ -52,12 +44,9 @@ class MemoryService:
         Convert complex state into a single vector.
         """
         if not self.embedding_model:
-            # Fallback: Zero vector or random if strictly needed, but better to return empty
-            # which indicates "no embedding available".
             return []
 
         # Construct textual representation of the Quantum State
-        # This "Prompt" is what gets embedded.
         state_text = (
             f"Asset: {symbol}. "
             f"Regime: {physics.get('regime', 'Unknown')} (Alpha={physics.get('alpha', 0):.2f}). "
@@ -67,7 +56,8 @@ class MemoryService:
         )
 
         try:
-            vector = self.embedding_model.embed_query(state_text)
+            # Encode returns numpy array, convert to list
+            vector = self.embedding_model.encode(state_text).tolist()
             return vector
         except Exception as e:
             logger.error(f"MemoryService: Embedding generation failed: {e}")
@@ -81,7 +71,7 @@ class MemoryService:
         Save the current state to the 'market_state_embeddings' table.
         """
         embedding = self.embed_state(symbol, physics, sentiment)
-        if not embedding:
+        if not embedding or len(embedding) == 0:
             logger.debug("MemoryService: Skipping save (no embedding generated).")
             return
 
@@ -91,7 +81,6 @@ class MemoryService:
         session = SessionLocal()
         try:
             # Construct SQL with vector casting
-            # Note: We pass the list as a string, e.g. '[0.1, 0.2, ...]'
             # Postgres pgvector expects '[...]' format.
             query = text("""
                 INSERT INTO market_state_embeddings (timestamp, symbol, metadata, embedding)
@@ -108,6 +97,7 @@ class MemoryService:
             )
             session.commit()
             logger.info(f"MemoryService: Saved regime for {symbol}.")
+            business_metrics.memory_operations.add(1, {"op": "save", "symbol": symbol})
 
         except Exception as e:
             logger.error(f"MemoryService: Save failed: {e}")
@@ -127,7 +117,7 @@ class MemoryService:
         Find the top-k most similar historical market states.
         """
         embedding = self.embed_state(symbol, physics, sentiment)
-        if not embedding:
+        if not embedding or len(embedding) == 0:
             return []
 
         session = SessionLocal()
@@ -158,6 +148,9 @@ class MemoryService:
                 )
 
             logger.info(f"MemoryService: Retrieved {len(results)} similar regimes.")
+            business_metrics.memory_operations.add(
+                1, {"op": "retrieve", "symbol": symbol}
+            )
             return results
 
         except Exception as e:

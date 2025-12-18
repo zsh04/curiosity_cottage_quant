@@ -10,6 +10,7 @@ from app.agent.state import AgentState, TradingStatus
 from app.services.global_state import get_global_state_service, get_current_snapshot_id
 from app.execution.alpaca_client import AlpacaClient
 from app.core.config import settings
+from app.core import metrics as business_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ class ExecutionAgent:
             symbol = state.get("symbol")
             status = state.get("status")
             alpha = state.get("current_alpha", 2.0)
-            velocity = state.get("velocity", 0.0)  # NEW: Velocity for momentum scaling
+            velocity = state.get("velocity")  # Get raw value to check for missing
 
             # 2. Validation Guard (Risk Veto)
             if approved_size <= 0:
@@ -58,19 +59,21 @@ class ExecutionAgent:
             # 3. Calculate Quantity & Limit Price
             qty = approved_size / price
 
-            # Dynamic Slippage Buffer Logic
+            # Dynamic Slippage Buffer Logic (HFT)
             # Base Buffer: 0.1% (Standard)
-            # Alpha Penalty: If Alpha < 1.5 (Volatile), add 0.5%
-            # Velocity Penalty: If Momentum is high, market moves fast. Add proportional buffer.
-            # Formula: Buffer = 0.001 + (AlphaPenalty) + (VelocityFactor)
+            # Velocity Penalty: "Scaled factor of abs(velocity)"
+            # Safety: If velocity missing, use 0.5%
 
             base_buffer = 0.001
-            alpha_penalty = 0.005 if alpha < 1.5 else 0.0
-            velocity_penalty = min(
-                0.005, abs(velocity) * 0.01
-            )  # Cap at 0.5% extra for velocity
 
-            buffer_pct = base_buffer + alpha_penalty + velocity_penalty
+            if velocity is None:
+                buffer_pct = 0.005  # Safety Fallback
+                logger.warning(
+                    "EXECUTION: ⚠️ Velocity missing. Using 0.5% safety buffer."
+                )
+            else:
+                # Scaling Factor: 0.1 (e.g. Vel=0.01 -> +0.001 bracket)
+                buffer_pct = base_buffer + (abs(float(velocity)) * 0.1)
 
             limit_price = 0.0
             if signal_side == "BUY":
@@ -78,7 +81,7 @@ class ExecutionAgent:
             elif signal_side == "SELL":
                 limit_price = price * (1 - buffer_pct)
 
-            # Round to 2 decimals
+            # Round to 2 decimals (Exchange Requirement)
             limit_price = round(limit_price, 2)
 
             # 4. SAFETY SWITCH: Live/Paper vs Simulation
@@ -89,17 +92,16 @@ class ExecutionAgent:
                         symbol=symbol,
                         qty=round(qty, 4),  # Alpaca support fractional
                         side=signal_side,
+                        time_in_force="day",  # Explicit Day order
                         limit_price=limit_price,  # USE LIMIT
                     )
                     log_msg = (
-                        f"🚀 LIMIT ORDER SENT: {signal_side} {qty:.4f} {symbol} "
+                        f"⚡ HFT EXECUTION: {signal_side} {qty:.4f} {symbol} "
                         f"@ ${limit_price:.2f} (Buffer: {buffer_pct:.2%}) | ID: {order.id}"
                     )
                     logger.warning(log_msg)
 
-                    state["execution_status"] = (
-                        "FILLED"  # Optimistic assumption for state
-                    )
+                    state["execution_status"] = "FILLED"  # Optimistic
                     state["order_id"] = str(order.id)
                     success = True
                     trade_executed = True

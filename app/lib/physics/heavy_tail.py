@@ -97,7 +97,7 @@ class HeavyTailEstimator:
 
         # ADAPTIVE TAIL SIZE for statistical robustness
         if tail_percentile is None:
-            if n < 100:
+            if n < 30:
                 tail_percentile = 0.10  # 10% for small samples
             elif n < 500:
                 tail_percentile = 0.05  # 5% for medium samples
