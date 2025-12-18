@@ -124,10 +124,12 @@ class MarketService:
         """
         try:
             logger.info(f"🔥 Warming up data for {symbol} (Limit: {limit})...")
-            return self.market_adapter.get_price_history(symbol, limit=limit)
+            # Use 1m for Physics/Alpha consistency with live ticks
+            return self.market_adapter.get_price_history(
+                symbol, limit=limit, interval="1m"
+            )
         except Exception as e:
             logger.error(f"MarketService: Warm-up fetch failed: {e}")
-            return []
             return []
 
     def get_chart_history(self, symbol: str, limit: int = 100) -> List[Dict[str, Any]]:

@@ -90,3 +90,9 @@ class AlpacaClient:
         except Exception as e:
             logger.error(f"Failed to list positions: {e}")
             return []
+
+    def get_positions(self):
+        """
+        Alias for list_positions for compatibility.
+        """
+        return self.list_positions()

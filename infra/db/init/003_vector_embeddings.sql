@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS market_state_embeddings (
     metadata    JSONB DEFAULT '{}'::jsonb,
     
     -- The Quantum State Vector
-    embedding   vector(1536)
+    embedding   vector(384)
 );
 
 -- Step 3: Convert to Hypertable (TimescaleDB)
