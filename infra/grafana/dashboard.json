@@ -1,21 +1,39 @@
 {
-  "title": "Mission Control",
-  "uid": "mission-control",
-  "tags": ["cc_engine", "physics", "risk"],
+  "title": "Curiosity Cottage - Mission Control",
+  "uid": "cc-mission-control-v3",
+  "tags": ["production", "trading", "physics", "llm"],
   "timezone": "browser",
-  "schemaVersion": 30,
-  "version": 1,
+  "schemaVersion": 38,
+  "version": 3,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "symbol",
+        "type": "query",
+        "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+        "query": "label_values(cc_physics_alpha, symbol)",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false
+      }
+    ]
+  },
   "panels": [
     {
       "id": 1,
-      "title": "Physics Alpha",
+      "title": "🎯 Alpha Tail Index (Critical)",
       "type": "gauge",
-      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
       "targets": [
         {
-          "expr": "agent_risk_alpha",
-          "legendFormat": "Alpha",
+          "expr": "cc_physics_alpha{symbol=~\"$symbol\"}",
+          "legendFormat": "Alpha ({{regime}})",
           "refId": "A"
         }
       ],
@@ -25,77 +43,456 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 2.0 },
-              { "color": "green", "value": 3.0 }
+              {"color": "red", "value": 0},
+              {"color": "red", "value": 1.5},
+              {"color": "yellow", "value": 2.0},
+              {"color": "green", "value": 3.0}
             ]
           },
           "min": 0,
-          "max": 5
-        },
-        "overrides": []
+          "max": 5,
+          "unit": "none"
+        }
+      },
+      "options": {
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true
       }
     },
     {
       "id": 2,
-      "title": "Risk Approved Size ($)",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 18, "x": 6, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "title": "📈 Velocity (Kalman)",
+      "type": "gauge",
+      "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
       "targets": [
         {
-          "expr": "agent_risk_approved_size",
-          "legendFormat": "Approved Size",
+          "expr": "cc_physics_velocity{symbol=~\"$symbol\"}",
+          "legendFormat": "Velocity",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisLabel": "USD",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": -0.01},
+              {"color": "yellow", "value": -0.001},
+              {"color": "green", "value": 0},
+              {"color": "yellow", "value": 0.001},
+              {"color": "red", "value": 0.01}
+            ]
           },
-          "unit": "currencyUSD"
-        },
-        "overrides": []
+          "min": -0.02,
+          "max": 0.02,
+          "unit": "percentunit"
+        }
       }
     },
     {
       "id": 3,
-      "title": "Engine Logs (System Stream)",
-      "type": "logs",
-      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 8 },
-      "datasource": { "type": "loki", "uid": "grafanacloud-logs" },
+      "title": "⚡ Acceleration",
+      "type": "gauge",
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
       "targets": [
         {
-          "expr": "{service_name=\"cc_engine\"} |= \"RISK\" or \"EXECUTION\" or \"PHYSICS\"",
+          "expr": "cc_physics_acceleration{symbol=~\"$symbol\"}",
+          "legendFormat": "Acceleration",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": -0.001,
+          "max": 0.001
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "🌀 Hurst Exponent (Fractal Memory)",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "targets": [
+        {
+          "expr": "cc_physics_hurst",
+          "legendFormat": "Hurst",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              {"color": "yellow", "value": 0},
+              {"color": "green", "value": 0.4},
+              {"color": "yellow", "value": 0.6}
+            ]
+          },
+          "min": 0,
+          "max": 1,
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "📊 Alpha Timeline (Regime Shifts)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "targets": [
+        {
+          "expr": "cc_physics_alpha",
+          "legendFormat": "{{symbol}} ({{regime}})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "auto"
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": ".*Critical.*"},
+            "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]
+          },
+          {
+            "matcher": {"id": "byRegexp", "options": ".*Gaussian.*"},
+            "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]
+          }
+        ]
+      }
+    },
+    {
+      "id": 6,
+      "title": "💰 Position Sizes",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "targets": [
+        {
+          "expr": "cc_risk_position_size",
+          "legendFormat": "{{symbol}} ({{side}})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 20
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "🛑 Risk Vetoes (Circuit Breaker)",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "targets": [
+        {
+          "expr": "sum(increase(cc_risk_vetoes_total[1h])) by (reason)",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": 0},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 5}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "📦 Trade Value Distribution",
+      "type": "histogram",
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, cc_trades_value_bucket)",
+          "legendFormat": "p95",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "🧠 LLM Inference Latency (p95)",
+      "type": "stat",
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(cc_llm_inference_time_bucket[5m]))",
+          "legendFormat": "p95 Latency",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": 0},
+              {"color": "yellow", "value": 100},
+              {"color": "red", "value": 300}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "🎲 Signal Confidence Heatmap",
+      "type": "heatmap",
+      "gridPos": {"h": 6, "w": 12, "x": 6, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "targets": [
+        {
+          "expr": "cc_signals_confidence",
+          "legendFormat": "{{symbol}}: {{side}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "🔬 Analyst Throughput",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 6, "x": 18, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "targets": [
+        {
+          "expr": "rate(cc_analyst_candidates_sum[1m]) / rate(cc_analyst_candidates_count[1m])",
+          "legendFormat": "Avg Candidates/Cycle",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {"drawStyle": "bars"}
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "⚡ Execution Slippage Buffer",
+      "type": "histogram",
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 30},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "targets": [
+        {
+          "expr": "cc_execution_slippage",
+          "legendFormat": "Slippage %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "⏱️ Trade Latency (p99)",
+      "type": "stat",
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 30},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(cc_trades_latency_bucket[5m]))",
+          "legendFormat": "p99",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": 0},
+              {"color": "yellow", "value": 100},
+              {"color": "red", "value": 500}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "📈 Trades Timeline",
+      "type": "barchart",
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 30},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "targets": [
+        {
+          "expr": "increase(cc_trades_total[5m])",
+          "legendFormat": "Trades (5m)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "title": "🔍 Service Traces (OTEL)",
+      "type": "traces",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 36},
+      "datasource": {"type": "tempo", "uid": "grafanacloud-traces"},
+      "targets": [
+        {
+          "query": "{service.name=\"cc_engine\"}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "enableDetails": true
+      }
+    },
+    {
+      "id": 16,
+      "title": "📜 Engine Logs (Errors & Warnings)",
+      "type": "logs",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 36},
+      "datasource": {"type": "loki", "uid": "grafanacloud-logs"},
+      "targets": [
+        {
+          "expr": "{service_name=\"cc_engine\"} |~ \"RISK|EXECUTION|PHYSICS\" | level=~\"ERROR|WARNING\"",
           "refId": "A"
         }
       ],
       "options": {
         "showTime": true,
         "showLabels": false,
-        "showCommonLabels": false,
         "wrapLogMessage": true,
-        "prettifyLogMessage": false,
         "enableLogDetails": true,
         "dedupStrategy": "none",
         "sortOrder": "Descending"
       }
+    },
+    {
+      "id": 17,
+      "title": "🌐 Frontend RUM - Page Load Time",
+      "type": "stat",
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 44},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(frontend_page_load_duration_bucket[5m]))",
+          "legendFormat": "p95 Load Time",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": 0},
+              {"color": "yellow", "value": 1000},
+              {"color": "red", "value": 3000}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 18,
+      "title": "🖱️ Frontend - User Interactions",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 44},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "targets": [
+        {
+          "expr": "rate(frontend_user_interactions_total[1m])",
+          "legendFormat": "{{action}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {"drawStyle": "line"}
+        }
+      }
+    },
+    {
+      "id": 19,
+      "title": "⚠️ Frontend - JS Errors",
+      "type": "stat",
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 44},
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "targets": [
+        {
+          "expr": "sum(increase(frontend_errors_total[1h]))",
+          "legendFormat": "Errors (1h)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": 0},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 10}
+            ]
+          }
+        }
+      }
     }
-  ]
+  ],
+  "annotations": {
+    "list": [
+      {
+        "name": "Circuit Breakers",
+        "datasource": {"type": "loki", "uid": "grafanacloud-logs"},
+        "expr": "{service_name=\"cc_engine\"} |= \"CIRCUIT BREAKER TRIGGERED\"",
+        "tagKeys": "reason",
+        "textFormat": "🛑 {{reason}}",
+        "iconColor": "red"
+      }
+    ]
+  }
 }

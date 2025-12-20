@@ -43,10 +43,9 @@ class Settings(BaseSettings):
     # --- Reasoning Engine ---
     # REASONING_MODE and GOOGLE_API_KEY removed (Rolled Back)
 
-    # --- Microservices (Defaults = Localhost) ---
-    # In Docker, these MUST be overridden via ENV vars to "http://cc_chronos:8000" etc.
-    CHRONOS_URL: str = "http://localhost:8002"
-    FINBERT_URL: str = "http://localhost:8001"
+    # --- Legacy Microservices Removed ---
+    # Chronos and FinBERT are now local libraries running on Metal GPU
+    # No network calls required
 
     # --- Telemetry ---
     # Defaults to empty/disabled if not provided

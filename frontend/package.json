@@ -10,8 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@grafana/faro-react": "2.1.0",
+    "@grafana/faro-web-tracing": "2.1.0",
     "@opentelemetry/auto-instrumentations-web": "^0.33.0",
     "@opentelemetry/context-zone": "^1.18.1",
+    "@opentelemetry/exporter-metrics-otlp-http": "0.208.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.46.0",
     "@opentelemetry/instrumentation": "^0.46.0",
     "@opentelemetry/instrumentation-document-load": "^0.33.0",
@@ -19,6 +22,7 @@
     "@opentelemetry/instrumentation-user-interaction": "^0.33.0",
     "@opentelemetry/instrumentation-xml-http-request": "^0.46.0",
     "@opentelemetry/resources": "^1.18.1",
+    "@opentelemetry/sdk-metrics": "2.2.0",
     "@opentelemetry/sdk-trace-base": "^1.18.1",
     "@opentelemetry/sdk-trace-web": "^1.18.1",
     "@opentelemetry/semantic-conventions": "^1.18.1",
@@ -28,7 +32,7 @@
     "lucide-react": "^0.302.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.20.0",
+    "react-router-dom": "6.30.2",
     "recharts": "^2.10.3",
     "tailwind-merge": "^2.2.0"
   },

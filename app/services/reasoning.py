@@ -288,14 +288,25 @@ Respond ONLY with this JSON:
         start_time = time.time()
 
         # --- LOCAL LOGIC ONLY (Cloud Removed) ---
+        # --- LOCAL LOGIC ONLY (Cloud Removed) ---
         raw = self.llm.infer(prompt)
         try:
             import json
+            import re
 
-            cleaned = raw.strip().replace("```json", "").replace("```", "").strip()
-            result = json.loads(cleaned)
-        except:
-            result = {"winner_symbol": None, "rationale": "Local Parse Error"}
+            # Robust Regex Extraction
+            # matches { ... } including nested braces
+            # Simplest valid approach for this use case: find first { and last }
+            match = re.search(r"\{.*\}", raw.replace("\n", " "), re.DOTALL)
+            if match:
+                json_str = match.group(0)
+                result = json.loads(json_str)
+            else:
+                raise ValueError("No JSON found")
+
+        except Exception as e:
+            logger.warning(f"RISK: LLM Parse Error: {e} | Raw: {raw[:100]}...")
+            result = {"winner_symbol": None, "rationale": f"Local Parse Error ({e})"}
 
         inference_time_ms = (time.time() - start_time) * 1000
 

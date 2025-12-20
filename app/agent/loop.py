@@ -62,9 +62,37 @@ async def run_agent_service():
 
             logger.info("--- 🧠 Agent Loop: Thinking ---")
 
-            # Run the Graph
-            # We assume a single turn of the graph (Macro -> Analyst -> Risk -> Execution -> End)
-            final_state = await app_graph.ainvoke(inputs)
+            # Run the Graph - Streaming Mode for "Consciousness Stream"
+            # We iterate through the graph execution step-by-step
+            current_state = inputs.copy()
+
+            async for event in app_graph.astream(inputs, stream_mode="updates"):
+                for node_name, update in event.items():
+                    logger.info(f"🧠 Graph Update from [{node_name}]")
+
+                    # Merge update into current state for final telemetry
+                    current_state.update(update)
+
+                    # Broadcast NODE_UPDATE event
+                    node_packet = {
+                        "type": "NODE_UPDATE",
+                        "node": node_name,
+                        "timestamp": "now",  # Helper or real isoformat
+                        "symbol": current_state.get("symbol", "UNKNOWN"),
+                        "payload": update,  # Raw update from the node
+                    }
+
+                    # Special logic for Risk Verdict
+                    if node_name == "risk" and "approved_size" in update:
+                        node_packet["type"] = "TOURNAMENT_VERDICT"
+                        node_packet["payload"]["rationale"] = current_state.get(
+                            "reasoning", ""
+                        )
+
+                    await broadcaster.broadcast(node_packet)
+
+            # Final State Construction for Legacy Telemetry (Pulse)
+            final_state = current_state
 
             # Construct Telemetry Packet
             # This should match what the Frontend App.tsx expects
@@ -114,7 +142,7 @@ async def run_agent_service():
                 f"📡 BROADCAST: {current_symbol} Price={current_price} Vel={current_vel}"
             )
 
-            logger.info("📡 Broadcasting State...")
+            logger.info("📡 Broadcasting Final State...")
             await broadcaster.broadcast(telemetry_packet)
 
         except Exception as e:

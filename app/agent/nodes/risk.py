@@ -282,7 +282,8 @@ def risk_node(state: AgentState) -> AgentState:
                                 f"RISK: AI selected {winner_sym} but it's not in current reports."
                             )
                     else:
-                        rationale = "AI selected NONE (Safety/No Confluence)"
+                        # AI explicitly selected NONE. Use its rationale.
+                        rationale = f"AI Veto: {arb_result.get('rationale', 'Safety/No Confluence')}"
                 except Exception as e:
                     logger.error(f"RISK: Tournament Error: {e}")
                     # Fallback: Submit to background? Or pick best confident?

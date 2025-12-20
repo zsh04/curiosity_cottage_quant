@@ -104,6 +104,34 @@ class MarketAdapter:
 
             # Consensus / Selection Logic
             if not results:
+                logger.warning(
+                    f"⚠️ All providers failed for {symbol}, trying yfinance fallback..."
+                )
+                # Fallback to yfinance (no API key required)
+                try:
+                    import yfinance as yf
+
+                    normalized_symbol = symbol.replace("/", "-")  # BTC/USD -> BTC-USD
+                    ticker = yf.Ticker(normalized_symbol)
+                    info = ticker.info
+
+                    # Try multiple price fields
+                    price = (
+                        info.get("regularMarketPrice")
+                        or info.get("currentPrice")
+                        or info.get("previousClose")
+                        or 0.0
+                    )
+
+                    if price > 0:
+                        logger.info(
+                            f"✅ yfinance fallback successful for {symbol}: ${price}"
+                        )
+                        span.set_attribute("source", "yfinance_fallback")
+                        return float(price)
+                except Exception as e:
+                    logger.error(f"yfinance fallback also failed: {e}")
+
                 logger.error(f"❌ ALL PROVIDERS FAILED for {symbol}")
                 return 0.0
 

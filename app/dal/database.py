@@ -3,9 +3,9 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import sessionmaker, Session
 import os
 
-# Database configuration
+# Database configuration - Default to localhost for Hybrid Metal architecture
 DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://postgres:password@cc_db:5432/curiosity_cottage"
+    "DATABASE_URL", "postgresql://postgres:password@localhost:5432/quant_db"
 )
 
 # Create engine

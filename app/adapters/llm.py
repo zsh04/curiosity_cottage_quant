@@ -30,15 +30,16 @@ class LLMAdapter:
         Initialize LLM adapter.
 
         Args:
-            base_url: Ollama service URL (defaults to settings or http://cc_brain:11434)
+            base_url: Ollama service URL (defaults to settings or http://localhost:11434)
             model: Model name (defaults to settings or gemma2:9b)
         """
         from app.core.config import settings
 
+        # Default to localhost for Hybrid Metal architecture
         self.base_url = (
             base_url
             or getattr(settings, "OLLAMA_BASE_URL", None)
-            or os.getenv("OLLAMA_BASE_URL", "http://cc_brain:11434")
+            or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         )
         self.model = (
             model
@@ -132,6 +133,20 @@ class LLMAdapter:
             logger.error(f"LLM adapter error: {e}")
             span.set_attribute("error", True)
             return ""
+
+    def generate(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.1,
+        max_tokens: Optional[int] = None,  # Ignored but accepted for compatibility
+    ) -> str:
+        """
+        Backward compatibility alias for infer().
+
+        Note: max_tokens is ignored (Ollama doesn't support this parameter).
+        """
+        return self.infer(prompt, system_prompt=system_prompt, temperature=temperature)
 
     def get_trade_signal(self, context: str) -> Dict[str, Any]:
         """
