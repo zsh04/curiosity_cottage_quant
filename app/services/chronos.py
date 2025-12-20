@@ -151,9 +151,10 @@ class ChronosService:
             spread_pct = (p90 - p10) / p50
             confidence = max(0.0, 1.0 - (spread_pct * 10))  # Heuristic scaling
 
+            is_synthetic = not bool(self.pipeline)
             log_conf = f"{confidence * 100:.1f}%"
             logger.info(
-                f"Inference T+{horizon}: ${p50:.2f} (±{log_conf} confidence). Moved to {self.device}."
+                f"Inference T+{horizon}: ${p50:.2f} (±{log_conf} confidence). Moved to {self.device}. Synthetic: {is_synthetic}"
             )
 
             return ForecastPacket(
@@ -164,6 +165,7 @@ class ChronosService:
                 p90=float(p90),
                 horizon=horizon,
                 confidence=float(confidence),
+                is_synthetic=is_synthetic,
             )
 
         except Exception as e:

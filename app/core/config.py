@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     # --- App Info ---
     PROJECT_NAME: str = "Curiosity Cottage Quant Engine"
     VERSION: str = "0.1.0-alpha"
+    ENV: str = "DEV"  # DEV, PROD
     DEBUG: bool = False
 
     # --- Database ---

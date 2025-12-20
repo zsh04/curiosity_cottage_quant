@@ -121,3 +121,44 @@ class TestSorosReflexivity:
 
         assert signal.side == Side.HOLD
         assert signal.meta["veto"] == "JUDGE_OVERRULED"
+
+    @pytest.mark.asyncio
+    async def test_gate_x_synthetic_veto(self, meister, base_vector):
+        """Case X: Synthetic Forecast in PROD -> VETO."""
+        # Setup: Agreeing Forecast BUT Synthetic
+        meister.update_forecast(
+            ForecastPacket(
+                timestamp=datetime.now(),
+                symbol="BTC-USD",
+                p10=90.0,
+                p50=110000.0,
+                p90=120.0,
+                horizon=10,
+                confidence=1.0,
+                is_synthetic=True,  # SYNTHETIC!
+            )
+        )
+
+        # Force PROD environment behavior
+        # We need to mock settings since it's imported inside the method
+        with pytest.MonkeyPatch.context() as m:
+            m.setenv("ENV", "PROD")
+
+            # Since settings are loaded at import time or instantiated, we might need to mock the object
+            # app.services.soros imports settings inside the method?
+            # No, it imports `from app.core.config import settings` locally inside the conditional block?
+            # Let's check soros.py again. Yes:
+            # from app.core.config import settings
+            # We can mock os.environ before calling, but `settings` object might be cached.
+            # However, the code also checks `os.getenv("ENV")` as a fallback/override?
+            # Code: env = os.getenv("ENV", "DEV").upper(); if settings.ENV == "PROD" or env == "PROD":
+            # So setting os.environ["ENV"] = "PROD" should trigger the "env == PROD" condition.
+
+            base_vector["momentum"] = 100.0
+            base_vector["nash_dist"] = 0.5
+            force = ForceVector(**base_vector)
+
+            signal = await meister.apply_reflexivity_async(force)
+
+            assert signal.side == Side.HOLD
+            assert signal.meta["veto"] == "SYNTHETIC_DATA_VETO"

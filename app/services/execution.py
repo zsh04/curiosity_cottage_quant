@@ -162,4 +162,27 @@ async def handle_signals(msg: Union[bytes, Dict[str, Any]]):
                 # We could emit a REJECTED report here
 
     except Exception as e:
-        logger.error(f"Execution Gate Failed: {e}", exc_info=True)
+        logger.critical(f"EXECUTION GATE CRASHED: {e}", exc_info=True)
+        # PANIC: Report the Error Upstream (Ops)
+        try:
+            # Attempt to extract symbol/ID if possible
+            symbol = "UNKNOWN"
+            if isinstance(msg, (bytes, str, dict)):
+                d = orjson.loads(msg) if isinstance(msg, bytes) else msg
+                symbol = d.get("symbol", "UNKNOWN")
+
+            # Publish ERROR Report
+            error_report = ExecutionReport(
+                timestamp=datetime.now(),
+                order_id="ERROR",
+                symbol=symbol,
+                side="ERROR",
+                status="ERROR",
+                price=0.0,
+                quantity=0.0,
+            )
+            await broker.publish(
+                error_report.model_dump_json(), channel="execution.updates"
+            )
+        except:
+            logger.critical("Double Fault in Execution Gate. System Unstable.")

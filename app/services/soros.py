@@ -126,6 +126,22 @@ class SorosService:
                 force.symbol, Side.HOLD, 0.0, force.price, reasoning
             )
 
+        # --- Gate X: Synthetic Veto (Prod Safety) ---
+        if self.latest_forecast and self.latest_forecast.is_synthetic:
+            # Lazy import to avoid circular dependency
+            from app.core.config import settings
+            import os
+
+            env = os.getenv("ENV", "DEV").upper()
+            if settings.ENV == "PROD" or env == "PROD":
+                reasoning["veto"] = "SYNTHETIC_DATA_VETO"
+                logger.warning(
+                    f"⛔ VETO: Synthetic Forecast in PROD Env. {force.symbol} halted."
+                )
+                return self._create_signal(
+                    force.symbol, Side.HOLD, 0.0, force.price, reasoning
+                )
+
         # --- Gate 3: Reflexivity ---
         side = Side.HOLD
         strength = 0.0
@@ -231,6 +247,28 @@ async def handle_physics(msg: Union[bytes, Dict[str, Any]]):
 
     except Exception as e:
         logger.error(f"Reflexivity Failed: {e}", exc_info=True)
+        # PANIC RECOVERY
+        # If we failed here, we should probably emit a HOLD signal to indicate ERROR state
+        # But we might struggle to construct a valid signal without a symbol.
+        # Fallback effort:
+        try:
+            if isinstance(msg, (bytes, str, dict)):
+                # Try simple recovery
+                data = orjson.loads(msg) if isinstance(msg, bytes) else msg
+                symbol = data.get("symbol", "UNKNOWN")
+                err_signal = TradeSignal(
+                    timestamp=datetime.now(),
+                    symbol=symbol,
+                    side=Side.HOLD,
+                    strength=0.0,
+                    price=0.0,
+                    meta={"warning": "INTERNAL_ERROR", "error": str(e)},
+                )
+                await broker.publish(
+                    err_signal.model_dump_json(), channel="strategy.signals"
+                )
+        except:
+            logger.critical("Double Fault in Reflexivity Handler. Signal Lost.")
 
 
 @broker.subscriber("forecast.signals")

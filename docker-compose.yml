@@ -41,6 +41,22 @@ services:
       timeout: 5s
       retries: 5
 
+  # --- Service: Otel Collector (The Watchtower Relay) ---
+  cc_pulse:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: cc_pulse
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./infra/otel/collector-config.yml:/etc/otel/config.yaml
+    environment:
+      - GRAFANA_ENDPOINT=${GRAFANA_CLOUD_ENDPOINT}
+      - GRAFANA_AUTH=${GRAFANA_CLOUD_AUTH}
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    networks:
+      - cc_net
+
   # --- Service: The Logic (App Container) ---
   cc_app:
     container_name: cc_app
@@ -50,11 +66,15 @@ services:
     environment:
       - REDIS_URL=redis://host.docker.internal:6379
       - DATABASE_URL=postgresql://admin:quest@host.docker.internal:8812/qdb
+      - IS_DOCKER=true
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://cc_pulse:4318
     depends_on:
       cc_cache:
         condition: service_healthy
       cc_db:
         condition: service_healthy
+      cc_pulse:
+        condition: service_started
     networks:
       - cc_net
 

@@ -86,6 +86,9 @@ class ForecastPacket(BaseModel):
     confidence: float = Field(
         ..., ge=0.0, le=1.0, description="Spread Confidence (Derived)"
     )
+    is_synthetic: bool = Field(
+        default=False, description="True if forecast is random/mocked."
+    )
 
 
 class ExecutionReport(BaseModel):

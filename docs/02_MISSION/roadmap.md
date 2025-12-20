@@ -59,3 +59,15 @@
 
 - [x] **Script:** `scripts/verify_golden_thread.py` (End-to-End Verification).
 - [x] **Verification:** Tick -> Physics -> Soros -> Execution -> Order.
+
+## Phase 10: The Siphon (Live Ingest) [BLOCKED]
+
+- [ ] **Service:** `IngestService` (Alpaca Stream -> Redis).
+- [ ] **Infrastructure:** Telemetry Pipeline Repair (Docker/OTEL).
+- [ ] **Verification:** Live Data -> Physics Kernel.
+
+## Phase 11: The Awakening (Live Activation) [PENDING]
+
+- [ ] **Ops:** Deployment to Production Container.
+- [ ] **Governance:** Capital Allocation.
+- [ ] **Launch:** Enable `LIVE_TRADING_ENABLED`.
