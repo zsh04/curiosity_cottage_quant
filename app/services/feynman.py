@@ -162,6 +162,7 @@ class FeynmanService:
             "entropy": float(entropy_val),
             "nash_dist": float(nash_distance),  # Renamed to match Contract
             "alpha_coefficient": float(alpha_coeff),
+            "price": float(current_price),
             "regime": regime,
         }
 

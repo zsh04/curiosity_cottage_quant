@@ -10,13 +10,17 @@
 
 - [x] **Polars:** Implement vectorized physics on CPU.
 
-## Phase 2: The Neural Feel (Soros) [IN PROGRESS]
+## Phase 2: The Neural Feel (Soros) [COMPLETE]
 
-- [ ] **Specs:** Define `TradeSignal` contract.
-- [ ] **Service:** Implement `SorosService` (Reflexivity Engine).
-- [ ] **Inference:** Run `soros_ane.py` on Host (Deferred/Parallel).
+- [x] **Specs:** Define `TradeSignal` contract.
+- [x] **Service:** Implement `SorosService` (Reflexivity Engine).
+- [x] **Inference:** Run `soros_ane.py` on Host (Infrastructure Verified).
 
-## Phase 3: The GPU Mind (Chronos/Boyd)
+## Phase 3: The Risk Gate (Execution) [IN PROGRESS]
+
+- [ ] **Specs:** Define `OrderPacket` contract (and update upstream `price` flow).
+- [ ] **Service:** Implement `ExecutionService` (Taleb Gatekeeper).
+- [ ] **Verification:** Test Ruin Constraints.
 
 - [ ] **Forecast:** Run `chronos_mps.py` on Host.
 - [ ] **Strategy:** Run Boyd via Ollama (using Metal backend).

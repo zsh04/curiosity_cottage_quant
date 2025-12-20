@@ -42,14 +42,18 @@ class SorosService:
         if force.alpha_coefficient <= 2.0:
             reasoning["veto"] = "ALPHA_TOO_LOW"
             reasoning["alpha"] = force.alpha_coefficient
-            return self._create_signal(force.symbol, Side.HOLD, 0.0, reasoning)
+            return self._create_signal(
+                force.symbol, Side.HOLD, 0.0, force.price, reasoning
+            )
 
         # --- Gate 2: The Chaos Veto (Entropy) ---
         # If Entropy > 0.8, the system is too disordered. Information content is low.
         if force.entropy > 0.8:
             reasoning["veto"] = "CHAOS_DETECTED"
             reasoning["entropy"] = force.entropy
-            return self._create_signal(force.symbol, Side.HOLD, 0.0, reasoning)
+            return self._create_signal(
+                force.symbol, Side.HOLD, 0.0, force.price, reasoning
+            )
 
         # --- Gate 3: Reflexivity (Momentum + Nash) ---
         # We look for Clean Trends where:
@@ -84,16 +88,17 @@ class SorosService:
                 f"Reflexivity Triggered: {side.value} {force.symbol} (Strength {strength}) | {reasoning}"
             )
 
-        return self._create_signal(force.symbol, side, strength, reasoning)
+        return self._create_signal(force.symbol, side, strength, force.price, reasoning)
 
     def _create_signal(
-        self, symbol: str, side: Side, strength: float, meta: dict
+        self, symbol: str, side: Side, strength: float, price: float, meta: dict
     ) -> TradeSignal:
         return TradeSignal(
             timestamp=datetime.now(),
             symbol=symbol,
             side=side,
             strength=strength,
+            price=price,
             meta=meta,
         )
 

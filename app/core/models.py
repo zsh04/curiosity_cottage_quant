@@ -20,6 +20,7 @@ class ForceVector(BaseModel):
     nash_dist: float = Field(..., description="Z-Score Distance from Mode")
 
     # Extra
+    price: float = Field(..., description="Current Price for Sizing")
     alpha_coefficient: float = Field(default=2.0, description="Tail Index (Alpha)")
 
 
@@ -46,4 +47,21 @@ class TradeSignal(BaseModel):
     strength: float = Field(
         ..., ge=0.0, le=1.0, description="Confidence/Aggression (0.0 - 1.0)"
     )
+    price: float = Field(..., description="Reference Price for Execution")
     meta: Dict[str, Any] = Field(default_factory=dict, description="Reasoning Logs")
+
+
+class OrderPacket(BaseModel):
+    """
+    Execution Gate Output.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    timestamp: datetime = Field(..., description="Order Generation Time")
+    signal_id: str = Field(..., description="Origin Signal UUID")
+    symbol: str = Field(..., description="Ticker Symbol")
+    side: str = Field(..., description="BUY or SELL")
+    quantity: float = Field(..., description="Sized Quantity")
+    order_type: str = Field(default="MARKET", description="Order Type")
+    risk_check_passed: bool = Field(..., description="Did it pass the Ruin checks?")

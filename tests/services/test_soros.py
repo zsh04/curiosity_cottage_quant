@@ -20,6 +20,7 @@ class TestSorosReflexivity:
             "entropy": 0.1,
             "nash_dist": 0.0,
             "alpha_coefficient": 2.5,
+            "price": 100000.0,
         }
 
     def test_gate_1_alpha_veto(self, meister, base_vector):
