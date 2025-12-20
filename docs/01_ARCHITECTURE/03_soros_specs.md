@@ -44,6 +44,14 @@
    * **Sell:** Momentum $< 0$ AND NashDistance $> -2.0$ (Downtrend, not oversold).
    * **Else:** `HOLD` (Mean Reversion / Chop).
 
+4. **Gate 4: The Trinity Filter (Signal Fusion)**
+   * **Concept:** Believability-Weighted Decision Making (Ray Dalio).
+   * **Inputs:** Physics Signal (Gate 3) + Quant Forecast (Chronos P50).
+   * **Logic:**
+     * **Agreement:** If Physics says UP and Chronos P50 > Price $\implies$ `CONFIDENCE = 1.0`.
+     * **Divergence:** If Physics says UP and Chronos P50 < Price $\implies$ `VETO` (Strength 0.0).
+     * **Uncertainty:** If No Forecast Available $\implies$ `Penalty` (Strength 0.5).
+
 ## Infrastructure
 
 * **Neural Engine:** `metal/soros_ane.py` runs natively on macOS Host.

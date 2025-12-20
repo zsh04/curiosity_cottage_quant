@@ -26,5 +26,12 @@
 
 - [x] **Specs:** Define `ForecastPacket` contract.
 - [x] **Service:** Implement `ChronosService` (Simons Quant).
-- [x] **Verification:** Probabilistic Forecasts on MPS._mps.py` on Host.
+- [x] **Verification:** Probabilistic Forecasts on MPS.
 - [x] **Strategy:** Run Boyd via Ollama (using Metal backend).
+- [x] **Infrastructure:** Run `chronos_mps.py` on Host.
+
+## Phase 5: The Trinity (Signal Fusion) [IN PROGRESS]
+
+- [ ] **State:** Fuse Physics + Chronos inputs.
+- [ ] **Logic:** Implement Dalio's Confluence/Divergence Checks.
+- [ ] **Verification:** Test Agreement vs. Disagreement.

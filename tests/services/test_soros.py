@@ -68,5 +68,43 @@ class TestSorosReflexivity:
 
         signal = meister.apply_reflexivity(force)
 
-        assert signal.side == Side.SELL
+    def test_trinity_fusion(self, meister, base_vector):
+        """Test the integration of Chronos Forecasts."""
+        force = ForceVector(**base_vector)
+
+        # 1. Missing Forecast -> Penalty
+        meister.latest_forecast = None
+        # Setup clean uptrend for physics
+        force.momentum = 100.0
+        force.nash_dist = 0.5
+
+        signal = meister.apply_reflexivity(force)
+        assert signal.side == Side.BUY
+        assert signal.strength == 0.5
+        assert signal.meta["warning"] == "NO_FORECAST_AVAILABLE"
+
+        # 2. Agreement (Bullish) -> High Confidence
+        from app.core.models import ForecastPacket
+
+        meister.latest_forecast = ForecastPacket(
+            timestamp=datetime.now(),
+            symbol="BTC-USD",
+            p10=90000.0,
+            p50=105000.0,  # Higher than current price (100k)
+            p90=110000.0,
+            horizon=10,
+            confidence=0.8,
+        )
+
+        signal = meister.apply_reflexivity(force)
+        assert signal.side == Side.BUY
         assert signal.strength == 1.0
+        assert signal.meta["confluence"] == "BULLISH_AGREEMENT"
+
+        # 3. Divergence (Bearish Forecast vs Bullish Physics) -> VETO
+        meister.latest_forecast.p50 = 95000.0  # Lower than current price (100k)
+
+        signal = meister.apply_reflexivity(force)
+        assert signal.side == Side.HOLD
+        assert signal.strength == 0.0
+        assert signal.meta["veto"] == "DIVERGENCE_FORECAST_BEARISH"

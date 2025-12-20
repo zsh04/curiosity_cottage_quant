@@ -2,9 +2,10 @@ import os
 import logging
 import orjson
 from datetime import datetime
+from typing import Optional
 from faststream import FastStream
 from faststream.redis import RedisBroker
-from app.core.models import ForceVector, TradeSignal, Side
+from app.core.models import ForceVector, TradeSignal, Side, ForecastPacket
 
 # Configure The Philosopher
 logging.basicConfig(
@@ -27,6 +28,12 @@ class SorosService:
     Role: Transforms Physics Forces -> Trade Signals.
     Philosophy: Predatory. Vetoes Randomness. Exploits Reflexivity (Momentum + Nash).
     """
+
+    def __init__(self):
+        self.latest_forecast: Optional[ForecastPacket] = None
+
+    def update_forecast(self, forecast: ForecastPacket):
+        self.latest_forecast = forecast
 
     def apply_reflexivity(self, force: ForceVector) -> TradeSignal:
         """
@@ -69,7 +76,7 @@ class SorosService:
 
         if force.momentum > 0 and force.nash_dist < 2.0:
             side = Side.BUY
-            strength = 1.0  # Maximum aggression for now
+            strength = 1.0  # Tentative
             reasoning["thesis"] = "CLEAN_UP_TREND"
 
         elif force.momentum < 0 and force.nash_dist > -2.0:
@@ -81,12 +88,54 @@ class SorosService:
             reasoning["veto"] = "OVEREXTENDED_OR_MEAN_REVERSION"
             reasoning["nash"] = force.nash_dist
             reasoning["momentum"] = force.momentum
+            return self._create_signal(
+                force.symbol, Side.HOLD, 0.0, force.price, reasoning
+            )
+
+        # --- Gate 4: The Trinity Filter (Fusion) ---
+        # "Triangulation" - Ray Dalio
+
+        if not self.latest_forecast:
+            # Penalize confidence if we are flying blind without a forecast
+            strength = 0.5
+            reasoning["warning"] = "NO_FORECAST_AVAILABLE"
+        else:
+            # Check Confluence
+            forecast = self.latest_forecast
+            p50 = forecast.p50
+            current_price = force.price
+
+            reasoning["forecast_p50"] = p50
+
+            if side == Side.BUY:
+                if p50 > current_price:
+                    # Physics says UP, Chronos says UP.
+                    strength = 1.0
+                    reasoning["confluence"] = "BULLISH_AGREEMENT"
+                else:
+                    # Divergence
+                    side = Side.HOLD
+                    strength = 0.0
+                    reasoning["veto"] = "DIVERGENCE_FORECAST_BEARISH"
+
+            elif side == Side.SELL:
+                if p50 < current_price:
+                    # Physics says DOWN, Chronos says DOWN.
+                    strength = 1.0
+                    reasoning["confluence"] = "BEARISH_AGREEMENT"
+                else:
+                    # Divergence
+                    side = Side.HOLD
+                    strength = 0.0
+                    reasoning["veto"] = "DIVERGENCE_FORECAST_BULLISH"
 
         # Log significant triggers
         if side != Side.HOLD:
             logger.info(
                 f"Reflexivity Triggered: {side.value} {force.symbol} (Strength {strength}) | {reasoning}"
             )
+        elif "veto" in reasoning and "DIVERGENCE" in reasoning["veto"]:
+            logger.info(f"Reflexivity Vetoed by Trinity: {reasoning['veto']}")
 
         return self._create_signal(force.symbol, side, strength, force.price, reasoning)
 
@@ -147,3 +196,18 @@ async def handle_physics(msg: bytes):
 
     except Exception as e:
         logger.error(f"Reflexivity Failed: {e}", exc_info=True)
+
+
+@broker.subscriber("forecast.signals")
+async def handle_forecast(msg: bytes):
+    """
+    Consumes Forecasts (Chronos).
+    Updates Internal State.
+    """
+    try:
+        data = orjson.loads(msg)
+        forecast = ForecastPacket(**data)
+        soros.update_forecast(forecast)
+        # logger.info(f"Forecast Updated: T+10 Expectation ${forecast.p50:.2f}")
+    except Exception as e:
+        logger.error(f"Forecast Update Failed: {e}")
