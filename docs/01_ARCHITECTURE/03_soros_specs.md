@@ -52,6 +52,14 @@
      * **Divergence:** If Physics says UP and Chronos P50 < Price $\implies$ `VETO` (Strength 0.0).
      * **Uncertainty:** If No Forecast Available $\implies$ `Penalty` (Strength 0.5).
 
+5. **Gate 5: The Tournament (Hegelian Dialectic)**
+   * **Concept:** Agentic Debate (Thesis vs Antithesis $\implies$ Synthesis).
+   * **Inputs:** Physics, Forecast, Entropy.
+   * **Logic:**
+     * **Bull Agent:** Argues for Trend/Momentum.
+     * **Bear Agent:** Argues for Risk/Mean Reversion.
+     * **Judge:** Weighs arguments. Can **VETO** a valid signal if the "Bear Case" is stronger. Output: `Judge Verdict` JSON.
+
 ## Infrastructure
 
 * **Neural Engine:** `metal/soros_ane.py` runs natively on macOS Host.

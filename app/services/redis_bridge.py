@@ -2,6 +2,7 @@ import asyncio
 import os
 import logging
 import orjson
+from datetime import datetime
 from redis.asyncio import Redis
 from app.services.state_stream import get_state_broadcaster
 
@@ -153,6 +154,3 @@ class RedisBridge:
         if alpha > 1.5:
             return "LÉVY STABLE (Risky)"
         return "CRITICAL (Chaos)"
-
-
-from datetime import datetime
