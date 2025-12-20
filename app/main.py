@@ -1,4 +1,9 @@
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 from litestar import Litestar, get
 from litestar.config.cors import CORSConfig
 from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
@@ -14,6 +19,7 @@ from api.routes.actions import ActionsController
 from api.routes.orders import OrdersController
 from api.routes.market import MarketController
 from app.api.routes.telemetry import TelemetryController
+from app.api.routes.websocket import BrainStream
 
 # Database & State
 from app.dal.database import init_db, SessionLocal, async_session_maker
@@ -70,7 +76,7 @@ async def lifespan(app: Litestar):
 
 # Configure CORS
 cors_config = CORSConfig(
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -86,6 +92,7 @@ app = Litestar(
         OrdersController,
         MarketController,
         TelemetryController,
+        BrainStream,
     ],
     path="/api",  # Base path for all routes
     cors_config=cors_config,

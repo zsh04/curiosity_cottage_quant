@@ -25,9 +25,9 @@ logging.basicConfig(
 logger = logging.getLogger("CC_LiveSim")
 
 # Constants
-SYMBOL = "BTC/USD"
-STREAM_TYPE = "CRYPTO"  # 'CRYPTO' or 'STOCK'
-CSV_FILE = "data/sim_results_btc.csv"
+SYMBOL = "SPY"
+STREAM_TYPE = "STOCK"  # 'CRYPTO' or 'STOCK'
+CSV_FILE = "data/sim_results_spy.csv"
 LOOKBACK_MINUTES = 5
 
 

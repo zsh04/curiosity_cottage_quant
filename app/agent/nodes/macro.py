@@ -15,8 +15,11 @@ import time
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
-# HARDCODED UNIVERSE (High Liquidity, "Power Law" Candidates)
-UNIVERSE = [
+import asyncio
+from app.services.scanner import MarketScanner
+
+# FALLBACK UNIVERSE (High Liquidity, "Power Law" Candidates)
+FALLBACK_UNIVERSE = [
     "SPY",
     "QQQ",
     "IWM",  # Indices
@@ -38,21 +41,31 @@ UNIVERSE = [
     "USO",  # Commodities
 ]
 
+# Global Scanner Instance
+scanner_service = MarketScanner()
+
 
 @tracer.start_as_current_span("node_macro_scanner_parallel")
 def macro_node(state: AgentState) -> Dict[str, Any]:
     """
     Parallel Macro Scanner Node.
     Mission: Hunt for Volatility (The "Energy" of the market).
-
-    Architecture:
-    1. Parallel Fetch (ThreadPoolExecutor): Get snapshots for all N symbols concurrently.
-    2. Vectorized Filtering (Pandas): Filter by Price > 10, Vol > 1M instantly.
-    3. Energy Calculation: Momentum Mass = Abs(Ret) * Active Volume.
-    4. Tunneling & Superposition: Select Top Candidate BUT return Batch for future nodes.
+    Now powered by Dynamic Market Scanner (Alpaca).
     """
     start_time = time.time()
-    logger.info(f"🌍 MACRO: Starting Parallel Scan for {len(UNIVERSE)} assets...")
+
+    # --- Step 0: Dynamic Universe Discovery ---
+    try:
+        # Run async scanner in sync node
+        universe = asyncio.run(scanner_service.get_active_universe(limit=25))
+        if not universe:
+            raise ValueError("Scanner returned empty list")
+        logger.info(f"🌍 MACRO: Dynamic Universe Discovered: {universe}")
+    except Exception as e:
+        logger.warning(f"🌍 MACRO: Dynamic Scanner Failed ({e}). Using Fallback.")
+        universe = FALLBACK_UNIVERSE
+
+    logger.info(f"🌍 MACRO: Starting Parallel Scan for {len(universe)} assets...")
 
     service = MarketService()
 
@@ -63,7 +76,7 @@ def macro_node(state: AgentState) -> Dict[str, Any]:
         # Create a future for each symbol
         future_to_symbol = {
             executor.submit(service.get_market_snapshot, symbol): symbol
-            for symbol in UNIVERSE
+            for symbol in universe
         }
 
         for future in concurrent.futures.as_completed(future_to_symbol):

@@ -40,3 +40,10 @@ class MarketStackAdapter:
         except Exception as e:
             logger.warning(f"MarketStack EOD failed: {e}")
             return {}
+
+    def get_latest_price(self, symbol: str) -> float:
+        """
+        Get latest price from EOD data.
+        """
+        eod = self.get_eod_latest(symbol)
+        return float(eod.get("close", 0.0)) if eod else 0.0

@@ -19,7 +19,7 @@ exporters:
   debug:
     verbosity: normal
   otlphttp/grafana:
-    endpoint: "${GRAFANA_ENDPOINT}"
+    endpoint: "https://otlp-gateway-prod-us-west-0.grafana.net/otlp"
     headers:
       Authorization: "Basic ODMwNzIwOmdsY19leUp2SWpvaU1UQXlPRGt6TkNJc0ltNGlPaUpqWTNGamNDSXNJbXNpT2lKMVEza3lWRkkxT0RSV1ZXVTFhR1k0TmtJeE9FNXNNWEVpTENKdElqcDdJbklpT2lKd2NtOWtMWFZ6TFhkbGMzUXRNQ0o5ZlE9PQ=="
 

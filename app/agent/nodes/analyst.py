@@ -261,6 +261,7 @@ class AnalystAgent:
                     "strategy_mode": hurst_analysis["strategy_mode"],
                     "price": market_snapshot.get("price", 0.0),
                     "history": history,  # Careful with size, but needed for state
+                    "chronos_forecast": forecast,  # Propagate real forecast
                     "success": True,
                 }
             )
@@ -341,6 +342,28 @@ class AnalystAgent:
         # Update State
         state["analysis_reports"] = enriched_candidates
         state["candidates"] = enriched_candidates  # Backwards compatibility
+
+        # HOIST PRIMARY SIGNAL TO STATE ROOT
+        # Critical for Risk Node and Execution Node to see the decision.
+        if primary_data and primary_data.get("success"):
+            logger.info(f"ANALYST: 🚀 Hoisting signal for {primary_symbol}")
+            state["signal_side"] = primary_data.get("signal_side", "FLAT")
+            state["signal_confidence"] = primary_data.get("signal_confidence", 0.0)
+            state["regime"] = primary_data.get("regime", "Gaussian")
+            state["reasoning"] = primary_data.get("reasoning", "")
+
+            # Additional Physics/Risk Inputs Hoisting
+            state["current_alpha"] = primary_data.get("current_alpha", 2.0)
+            state["velocity"] = primary_data.get("velocity", 0.0)
+            state["acceleration"] = primary_data.get("acceleration", 0.0)
+            state["price"] = primary_data.get("price", 0.0)
+            state["chronos_forecast"] = primary_data.get(
+                "chronos_forecast", {"trend": "Neutral", "confidence": 0.0}
+            )
+        else:
+            logger.warning(
+                "ANALYST: Primary symbol analysis failed or missing. State not updated."
+            )
 
         # LOGGING (Batch Summary)
         successful = [c for c in enriched_candidates if c.get("success")]

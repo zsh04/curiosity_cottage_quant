@@ -1,39 +1,65 @@
-#!/usr/bin/env python3
-"""
-Quick test script to verify WebSocket endpoint is accessible.
-"""
-
 import asyncio
 import websockets
 import json
+import logging
+import sys
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("ws_test")
 
 
-async def test_websocket():
-    uri = "ws://localhost:8000/api/ws/stream"
-    print(f"🔌 Connecting to {uri}...")
+async def listen():
+    uri = "ws://localhost:8000/api/ws/brain"
+    logger.info(f"🔌 Connecting to {uri}...")
 
     try:
-        async with websockets.connect(uri) as websocket:
-            print("✅ Connected!")
-            print("📡 Waiting for telemetry...")
+        # Add Origin header to satisfy CORS
+        headers = {"Origin": "http://localhost:3000"}
+        async with websockets.connect(uri, additional_headers=headers) as websocket:
+            logger.info("✅ Connected! Waiting for thoughts...")
 
-            # Receive 3 messages
-            for i in range(3):
-                message = await websocket.recv()
-                data = json.loads(message)
-                print(f"\n📦 Packet {i + 1}:")
-                print(f"  Market: {data.get('market', {}).get('symbol', 'N/A')}")
-                print(f"  Price: ${data.get('market', {}).get('price', 0.0)}")
-                print(f"  Alpha: {data.get('market', {}).get('alpha', 0.0)}")
-                print(f"  Signal: {data.get('signal', {}).get('side', 'N/A')}")
-                history = data.get("market", {}).get("history", [])
-                print(f"  History Points: {len(history) if history else 0}")
-                if history:
-                    print(f"  Sample Bar: {history[-1]}")
+            # Wait for at least one NODE_UPDATE or TOURNAMENT_VERDICT
+            timeout = 60  # wait 60 seconds for a full cycle (scan + analysis)
+
+            try:
+                while True:
+                    message = await asyncio.wait_for(websocket.recv(), timeout)
+                    data = json.loads(message)
+
+                    msg_type = data.get("type", "UNKNOWN")
+                    node = data.get("node", "UNKNOWN")
+                    sym = data.get("symbol", "UNKNOWN")
+
+                    logger.info(f"🧠 RECEIVED: [{msg_type}] from {node} for {sym}")
+
+                    if msg_type == "NODE_UPDATE":
+                        # Inspect payload slightly
+                        payload = data.get("payload", {})
+                        keys = list(payload.keys())[:3]
+                        logger.info(f"   Payload Keys: {keys}...")
+
+                    if msg_type == "TOURNAMENT_VERDICT":
+                        logger.info("🏆 VERDICT RECEIVED! Verification Passed.")
+                        return
+
+            except asyncio.TimeoutError:
+                logger.error("❌ Timeout waiting for events.")
+                sys.exit(1)
 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        logger.error(f"❌ Connection Failed: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    asyncio.run(test_websocket())
+    # Ensure websockets is installed
+    try:
+        import websockets
+    except ImportError:
+        logger.error("Please install websockets: pip install websockets")
+        sys.exit(1)
+
+    asyncio.run(listen())
