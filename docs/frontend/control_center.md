@@ -1,48 +1,35 @@
 # Control Center UI Documentation
 
 ## Overview
+
 The **Control Center** is the primary interface for monitoring the Curiosity Cottage Quant system. It provides real-time visualization of trading performance, agent status, and system health.
 
 ## Architecture
-- **Framework**: React 18 + Vite
-- **Language**: JavaScript (JSX)
-- **Styling**: Vanilla CSS with CSS Variables (HSL color space)
-- **State Management**: Local React State (planned: Context/Redux for global state)
-- **Backend Communication**: REST API via `/api` proxy to Python backend.
 
-## Design System
-The application uses a custom "Premium Dark Mode" design system defined in `src/index.css`.
+- **Framework**: React 18 + Vite (TypeScript)
+- **Styling**: TailwindCSS (Cyberpunk Theme: Slate-950/Emerald-500)
+- **Routing**: Tabbed Interface (No external router)
+- **Data Layer**: Native WebSocket (`/api/ws/brain`) + REST
+- **Telemetry**: Grafana Faro (RUM) initialized on startup
 
-### Key Variables
-| Variable | Description |
-|----------|-------------|
-| `--color-primary` | Main brand color (hsl: 215, 90%, 60%) |
-| `--color-bg` | Deep dark background (hsl: 220, 20%, 10%) |
-| `--glass-panel` | Translucent background with blur for cards |
+## Components
 
-### Components
+### 1. Consciousness Stream ("Debate Console")
 
-#### `Layout`
-The main wrapper component providing the `Sidebar` and content area structure.
+The primary interface for visualizing the AI's internal reasoning loop.
 
-#### `Dashboard`
-The landing page containing:
-1. **Stats Grid**: High-level metrics (PnL, Active Agents).
-2. **Market Activity**: Placeholder for chart visualizations.
-3. **Recent Signals**: Log of recent system actions.
-4. **Quick Actions**: Buttons for manual intervention (Halt, Rebalance).
+- **Analysts Panel**: Left sidebar showing active tickers, sentiment gauge, and physics velocity vectors.
+- **Arena**: Central log stream displaying raw `NODE_UPDATE` events ("Thoughts") in real-time.
+- **Verdict**: Right panel with large visual indicators for Trade Decisions (BUY/HOLD/SHORT) and Risk Locks.
 
-## Development
+### 2. Operations ("Pro Terminal")
 
-### Setup
-```bash
-cd frontend
-npm install
-npm run dev
-```
+A high-density operational dashboard for system health.
 
-### Build
-```bash
-npm run build
-```
-Output is generated in `frontend/dist`.
+- **Metrics**: Real-time display of Latency, Throughput, and Error rates.
+- **Logs**: "Matrix-style" scrolling log of system events.
+
+## Integration
+
+- **Backend**: Connects via Proxy to `http://localhost:8000`
+- **Observability**: Gated load ensures `initTelemetry()` completes before UI renders.
