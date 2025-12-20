@@ -36,13 +36,21 @@
 - [x] **Logic:** Implement Dalio's Confluence/Divergence Checks.
 - [x] **Verification:** Test Agreement vs. Disagreement.
 
-## Phase 6: The Watchtower (Simulation) [COMPLETE]
+## Phase 6: The Watchtower (React Integration) [COMPLETE]
 
-- [x] **Script:** `scripts/simulate_trinity.py` (Validated Trinity Pipeline).
+- [x] **Backend:** Redis Bridge (`redis_bridge.py`) + Websocket (`/ws/stream`).
+- [x] **Verification:** Integration Test (Redis -> Bridge -> Websocket).
 
-## Phase 7: The Tournament (Agentic Debate) [IN PROGRESS]
+## Phase 7: The Tournament (Agentic Debate) [COMPLETE]
 
-- [ ] **Contract:** Update `TradeSignal.meta` (Bull/Bear Arguments).
-- [ ] **Service:** Upgrade `SorosService` with Ollama Integration.
-- [ ] **Logic:** Implement Hegelian Dialectic (Bull vs Bear vs Judge).
-- [ ] **Verification:** Mock LLM & Verify Reasoning Trace.
+- [x] **Contract:** Update `TradeSignal.meta` (Bull/Bear Arguments).
+- [x] **Service:** Upgrade `SorosService` with Ollama Integration.
+- [x] **Logic:** Implement Hegelian Dialectic (Bull vs Bear vs Judge).
+- [x] **Verification:** Mock LLM & Verify Reasoning Trace.
+
+## Phase 8: The Grim Trigger (Live Execution) [IN PROGRESS]
+
+- [x] **Contract:** `TradeSignal` Quantity & `ExecutionReport`.
+- [x] **Service:** `ExecutionService` wiring to `AlpacaClient`.
+- [x] **Logic:** Filter `HOLD`, Validate Size, Execute.
+- [x] **Verification:** Mock `AlpacaClient` in `pytest`.

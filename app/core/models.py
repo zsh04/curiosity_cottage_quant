@@ -48,6 +48,9 @@ class TradeSignal(BaseModel):
         ..., ge=0.0, le=1.0, description="Confidence/Aggression (0.0 - 1.0)"
     )
     price: float = Field(..., description="Reference Price for Execution")
+    quantity: float | None = Field(
+        default=None, description="Requested Quantity (Optional)"
+    )
     meta: Dict[str, Any] = Field(default_factory=dict, description="Reasoning Logs")
 
 
@@ -83,3 +86,19 @@ class ForecastPacket(BaseModel):
     confidence: float = Field(
         ..., ge=0.0, le=1.0, description="Spread Confidence (Derived)"
     )
+
+
+class ExecutionReport(BaseModel):
+    """
+    Live Execution Result from Broker.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    timestamp: datetime = Field(..., description="Execution Time")
+    order_id: str = Field(..., description="Broker Order ID")
+    symbol: str = Field(..., description="Ticker Symbol")
+    side: str = Field(..., description="BUY or SELL")
+    status: str = Field(..., description="Status (FILLED, NEW, REJECTED)")
+    price: float = Field(..., description="Fill Price")
+    quantity: float = Field(..., description="Filled Quantity")
