@@ -22,5 +22,9 @@
 - [x] **Service:** Implement `ExecutionService` (Taleb Gatekeeper).
 - [x] **Verification:** Test Ruin Constraints.
 
-- [ ] **Forecast:** Run `chronos_mps.py` on Host.
+## Phase 4: The GPU Mind (Chronos) [IN PROGRESS]
+
+- [ ] **Specs:** Define `ForecastPacket` contract.
+- [ ] **Service:** Implement `ChronosService` (Simons Quant).
+- [ ] **Verification:** Probabilistic Forecasts on MPS._mps.py` on Host.
 - [ ] **Strategy:** Run Boyd via Ollama (using Metal backend).

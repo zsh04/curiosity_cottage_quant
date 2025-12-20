@@ -65,3 +65,21 @@ class OrderPacket(BaseModel):
     quantity: float = Field(..., description="Sized Quantity")
     order_type: str = Field(default="MARKET", description="Order Type")
     risk_check_passed: bool = Field(..., description="Did it pass the Ruin checks?")
+
+
+class ForecastPacket(BaseModel):
+    """
+    Chronos Probabilistic Output.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    timestamp: datetime = Field(..., description="Forecast Generation Time")
+    symbol: str = Field(..., description="Ticker Symbol")
+    p10: float = Field(..., description="10th Percentile (Lower Bound)")
+    p50: float = Field(..., description="50th Percentile (Median)")
+    p90: float = Field(..., description="90th Percentile (Upper Bound)")
+    horizon: int = Field(..., description="Forecast Steps Ahead")
+    confidence: float = Field(
+        ..., ge=0.0, le=1.0, description="Spread Confidence (Derived)"
+    )
