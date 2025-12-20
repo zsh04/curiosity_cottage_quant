@@ -3,7 +3,7 @@ import logging
 import orjson
 import aiohttp
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union, Dict, Any
 from faststream import FastStream
 from faststream.redis import RedisBroker
 from app.core.models import ForceVector, TradeSignal, Side, ForecastPacket
@@ -211,9 +211,9 @@ soros = SorosService()
 
 
 @broker.subscriber("physics.forces")
-async def handle_physics(msg: bytes):
+async def handle_physics(msg: Union[bytes, Dict[str, Any]]):
     try:
-        data = orjson.loads(msg)
+        data = orjson.loads(msg) if isinstance(msg, bytes) else msg
         vectors = data.get("vectors", {})
         payload = {
             "timestamp": datetime.fromtimestamp(data.get("timestamp", 0) / 1000.0)
@@ -234,9 +234,9 @@ async def handle_physics(msg: bytes):
 
 
 @broker.subscriber("forecast.signals")
-async def handle_forecast(msg: bytes):
+async def handle_forecast(msg: Union[bytes, Dict[str, Any]]):
     try:
-        data = orjson.loads(msg)
+        data = orjson.loads(msg) if isinstance(msg, bytes) else msg
         forecast = ForecastPacket(**data)
         soros.update_forecast(forecast)
     except Exception as e:

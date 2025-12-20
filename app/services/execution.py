@@ -3,6 +3,7 @@ import logging
 import orjson
 import uuid
 from datetime import datetime
+from typing import Union, Dict, Any
 from faststream import FastStream
 from faststream.redis import RedisBroker
 from app.core.models import TradeSignal, OrderPacket, Side, ExecutionReport
@@ -127,8 +128,11 @@ class ExecutionService:
 taleb = ExecutionService()
 
 
+from typing import Union, Dict, Any
+
+
 @broker.subscriber("strategy.signals")
-async def handle_signals(msg: bytes):
+async def handle_signals(msg: Union[bytes, Dict[str, Any]]):
     """
     Consumes Trade Signals.
     Applies Risk Gates.
@@ -136,7 +140,7 @@ async def handle_signals(msg: bytes):
     Executes Live.
     """
     try:
-        data = orjson.loads(msg)
+        data = orjson.loads(msg) if isinstance(msg, bytes) else msg
         # Validate Logic
         signal = TradeSignal(**data)
 

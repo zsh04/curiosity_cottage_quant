@@ -30,8 +30,15 @@ class Settings(BaseSettings):
     ALPACA_DATA_FEED: str = "iex"
 
     # --- Market Data Keys ---
-    TIINGO_API_KEY: str = ""
+    ALPHAVANTAGE_API_KEY: str = ""
     FINNHUB_API_KEY: str = ""
+    TWELVEDATA_API_KEY: str = ""
+    MARKETSTACK_API_KEY: str = ""
+    TIINGO_API_KEY: str = ""
+
+    # --- Data Feed Config ---
+    ALPACA_DATA_FEED: str = "iex"
+    WATCHLIST: list[str] = ["SPY", "NVDA", "AAPL"]
 
     # --- LLM Configuration ---
     # Default: Localhost (typical for running run.py)

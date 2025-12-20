@@ -48,9 +48,14 @@
 - [x] **Logic:** Implement Hegelian Dialectic (Bull vs Bear vs Judge).
 - [x] **Verification:** Mock LLM & Verify Reasoning Trace.
 
-## Phase 8: The Grim Trigger (Live Execution) [IN PROGRESS]
+## Phase 8: The Grim Trigger (Live Execution) [COMPLETE]
 
 - [x] **Contract:** `TradeSignal` Quantity & `ExecutionReport`.
 - [x] **Service:** `ExecutionService` wiring to `AlpacaClient`.
 - [x] **Logic:** Filter `HOLD`, Validate Size, Execute.
 - [x] **Verification:** Mock `AlpacaClient` in `pytest`.
+
+## Phase 9: The War Games (System Integration) [COMPLETE]
+
+- [x] **Script:** `scripts/verify_golden_thread.py` (End-to-End Verification).
+- [x] **Verification:** Tick -> Physics -> Soros -> Execution -> Order.
