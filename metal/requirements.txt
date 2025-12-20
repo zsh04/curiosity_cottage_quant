@@ -1,0 +1,8 @@
+# metal/requirements.txt
+torch
+
+transformers
+redis
+chronos-forecasting
+coremltools
+numpy

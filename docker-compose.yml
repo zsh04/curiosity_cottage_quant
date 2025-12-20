@@ -5,51 +5,56 @@ networks:
     driver: bridge
 
 volumes:
-  timescaledb_data:
+  questdb_data:
 
 services:
-  # --- Service 1: Storage (Time-Series) ---
-  # Retained: Needed for persistent market history and state.
-  cc_db:
-    container_name: cc_db
-    image: timescale/timescaledb:latest-pg15
-    environment:
-      - POSTGRES_DB=quant_db
-      - POSTGRES_PASSWORD=password
+  # --- Service: Hot State (Dragonfly) ---
+  cc_cache:
+    container_name: cc_cache
+    image: docker.dragonflydb.io/dragonflydb/dragonfly
     ports:
-      - "5432:5432" # Exposed for Local Python scripts
-    volumes:
-      - timescaledb_data:/var/lib/postgresql/data
-      - ./infra/db/init:/docker-entrypoint-initdb.d
+      - "6379:6379"
+    command: ["--logtostderr"]
     networks:
       - cc_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # --- Service 2: Pulse (Telemetry) ---
-  # Retained: Needed to aggregate traces from Local Python and send to Grafana.
-  cc_pulse:
-    container_name: cc_pulse
-    image: otel/opentelemetry-collector-contrib:latest
-    command: ["--config=/etc/otelcol-contrib/config.yaml"]
-    volumes:
-      - ./infra/otel/collector-config-generated.yml:/etc/otelcol-contrib/config.yaml:ro
-    environment:
-      - GRAFANA_ENDPOINT=${GRAFANA_CLOUD_ENDPOINT}
-      - OTEL_SERVICE_NAME=cc_pulse
-      - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES}
-      - OTEL_EXPORTER_OTLP_ENDPOINT=${GRAFANA_CLOUD_ENDPOINT} 
-      - OTEL_EXPORTER_OTLP_HEADERS=${GRAFANA_CLOUD_HEADERS}
+  # --- Service 1: Cold Storage (QuestDB) ---
+  cc_db:
+    container_name: cc_db
+    image: questdb/questdb:latest
     ports:
-      - "4317:4317" # OTLP gRPC (Receives from Local Python)
-      - "4318:4318" # OTLP HTTP (Receives from Local JS)
-      - "13133:13133" # Health Check
+      - "9000:9000"   # ILP
+      - "8812:8812"   # PG Wire
+      - "9003:9003"   # Console
+    volumes:
+      - questdb_data:/root/.questdb/db
+    networks:
+      - cc_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider http://localhost:9003 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- Service: The Logic (App Container) ---
+  cc_app:
+    container_name: cc_app
+    build: .
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - REDIS_URL=redis://host.docker.internal:6379
+      - DATABASE_URL=postgresql://admin:quest@host.docker.internal:8812/qdb
     depends_on:
-      cc_config_gen:
-        condition: service_completed_successfully
+      cc_cache:
+        condition: service_healthy
+      cc_db:
+        condition: service_healthy
     networks:
       - cc_net
 
