@@ -1,6 +1,7 @@
 import os
 import logging
 import orjson
+import aiohttp
 from datetime import datetime
 from typing import Optional
 from faststream import FastStream
@@ -27,115 +28,168 @@ class SorosService:
 
     Role: Transforms Physics Forces -> Trade Signals.
     Philosophy: Predatory. Vetoes Randomness. Exploits Reflexivity (Momentum + Nash).
+    Identity: Ray Dalio (Triangulation) + Hegel (Dialectic).
     """
 
     def __init__(self):
         self.latest_forecast: Optional[ForecastPacket] = None
+        self.ollama_url = os.getenv(
+            "OLLAMA_URL", "http://host.docker.internal:11434/api/generate"
+        )
+        self.model_name = os.getenv("OLLAMA_MODEL", "llama3")
 
     def update_forecast(self, forecast: ForecastPacket):
         self.latest_forecast = forecast
 
-    def apply_reflexivity(self, force: ForceVector) -> TradeSignal:
+    async def conduct_debate(
+        self, force: ForceVector, forecast: Optional[ForecastPacket]
+    ) -> dict:
         """
-        The Logic Core.
-        Applies strict filtering gates to find truth in the noise.
+        The Tournament (Hegelian Dialectic).
+        Hosts a debate between Bull and Bear agents via LLM.
+        Returns the Judge's Verdict.
         """
+        # Context Construction
+        forecast_str = (
+            f"P50 Forecast: ${forecast.p50:.2f} (Confidence {forecast.confidence:.2f})"
+            if forecast
+            else "No Forecast"
+        )
+        context = (
+            f"Symbol: {force.symbol}\n"
+            f"Price: ${force.price:.2f}\n"
+            f"Momentum: {force.momentum:.2f}\n"
+            f"Nash Dist: {force.nash_dist:.2f}\n"
+            f"Entropy: {force.entropy:.2f}\n"
+            f"Alpha: {force.alpha_coefficient:.2f}\n"
+            f"Chronos: {forecast_str}"
+        )
+
+        prompt = (
+            f"You are the Soros Investment Committee.\n"
+            f"Context:\n{context}\n\n"
+            f"Task: Conduct a debate.\n"
+            f"1. Bull Agent: Argue for a LONG position based on Momentum/Trend.\n"
+            f"2. Bear Agent: Argue for a SHORT/HOLD based on Risk/Entropy/Overextension.\n"
+            f"3. Judge: Weigh the arguments. Output ONLY JSON.\n\n"
+            f"JSON Format Required:\n"
+            f"{{\n"
+            f'  "bull_argument": "string",\n'
+            f'  "bear_argument": "string",\n'
+            f'  "judge_verdict": "BUY" or "SELL" or "HOLD",\n'
+            f'  "confidence": float (0.0-1.0)\n'
+            f"}}"
+        )
+
+        try:
+            payload = {
+                "model": self.model_name,
+                "prompt": prompt,
+                "stream": False,
+                "format": "json",
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.ollama_url, json=payload) as resp:
+                    if resp.status == 200:
+                        result = await resp.json()
+                        response_text = result.get("response", "{}")
+                        return orjson.loads(response_text)
+                    else:
+                        logger.error(f"Ollama Error: {resp.status}")
+                        return {}
+
+        except Exception as e:
+            logger.error(f"Debate Failed: {e}")
+            return {}
+
+    async def apply_reflexivity_async(self, force: ForceVector) -> TradeSignal:
+        """
+        Async wrapper for reflexivity to allow awaiting the debate.
+        """
+        # We need to reimplement apply_reflexivity logic here or make it async.
+        # Since FastStream handlers are async, we can await this.
+
         reasoning = {}
 
-        # --- Gate 1: The Alpha Veto (Fat Tails) ---
-        # If Alpha <= 2.0, the market is effectively Gaussian or worse (Lévy Stable),
-        # meaning infinite variance is possible (or simply not tailored enough).
-        # We demand Alpha > 2.0 (Finite Variance, Exploitable).
+        # --- Gate 1: Alpha Veto ---
         if force.alpha_coefficient <= 2.0:
             reasoning["veto"] = "ALPHA_TOO_LOW"
-            reasoning["alpha"] = force.alpha_coefficient
             return self._create_signal(
                 force.symbol, Side.HOLD, 0.0, force.price, reasoning
             )
 
-        # --- Gate 2: The Chaos Veto (Entropy) ---
-        # If Entropy > 0.8, the system is too disordered. Information content is low.
+        # --- Gate 2: Chaos Veto ---
         if force.entropy > 0.8:
             reasoning["veto"] = "CHAOS_DETECTED"
-            reasoning["entropy"] = force.entropy
             return self._create_signal(
                 force.symbol, Side.HOLD, 0.0, force.price, reasoning
             )
 
-        # --- Gate 3: Reflexivity (Momentum + Nash) ---
-        # We look for Clean Trends where:
-        # 1. Momentum supports the move.
-        # 2. Price is NOT too far extended (Nash Distance within limits),
-        #    OR perhaps we want it NOT overextended?
-        #    Prompt Spec:
-        #    - Mom > 0 AND Nash < 2.0 -> BUY (Trend is up, not yet overbought)
-        #    - Mom < 0 AND Nash > -2.0 -> SELL (Trend is down, not yet oversold)
-
+        # --- Gate 3: Reflexivity ---
         side = Side.HOLD
         strength = 0.0
 
         if force.momentum > 0 and force.nash_dist < 2.0:
             side = Side.BUY
-            strength = 1.0  # Tentative
+            strength = 1.0
             reasoning["thesis"] = "CLEAN_UP_TREND"
 
         elif force.momentum < 0 and force.nash_dist > -2.0:
             side = Side.SELL
             strength = 1.0
             reasoning["thesis"] = "CLEAN_DOWN_TREND"
-
         else:
-            reasoning["veto"] = "OVEREXTENDED_OR_MEAN_REVERSION"
-            reasoning["nash"] = force.nash_dist
-            reasoning["momentum"] = force.momentum
+            reasoning["veto"] = "MEAN_REVERSION"
             return self._create_signal(
                 force.symbol, Side.HOLD, 0.0, force.price, reasoning
             )
 
-        # --- Gate 4: The Trinity Filter (Fusion) ---
-        # "Triangulation" - Ray Dalio
-
+        # --- Gate 4: Trinity (Fusion) ---
         if not self.latest_forecast:
-            # Penalize confidence if we are flying blind without a forecast
             strength = 0.5
-            reasoning["warning"] = "NO_FORECAST_AVAILABLE"
+            reasoning["warning"] = "NO_FORECAST"
         else:
-            # Check Confluence
-            forecast = self.latest_forecast
-            p50 = forecast.p50
-            current_price = force.price
+            p50 = self.latest_forecast.p50
+            if side == Side.BUY and p50 < force.price:
+                side = Side.HOLD
+                strength = 0.0
+                reasoning["veto"] = "DIVERGENCE_BEARISH_FORECAST"
+            elif side == Side.SELL and p50 > force.price:
+                side = Side.HOLD
+                strength = 0.0
+                reasoning["veto"] = "DIVERGENCE_BULLISH_FORECAST"
 
-            reasoning["forecast_p50"] = p50
-
-            if side == Side.BUY:
-                if p50 > current_price:
-                    # Physics says UP, Chronos says UP.
-                    strength = 1.0
-                    reasoning["confluence"] = "BULLISH_AGREEMENT"
-                else:
-                    # Divergence
-                    side = Side.HOLD
-                    strength = 0.0
-                    reasoning["veto"] = "DIVERGENCE_FORECAST_BEARISH"
-
-            elif side == Side.SELL:
-                if p50 < current_price:
-                    # Physics says DOWN, Chronos says DOWN.
-                    strength = 1.0
-                    reasoning["confluence"] = "BEARISH_AGREEMENT"
-                else:
-                    # Divergence
-                    side = Side.HOLD
-                    strength = 0.0
-                    reasoning["veto"] = "DIVERGENCE_FORECAST_BULLISH"
-
-        # Log significant triggers
+        # --- Gate 5: The Tournament (Agentic Debate) ---
+        # Only debate if we haven't been vetoed yet
         if side != Side.HOLD:
-            logger.info(
-                f"Reflexivity Triggered: {side.value} {force.symbol} (Strength {strength}) | {reasoning}"
-            )
-        elif "veto" in reasoning and "DIVERGENCE" in reasoning["veto"]:
-            logger.info(f"Reflexivity Vetoed by Trinity: {reasoning['veto']}")
+            debate_result = await self.conduct_debate(force, self.latest_forecast)
+
+            if debate_result:
+                # Merge debate into reasoning
+                reasoning["bull_argument"] = debate_result.get("bull_argument")
+                reasoning["bear_argument"] = debate_result.get("bear_argument")
+                judge = debate_result.get("judge_verdict", "HOLD")
+
+                reasoning["judge_verdict"] = judge
+
+                # If Judge disagrees, we Downgrade or Hold?
+                # Let's say we trust the Judge to VETO, but not necessarily to Initiate if Physics vetoed.
+                if judge != side.value:
+                    logger.warning(
+                        f"Judge Disagrees! Physics: {side.value}, Judge: {judge}"
+                    )
+                    side = Side.HOLD
+                    strength = 0.0
+                    reasoning["veto"] = "JUDGE_OVERRULED"
+                else:
+                    logger.info(f"Judge Confirms: {judge}")
+            else:
+                logger.warning("Debate yielded no result. Proceeding with caution.")
+
+        # Log
+        if side != Side.HOLD:
+            logger.info(f"Signal Generated: {side.value} {force.symbol} | {reasoning}")
 
         return self._create_signal(force.symbol, side, strength, force.price, reasoning)
 
@@ -158,25 +212,8 @@ soros = SorosService()
 
 @broker.subscriber("physics.forces")
 async def handle_physics(msg: bytes):
-    """
-    Consumes physics vectors.
-    Applies Reflexivity.
-    Publishes Signals.
-    """
     try:
-        # Decode and Validate Input
         data = orjson.loads(msg)
-        # Handle cases where input might be dict or list (though physics sends dict)
-        # Or if serialized with Pydantic .model_dump_json(), it's a dict.
-        # If 'vectors' key exists (from Feynman wrapper), extract it?
-        # Feynman sent: {"symbol":..., "vectors": {...}}
-        # But ForceVector expects flat structure?
-        # Let's check Feynman output structure.
-        # Feynman: packet = {"symbol": symbol, "timestamp": data.get("timestamp"), "vectors": forces}
-        # Forces dict: {mass, momentum...}
-        # ForceVector Model expects: timestamp, symbol, mass, momentum...
-
-        # We need to flatten/map the input to ForceVector
         vectors = data.get("vectors", {})
         payload = {
             "timestamp": datetime.fromtimestamp(data.get("timestamp", 0) / 1000.0)
@@ -185,13 +222,11 @@ async def handle_physics(msg: bytes):
             "symbol": data.get("symbol"),
             **vectors,
         }
-
         force = ForceVector(**payload)
 
-        # Think
-        signal = soros.apply_reflexivity(force)
+        # Use the Async method now
+        signal = await soros.apply_reflexivity_async(force)
 
-        # Act
         await broker.publish(signal.model_dump_json(), channel="strategy.signals")
 
     except Exception as e:
@@ -200,14 +235,9 @@ async def handle_physics(msg: bytes):
 
 @broker.subscriber("forecast.signals")
 async def handle_forecast(msg: bytes):
-    """
-    Consumes Forecasts (Chronos).
-    Updates Internal State.
-    """
     try:
         data = orjson.loads(msg)
         forecast = ForecastPacket(**data)
         soros.update_forecast(forecast)
-        # logger.info(f"Forecast Updated: T+10 Expectation ${forecast.p50:.2f}")
     except Exception as e:
         logger.error(f"Forecast Update Failed: {e}")

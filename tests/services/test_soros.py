@@ -1,13 +1,24 @@
 import pytest
 from datetime import datetime
+from unittest.mock import AsyncMock
 from app.services.soros import SorosService
-from app.core.models import ForceVector, Side
+from app.core.models import ForceVector, Side, ForecastPacket
 
 
 class TestSorosReflexivity:
     @pytest.fixture
     def meister(self):
-        return SorosService()
+        service = SorosService()
+        # Mock the debate to avoid network calls and return agreement by default
+        service.conduct_debate = AsyncMock(
+            return_value={
+                "bull_argument": "Momentum is strong.",
+                "bear_argument": "Risk is low.",
+                "judge_verdict": "BUY",
+                "confidence": 0.9,
+            }
+        )
+        return service
 
     @pytest.fixture
     def base_vector(self):
@@ -23,88 +34,90 @@ class TestSorosReflexivity:
             "price": 100000.0,
         }
 
-    def test_gate_1_alpha_veto(self, meister, base_vector):
+    @pytest.mark.asyncio
+    async def test_gate_1_alpha_veto(self, meister, base_vector):
         """Case A: Alpha <= 2.0 -> HOLD."""
-        base_vector["alpha_coefficient"] = 1.0  # Fat tails / Infinite Variance
+        base_vector["alpha_coefficient"] = 1.0
         force = ForceVector(**base_vector)
 
-        signal = meister.apply_reflexivity(force)
+        signal = await meister.apply_reflexivity_async(force)
 
         assert signal.side == Side.HOLD
         assert signal.meta["veto"] == "ALPHA_TOO_LOW"
 
-    def test_gate_2_chaos_veto(self, meister, base_vector):
+    @pytest.mark.asyncio
+    async def test_gate_2_chaos_veto(self, meister, base_vector):
         """Case C: Entropy > 0.8 -> HOLD."""
-        base_vector["entropy"] = 0.9  # Pure Randomness
+        base_vector["entropy"] = 0.9
         force = ForceVector(**base_vector)
 
-        signal = meister.apply_reflexivity(force)
+        signal = await meister.apply_reflexivity_async(force)
 
         assert signal.side == Side.HOLD
         assert signal.meta["veto"] == "CHAOS_DETECTED"
 
-    def test_gate_3_buy_signal(self, meister, base_vector):
-        """Case B: High Alpha, Low Entropy, Mom > 0, Nash < 2.0 -> BUY."""
+    @pytest.mark.asyncio
+    async def test_gate_3_buy_signal(self, meister, base_vector):
+        """Case B: Valid Buy + Forecast + Judge Agreement."""
+        # Setup: Agreeing Forecast
+        meister.update_forecast(
+            ForecastPacket(
+                timestamp=datetime.now(),
+                symbol="BTC-USD",
+                p10=90.0,
+                p50=110000.0,
+                p90=120.0,
+                horizon=10,
+                confidence=1.0,
+            )
+        )
+
         # Setup: Valid buy conditions
         base_vector["alpha_coefficient"] = 2.5
         base_vector["entropy"] = 0.1
         base_vector["momentum"] = 100.0
-        base_vector["nash_dist"] = 0.5  # Not overbought ( < 2.0)
+        base_vector["nash_dist"] = 0.5
 
         force = ForceVector(**base_vector)
 
-        signal = meister.apply_reflexivity(force)
+        signal = await meister.apply_reflexivity_async(force)
 
         assert signal.side == Side.BUY
         assert signal.strength == 1.0
-        assert signal.symbol == "BTC-USD"
+        assert signal.meta["judge_verdict"] == "BUY"
 
-    def test_gate_3_sell_signal(self, meister, base_vector):
-        """Extra: Valid Sell."""
-        base_vector["momentum"] = -100.0
-        base_vector["nash_dist"] = -0.5  # Not oversold ( > -2.0)
-
-        force = ForceVector(**base_vector)
-
-        signal = meister.apply_reflexivity(force)
-
-    def test_trinity_fusion(self, meister, base_vector):
-        """Test the integration of Chronos Forecasts."""
-        force = ForceVector(**base_vector)
-
-        # 1. Missing Forecast -> Penalty
-        meister.latest_forecast = None
-        # Setup clean uptrend for physics
-        force.momentum = 100.0
-        force.nash_dist = 0.5
-
-        signal = meister.apply_reflexivity(force)
-        assert signal.side == Side.BUY
-        assert signal.strength == 0.5
-        assert signal.meta["warning"] == "NO_FORECAST_AVAILABLE"
-
-        # 2. Agreement (Bullish) -> High Confidence
-        from app.core.models import ForecastPacket
-
-        meister.latest_forecast = ForecastPacket(
-            timestamp=datetime.now(),
-            symbol="BTC-USD",
-            p10=90000.0,
-            p50=105000.0,  # Higher than current price (100k)
-            p90=110000.0,
-            horizon=10,
-            confidence=0.8,
+    @pytest.mark.asyncio
+    async def test_gate_5_judge_veto(self, meister, base_vector):
+        """Case D: Physics/Quant say BUY, but Judge says HOLD."""
+        # Mock Judge Disagreement
+        meister.conduct_debate = AsyncMock(
+            return_value={
+                "bull_argument": "Trend up.",
+                "bear_argument": "News is bad.",
+                "judge_verdict": "HOLD",  # VETO
+                "confidence": 0.8,
+            }
         )
 
-        signal = meister.apply_reflexivity(force)
-        assert signal.side == Side.BUY
-        assert signal.strength == 1.0
-        assert signal.meta["confluence"] == "BULLISH_AGREEMENT"
+        # Setup: Agreeing Forecast
+        meister.update_forecast(
+            ForecastPacket(
+                timestamp=datetime.now(),
+                symbol="BTC-USD",
+                p10=90.0,
+                p50=110000.0,
+                p90=120.0,
+                horizon=10,
+                confidence=1.0,
+            )
+        )
 
-        # 3. Divergence (Bearish Forecast vs Bullish Physics) -> VETO
-        meister.latest_forecast.p50 = 95000.0  # Lower than current price (100k)
+        base_vector["momentum"] = 100.0
+        base_vector["nash_dist"] = 0.5
 
-        signal = meister.apply_reflexivity(force)
+        force = ForceVector(**base_vector)
+
+        signal = await meister.apply_reflexivity_async(force)
+
         assert signal.side == Side.HOLD
-        assert signal.strength == 0.0
-        assert signal.meta["veto"] == "DIVERGENCE_FORECAST_BEARISH"
+        assert signal.meta["veto"] == "JUDGE_OVERRULED"

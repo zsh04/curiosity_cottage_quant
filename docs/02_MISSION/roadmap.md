@@ -35,3 +35,14 @@
 - [x] **State:** Fuse Physics + Chronos inputs.
 - [x] **Logic:** Implement Dalio's Confluence/Divergence Checks.
 - [x] **Verification:** Test Agreement vs. Disagreement.
+
+## Phase 6: The Watchtower (Simulation) [COMPLETE]
+
+- [x] **Script:** `scripts/simulate_trinity.py` (Validated Trinity Pipeline).
+
+## Phase 7: The Tournament (Agentic Debate) [IN PROGRESS]
+
+- [ ] **Contract:** Update `TradeSignal.meta` (Bull/Bear Arguments).
+- [ ] **Service:** Upgrade `SorosService` with Ollama Integration.
+- [ ] **Logic:** Implement Hegelian Dialectic (Bull vs Bear vs Judge).
+- [ ] **Verification:** Mock LLM & Verify Reasoning Trace.
