@@ -105,3 +105,21 @@ class ExecutionReport(BaseModel):
     status: str = Field(..., description="Status (FILLED, NEW, REJECTED)")
     price: float = Field(..., description="Fill Price")
     quantity: float = Field(..., description="Filled Quantity")
+
+
+# -----------------------------------------------------------------------------
+# LANCE DB MODELS (Vector Memory)
+# -----------------------------------------------------------------------------
+
+from lancedb.pydantic import LanceModel, Vector
+
+
+class MarketStateEmbedding(LanceModel):
+    """
+    LanceDB Schema for Market State RAG.
+    """
+
+    vector: Vector(384) = Field(..., description="Embedding Vector (MiniLM-L6-v2)")
+    symbol: str = Field(..., description="Ticker Symbol")
+    timestamp: datetime = Field(..., description="Time of observation")
+    metadata: str = Field(..., description="JSON serialized state metadata")

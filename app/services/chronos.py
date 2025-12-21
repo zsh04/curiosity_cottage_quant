@@ -9,7 +9,7 @@ from faststream.redis import RedisBroker
 
 # Try importing ChronosPipeline, handle failure gracefully (for container/test envs without it)
 try:
-    from chronos import ChronosPipeline
+    from chronos import ChronosPipeline, ChronosBoltPipeline
 
     CHRONOS_AVAILABLE = True
 except ImportError:
@@ -40,7 +40,7 @@ class ChronosService:
     """
 
     def __init__(
-        self, model_name="amazon/chronos-t5-tiny", context_len=512, throttle_steps=10
+        self, model_name="amazon/chronos-bolt-small", context_len=512, throttle_steps=10
     ):
         self.symbol = "BTC-USD"  # Single symbol focus for now
         self.context_len = context_len
@@ -53,6 +53,7 @@ class ChronosService:
         self.is_filled = False
 
         # Load Model
+        # Enforce MPS if available for Bolt
         self.device = "mps" if torch.backends.mps.is_available() else "cpu"
         logger.info(f"Chronos Hardware Accelerated: {self.device.upper()}")
 
@@ -60,12 +61,21 @@ class ChronosService:
         if CHRONOS_AVAILABLE:
             try:
                 logger.info(f"Loading {model_name} on {self.device}...")
-                self.pipeline = ChronosPipeline.from_pretrained(
+
+                # Bolt requires bfloat16 for best performance on Metal
+                dtype = torch.bfloat16 if self.device == "mps" else torch.float32
+
+                if "bolt" in model_name.lower():
+                    logger.info("⚡ Using ChronosBoltPipeline")
+                    pipeline_class = ChronosBoltPipeline
+                else:
+                    logger.info("🕰️ Using Standard ChronosPipeline")
+                    pipeline_class = ChronosPipeline
+
+                self.pipeline = pipeline_class.from_pretrained(
                     model_name,
                     device_map=self.device,
-                    torch_dtype=torch.float32
-                    if self.device == "cpu"
-                    else torch.bfloat16,
+                    torch_dtype=dtype,
                 )
                 logger.info("Chronos Neural Matrix Loaded.")
             except Exception as e:
@@ -119,26 +129,30 @@ class ChronosService:
                 # Pipeline expects torch.tensor of shape (context_length,)
                 context_tensor = torch.tensor(context_data, dtype=torch.float32)
 
-                # predict(context, prediction_length, num_samples)
-                forecast = self.pipeline.predict(
-                    context_tensor, prediction_length=horizon, num_samples=20
-                )  # Returns (1, num_samples, prediction_length)
+                if isinstance(self.pipeline, ChronosBoltPipeline):
+                    # Bolt returns quantiles directly (default 0.1...0.9)
+                    forecast = self.pipeline.predict(
+                        context_tensor, prediction_length=horizon
+                    )  # (batch, num_quantiles, prediction_length)
 
-                # Extract Quantiles
-                # forecast[0] is (20, 10).
-                # We want P10, P50, P90 at the T+Horizon step (or average?).
-                # Let's verify structure. It usually returns distributions.
-                # Assuming forecast is tensor:
-                sample_paths = forecast[0].numpy()  # (20, 10)
+                    # forecast[0] is (num_quantiles, horizon)
+                    # Index 0=.10, 4=.50, 8=.90
+                    quantiles = forecast[0].cpu().numpy()
+                    p10 = quantiles[0, -1]
+                    p50 = quantiles[4, -1]
+                    p90 = quantiles[8, -1]
+                else:
+                    # Standard T5 returns samples
+                    forecast = self.pipeline.predict(
+                        context_tensor, prediction_length=horizon, num_samples=20
+                    )  # Returns (1, num_samples, prediction_length)
 
-                # We define "The Forecast" as the value at T+10 (Horizon)?
-                # Or average over the path?
-                # Taking the END of the horizon (T+10) is most predictive of "Destination".
-                terminal_values = sample_paths[:, -1]
+                    sample_paths = forecast[0].numpy()  # (20, 10)
+                    terminal_values = sample_paths[:, -1]
 
-                p10 = np.percentile(terminal_values, 10)
-                p50 = np.percentile(terminal_values, 50)
-                p90 = np.percentile(terminal_values, 90)
+                    p10 = np.percentile(terminal_values, 10)
+                    p50 = np.percentile(terminal_values, 50)
+                    p90 = np.percentile(terminal_values, 90)
 
             else:
                 # Mock Inference (Testing/No-Lib Mode)

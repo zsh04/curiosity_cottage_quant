@@ -48,9 +48,9 @@ async def lifespan(app: Litestar):
     """
     # 1. WAKE UP THE DB SERVICE
     logger.info("🔌 Initializing Global State Service...")
-    db = SessionLocal()
+    # Fix: Pass the factory, not a session instance
     try:
-        initialize_global_state_service(db)
+        initialize_global_state_service(SessionLocal)
         logger.info("✅ Global State Service Connected")
     except Exception as e:
         logger.error(f"❌ Failed to init Global State: {e}")
@@ -71,7 +71,7 @@ async def lifespan(app: Litestar):
             print("✅ Agent Service Stopped Cleanly")
 
         # Close the DB session held by global state (if possible/needed)
-        db.close()
+        # db.close() # Factory used now
 
 
 # Configure CORS

@@ -13,7 +13,7 @@ from app.services.reasoning import ReasoningService
 from app.services.memory import MemoryService
 from app.core import metrics as business_metrics
 from app.strategies.lstm import LSTMPredictionStrategy
-from app.lib.physics import Regime
+from app.strategies import ENABLED_STRATEGIES
 from app.services.global_state import (
     get_global_state_service,
     get_current_snapshot_id,
@@ -41,6 +41,12 @@ class AnalystAgent:
 
         # Strategy & Persistence
         self.lstm_model = LSTMPredictionStrategy()
+
+        # Initialize The Council
+        self.strategies = [Cls() for Cls in ENABLED_STRATEGIES]
+        logger.info(
+            f"ANALYST: Initialized Council with {len(self.strategies)} experts."
+        )
         try:
             # TRY DB LOAD
             blob = load_latest_checkpoint("analyst_lstm")
@@ -173,7 +179,33 @@ class AnalystAgent:
                 **regime_analysis,
                 **hurst_analysis,
                 **qho_analysis,
+                **qho_analysis,
             }
+
+            # --- Step 2.1: THE COUNCIL (Algorithmic Signals) ---
+            strat_signals = {}
+            if history:
+                try:
+                    import pandas as pd
+
+                    # Ensure alignment with market snapshot dates if available, else generate index
+                    dates = market_snapshot.get("dates", [])
+                    if len(dates) == len(history):
+                        df = pd.DataFrame(
+                            {"close": history}, index=pd.to_datetime(dates)
+                        )
+                    else:
+                        df = pd.DataFrame({"close": history})
+
+                    for strat in self.strategies:
+                        try:
+                            # Most strategies expect a DF
+                            sig = strat.calculate_signal(df)
+                            strat_signals[strat.name] = sig  # -1.0 to 1.0
+                        except Exception as e:
+                            logger.warning(f"Strategy {strat.name} failed: {e}")
+                except Exception as e:
+                    logger.error(f"Council Session Failed: {e}")
 
             # --- Step 2.5: STRATEGY (LSTM Model) ---
             # Update/Predict with latest data
@@ -219,12 +251,12 @@ class AnalystAgent:
                     "physics": physics_context,
                     "forecast": forecast,
                     "sentiment": sentiment_snapshot,
-                    "strategies": {"lstm_signal": lstm_signal},  # Inject LSTM signal
+                    "strategies": {
+                        "lstm_signal": lstm_signal,
+                        **strat_signals,
+                    },  # Inject Council & LSTM
                 }
-
-                signal_result = await asyncio.to_thread(
-                    self.reasoning.generate_signal, reasoning_context
-                )
+                signal_result = await self.reasoning.generate_signal(reasoning_context)
             else:
                 # OPTIMIZATION: Skip LLM for non-primary candidates
                 signal_result = {
@@ -301,7 +333,8 @@ class AnalystAgent:
             )
             candidates = [{"symbol": target_symbol}]
 
-        symbols = [c["symbol"] for c in candidates]
+            candidates = [{"symbol": target_symbol}]
+
         primary_symbol = state.get("symbol", "SPY")
         tasks = []
 
@@ -413,9 +446,9 @@ class AnalystAgent:
 _analyst_agent_instance = AnalystAgent()
 
 
-def analyst_node(state: AgentState) -> AgentState:
+async def analyst_node(state: AgentState) -> AgentState:
     """
-    LangGraph Node Wrapper (Synchronous).
+    LangGraph/Pipeline Node Wrapper (Async).
     Uses the persistent global agent instance.
     """
-    return asyncio.run(_analyst_agent_instance.analyze(state))
+    return await _analyst_agent_instance.analyze(state)

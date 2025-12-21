@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import traceback
-from app.agent.graph import app_graph
+from app.agent.pipeline import app_pipeline
 from app.services.state_stream import get_state_broadcaster
 from app.services.global_state import is_system_halted
 
@@ -18,13 +18,6 @@ async def run_agent_service():
     logger.info("🚀 Agent Service Started")
     broadcaster = get_state_broadcaster()
 
-    # Initial inputs could be empty or have some configuration
-    # In a persistent loop, we might pass the previous state back in,
-    # but LangGraph usually manages state persistence if configured.
-    # For now, we mimic the script and start fresh or pass minimal context.
-    # If the graph has checkpointers, it will resume.
-    # If not, we are re-running the pipeline "From Scratch" each tick (common for polling agents).
-
     # Initialize Execution Client for Portfolio Awareness
     from app.execution.alpaca_client import AlpacaClient
 
@@ -35,7 +28,7 @@ async def run_agent_service():
         "messages": [],
     }
 
-    logger.info("🧠 Cognitive Engine: Online")
+    logger.info("🧠 Cognitive Engine: Online (Linear Pipeline)")
 
     while True:
         # --- EMERGENCY HALT CHECK ---
@@ -50,8 +43,6 @@ async def run_agent_service():
             # Phase 13: Fetch Current Portfolio for Risk Node
             try:
                 positions = alpaca.get_positions()
-                # Format for AgentState check if needed, Alpaca returns list of Position objects
-                # We convert to dict for State
                 inputs["current_positions"] = [p.dict() for p in positions]
                 logger.info(
                     f"💼 Portfolio: {len(inputs['current_positions'])} positions loaded."
@@ -62,37 +53,21 @@ async def run_agent_service():
 
             logger.info("--- 🧠 Agent Loop: Thinking ---")
 
-            # Run the Graph - Streaming Mode for "Consciousness Stream"
-            # We iterate through the graph execution step-by-step
+            # Run the Pipeline (Linear Mode)
             current_state = inputs.copy()
+            current_state["timestamp"] = "now"  # Or proper ISO
 
-            async for event in app_graph.astream(inputs, stream_mode="updates"):
-                for node_name, update in event.items():
-                    logger.info(f"🧠 Graph Update from [{node_name}]")
+            # Execute Pipeline
+            final_state = await app_pipeline.run(current_state)
 
-                    # Merge update into current state for final telemetry
-                    current_state.update(update)
+            # Update inputs for next iteration if needed (memory)
+            # inputs = final_state # Optional: Persist state between ticks?
 
-                    # Broadcast NODE_UPDATE event
-                    node_packet = {
-                        "type": "NODE_UPDATE",
-                        "node": node_name,
-                        "timestamp": "now",  # Helper or real isoformat
-                        "symbol": current_state.get("symbol", "UNKNOWN"),
-                        "payload": update,  # Raw update from the node
-                    }
+            # Broadcast Updates (Simplified for Linear)
+            # We can construct node packets if pipeline emits them?
+            # For now, just broadcast the final telemetry.
 
-                    # Special logic for Risk Verdict
-                    if node_name == "risk" and "approved_size" in update:
-                        node_packet["type"] = "TOURNAMENT_VERDICT"
-                        node_packet["payload"]["rationale"] = current_state.get(
-                            "reasoning", ""
-                        )
-
-                    await broadcaster.broadcast(node_packet)
-
-            # Final State Construction for Legacy Telemetry (Pulse)
-            final_state = current_state
+            # Generate Telemetry Packet
 
             # Construct Telemetry Packet
             # This should match what the Frontend App.tsx expects

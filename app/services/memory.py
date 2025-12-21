@@ -1,11 +1,11 @@
 import logging
 import json
-from typing import List, Dict, Any, Optional
+import lancedb
+from typing import List, Dict, Any
 from datetime import datetime
-from sqlalchemy import text
-from app.dal.database import SessionLocal
 from opentelemetry import trace
 from app.core import metrics as business_metrics
+from app.core.models import MarketStateEmbedding
 import os
 
 logger = logging.getLogger(__name__)
@@ -17,13 +17,11 @@ class MemoryService:
     Quantum Memory Service (Cloud Cortex Edition).
     Responsibility:
     1. Embed Market States (Physics + Sentiment) into vectors.
-    2. Store them in TimescaleDB (with pgvector).
+    2. Store them in LanceDB (Local Vector DB).
     3. Retrieve similar historical outcomes (RAG) to ground LLM reasoning.
-
-    NOTE: Embeddings currently disabled (Gemini Rolled Back).
     """
 
-    def __init__(self):
+    def __init__(self, db_path: str = "data/lancedb"):
         try:
             from sentence_transformers import SentenceTransformer
 
@@ -35,6 +33,32 @@ class MemoryService:
         except ImportError:
             logger.error("MemoryService: sentence-transformers not installed.")
             self.embedding_model = None
+
+        # Initialize LanceDB
+        try:
+            os.makedirs(db_path, exist_ok=True)
+            self.db = lancedb.connect(db_path)
+            # Create table if not exists (OPEN_OR_CREATE logic handled by create_table with exist_ok)
+            # We map the Pydantic model to the table schema
+            self.table_name = "market_state_embeddings"
+
+            # LanceDB create_table expects data to infer schema or explicit schema
+            # We use pydantic integration to create empty table if needed is tricker
+            # actually .create_table(name, schema=Model) works in newer versions
+            # Check if table exists
+            if self.table_name in self.db.table_names():
+                self.table = self.db.open_table(self.table_name)
+            else:
+                # Create empty table using the Pydantic schema
+                self.table = self.db.create_table(
+                    self.table_name, schema=MarketStateEmbedding
+                )
+
+            logger.info(f"MemoryService: Connected to LanceDB at {db_path} 💾")
+        except Exception as e:
+            logger.error(f"MemoryService: LanceDB Init Failed: {e}")
+            self.db = None
+            self.table = None
 
     @tracer.start_as_current_span("memory_embed_state")
     def embed_state(
@@ -70,6 +94,9 @@ class MemoryService:
         """
         Save the current state to the 'market_state_embeddings' table.
         """
+        if self.table is None:
+            return
+
         embedding = self.embed_state(symbol, physics, sentiment)
         if not embedding or len(embedding) == 0:
             logger.debug("MemoryService: Skipping save (no embedding generated).")
@@ -77,33 +104,22 @@ class MemoryService:
 
         metadata = {"physics": physics, "sentiment": sentiment}
 
-        # Use synchronous session for DB write
-        session = SessionLocal()
         try:
-            # Construct SQL with vector casting
-            # Postgres pgvector expects '[...]' format.
-            query = text("""
-                INSERT INTO market_state_embeddings (timestamp, symbol, metadata, embedding)
-                VALUES (NOW(), :symbol, :metadata, :embedding ::vector)
-            """)
-
-            session.execute(
-                query,
-                {
-                    "symbol": symbol,
-                    "metadata": json.dumps(metadata),
-                    "embedding": str(embedding),
-                },
+            record = MarketStateEmbedding(
+                vector=embedding,
+                symbol=symbol,
+                timestamp=datetime.now(),
+                metadata=json.dumps(metadata),
             )
-            session.commit()
+
+            # LanceDB add expects list of items
+            self.table.add([record])
+
             logger.info(f"MemoryService: Saved regime for {symbol}.")
             business_metrics.memory_operations.add(1, {"op": "save", "symbol": symbol})
 
         except Exception as e:
             logger.error(f"MemoryService: Save failed: {e}")
-            session.rollback()
-        finally:
-            session.close()
 
     @tracer.start_as_current_span("memory_retrieve_similar")
     def retrieve_similar(
@@ -116,34 +132,26 @@ class MemoryService:
         """
         Find the top-k most similar historical market states.
         """
+        if self.table is None:
+            return []
+
         embedding = self.embed_state(symbol, physics, sentiment)
         if not embedding or len(embedding) == 0:
             return []
 
-        session = SessionLocal()
         results = []
         try:
-            # KNN Search using Cosine Distance (<=> operator)
-            # We want the SMALLEST distance (most similar)
-            query = text("""
-                SELECT timestamp, symbol, metadata, (embedding <=> :query_vec ::vector) as distance
-                FROM market_state_embeddings
-                WHERE symbol = :symbol
-                ORDER BY distance ASC
-                LIMIT :k
-            """)
+            # LanceDB Search
+            search_res = self.table.search(embedding).limit(k).to_list()
 
-            rows = session.execute(
-                query, {"symbol": symbol, "query_vec": str(embedding), "k": k}
-            ).fetchall()
-
-            for row in rows:
+            for row in search_res:
+                # row is a dict usually matching schema + _distance
                 results.append(
                     {
-                        "timestamp": row.timestamp,
-                        "symbol": row.symbol,
-                        "metadata": row.metadata,
-                        "distance": float(row.distance),
+                        "timestamp": row["timestamp"],
+                        "symbol": row["symbol"],
+                        "metadata": json.loads(row["metadata"]),
+                        "distance": float(row.get("_distance", 0.0)),
                     }
                 )
 
@@ -156,5 +164,3 @@ class MemoryService:
         except Exception as e:
             logger.error(f"MemoryService: Retrieval failed: {e}")
             return []
-        finally:
-            session.close()
