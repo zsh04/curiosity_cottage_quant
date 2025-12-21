@@ -193,18 +193,21 @@ python -c "from app.strategies import STRATEGY_REGISTRY; print(STRATEGY_REGISTRY
 
 ### Strategy with Physics Integration
 
-Access the Physics Veto:
+Access the Physics Veto (see internal docs for threshold values):
 
 ```python
 def calculate_signal(self, prices, physics, **kwargs):
-    alpha = physics.get("alpha", 2.5)
+    # Use PhysicsService to check regime
+    from app.services.physics import PhysicsService
     
-    # Respect Physics Veto
-    if alpha < 2.0:
+    regime = PhysicsService.get_regime(physics)
+    
+    # Respect Physics Veto (Critical regime blocks all trading)
+    if regime.leverage_cap == 0.0:
         return {"side": "FLAT", "confidence": 0.0, "reasoning": "Physics VETO"}
     
     # Scale confidence by regime
-    regime_multiplier = min(alpha - 2.0, 1.0)
+    confidence *= regime.leverage_cap
     # ... rest of logic
 ```
 
