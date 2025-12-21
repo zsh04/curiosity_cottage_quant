@@ -1,24 +1,94 @@
-# CC-V2 Quant Engine
+# Curiosity Cottage Quant
 
-Curiosity Cottage V2 Autonomous Trading System.
+### The Ezekiel Operating System (v0.11.0)
 
-## Features
+> **"Trust Physics, Not Emotion."**
 
-- **Consciousness Stream**: Real-time WebSocket feed of AI reasoning (`/api/ws/brain`).
-- **Glass Cockpit**: React-based Command Center (`frontend/`) featuring:
-  - **Debate Console**: Live visualization of Analyst/Risk debates.
-  - **Pro Terminal**: Operational metrics and system controls.
-- **Hybrid Core**: Python 3.11 Engine.
-- **Neural Standardization**:
-  - **Sentiment**: ONNX Runtime (FinBERT) - ~30ms latency.
-  - **Forecast**: Chronos-Bolt (MPS) - Bfloat16 accelerated.
+---
 
-## Quick Start
+## 🏛️ System Overview
 
-1. **Backend**: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
-2. **Frontend**: `cd frontend && npm run dev`
-3. **Access**: Open `http://localhost:3000`
+**Curiosity Cottage Quant (CCQ)** is an autonomous, physics-driven trading system built on the **Ezekiel Protocol**. It is not just a backtester or a bot; it is a **cybernetic organism** managed by a "Council" of AI agents that debate, reason, and execute trades under strict risk constraints.
 
-See `AGENTS.md` for the internal protocol.
+The system is governed by the **Black Box Doctrine**: Alpha is private; Architecture is public.
 
-See `docs/00_CONSTITUTION/02_physics_v4.md` for the proprietary logic.
+### 🧠 The Council (Decision Engine)
+
+- **The Analyst:** Pattern recognition & sentiment analysis (FinBERT/ONNX).
+- **The Skeptic:** Devil's advocate & risk challenger.
+- **The Quant:** Statistical arbitrage & math checks (Chronos-Bolt/MPS).
+- **The Executioner:** Order routing & state management.
+
+### ⚛️ The Physics Engine (Risk Core)
+
+A deterministic "Veto Layer" that overrides AI consensus if physical laws of the market are violated.
+
+- **Law I: Conservation of Capital** (Kelly Criterion)
+- **Law II: Entropy Management** (Hill Estimator & Tail Risk)
+- **Law III: Kinematics** (Kalman Filter Velocity/Acceleration)
+
+---
+
+## ⚡ Technology Stack
+
+| Component | Technology | Role |
+|-----------|------------|------|
+| **Core** | Python 3.11 | The Metal (AsyncIO) |
+| **Memory** | LanceDB | Semantic Search / Embeddings |
+| **Time-Series** | QuestDB | High-Frequency Tick Data |
+| **Neural** | ONNX + MPS | Hardware-Accelerated Inference |
+| **API** | Litestar | High-Performance REST Interface |
+
+---
+
+## 📚 Documentation
+
+The knowledge base is organized according to the **Diátaxis** framework.
+
+### 🟢 For Everyone (Public)
+
+*Start here to understand how to use and deploy the system.*
+
+- **[Quickstart Guide](docs/public/tutorials/01-quickstart.md)** — Launch the system in 10 minutes.
+- **[How-To Guides](docs/public/how-to/)** — Add strategies, run backtests, or deploy.
+- **[System Architecture](docs/public/reference/architecture/stack.md)** — Diagrams & Stack details.
+- **[API Reference](docs/public/reference/api/rest-endpoints.md)** — REST interactions.
+
+### 🔴 For The Council (Internal Only)
+
+*Mathematical proofs, proprietary alpha logic, and strategy parameters are strictly isolated.*
+
+- `docs/internal/math/` (Physics Specs)
+- `docs/internal/strategies/` (Alpha Logic)
+- `docs/internal/architecture/` (Service Contracts)
+
+> **Note:** Internal docs are **git-ignored** per the [Black Box Doctrine](GOVERNANCE.md).
+
+---
+
+## ⚖️ Governance
+
+This project is run as a **Directive-Driven** organization.
+
+- **[GOVERNANCE.md](GOVERNANCE.md)** — The Constitution & Code of Conduct.
+- **[PROJECT_MANAGEMENT.md](PROJECT_MANAGEMENT.md)** — Directive Workflow & Traceability.
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — Style Guide & PR Rules.
+
+---
+
+## 🚀 Quick Start
+
+```bash
+# 1. Install Dependencies
+pip install -r requirements.txt
+
+# 2. Run the Engine
+uvicorn app.main:app --reload
+
+# 3. Access the Neural Stream
+# http://localhost:8000/docs
+```
+
+---
+
+*Copyright © 2025 Curiosity Cottage. All Rights Reserved.*
