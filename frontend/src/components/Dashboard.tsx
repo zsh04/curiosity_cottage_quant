@@ -91,7 +91,7 @@ const Dashboard: React.FC = () => {
 
     // WebSocket Connection
     useEffect(() => {
-        const WS_URL = 'ws://localhost:8000/api/ws/stream';
+        const WS_URL = 'ws://localhost:8000/ws/stream';
         let ws: WebSocket | null = null;
         let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 

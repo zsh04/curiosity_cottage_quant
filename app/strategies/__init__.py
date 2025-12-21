@@ -1,17 +1,24 @@
-from app.strategies.moon_phase import MoonPhaseStrategy
+from .moon_phase import MoonPhaseStrategy
+from .trend import KalmanMomentumStrategy
+from .mean_reversion import BollingerReversionStrategy
+from .breakout import FractalBreakoutStrategy
+from .quantum import QuantumOscillatorStrategy
 
-from app.strategies.trend import KalmanMomentumStrategy
-from app.strategies.mean_reversion import BollingerReversionStrategy
-from app.strategies.breakout import FractalBreakoutStrategy
-from app.strategies.lstm import LSTMPredictionStrategy
-from app.strategies.quantum import QuantumOscillatorStrategy
-
+# The Council of Experts
+ENABLED_STRATEGIES = [
+    KalmanMomentumStrategy,
+    BollingerReversionStrategy,
+    FractalBreakoutStrategy,
+    QuantumOscillatorStrategy,
+    MoonPhaseStrategy,
+]
 
 STRATEGY_REGISTRY = [
-    MoonPhaseStrategy(),  # Esoteric
-    KalmanMomentumStrategy(),  # Physics
-    BollingerReversionStrategy(),  # Statistics
-    FractalBreakoutStrategy(),  # Geometry
-    LSTMPredictionStrategy(),  # AI / Memory
-    QuantumOscillatorStrategy(),  # Quantum Mechanics
+    # Instantiated for legacy compatibility if needed
+    MoonPhaseStrategy(),
+    KalmanMomentumStrategy(),
+    BollingerReversionStrategy(),
+    FractalBreakoutStrategy(),
+    QuantumOscillatorStrategy(),
+    # LSTM is usually handled separately as it has memory state
 ]

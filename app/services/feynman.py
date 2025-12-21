@@ -219,8 +219,37 @@ async def handle_tick(msg: Union[bytes, Dict[str, Any]]):
                 f"TREND DETECTED {symbol} | Momentum: {forces['momentum']:.4f} | Nash: {forces['nash_dist']:.2f}"
             )
 
+        # BRIDGE: Write State to Key for synchronous access by Agents
+        # Expiry: 10 seconds (Data is fresh or dead)
+        try:
+            if hasattr(broker, "redis"):
+                await broker.redis.set(
+                    f"physics:state:{symbol}", orjson.dumps(forces), ex=10
+                )
+        except Exception as e:
+            logger.error(f"Feynman State Write Error: {e}")
+
         # Publish Force Vector
         await broker.publish(orjson.dumps(packet), channel="physics.forces")
 
     except Exception as e:
-        logger.error(f"Feynman Calculation Failed: {e}")
+        logger.critical(f"Feynman Calculation Failed: {e}", exc_info=True)
+        # HARDENING: Don't starve the system. Publish a Neutral Vector (Ghost in the Machine).
+        try:
+            # Extract timestamp/symbol if possible
+            data = orjson.loads(msg) if isinstance(msg, bytes) else msg
+            symbol = data.get("symbol", "UNKNOWN")
+            ts = data.get("timestamp")
+
+            neutral_forces = kernel._empty_vector()
+            neutral_forces["regime"] = "ERROR_FALLBACK"
+
+            packet = {
+                "symbol": symbol,
+                "timestamp": ts,
+                "vectors": neutral_forces,
+                "error": str(e),
+            }
+            await broker.publish(orjson.dumps(packet), channel="physics.forces")
+        except:
+            logger.critical("Double Fault in Feynman. Physics collapsed.")

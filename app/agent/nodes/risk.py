@@ -245,18 +245,26 @@ def risk_node(state: AgentState) -> AgentState:
 
         reasoning_service = get_reasoning_service()
 
-        # A. Check Asynchronous Background Brain Result (Priority)
-        bg_result = reasoning_service.check_background_result()
-        if bg_result and bg_result.get("winner_symbol") not in [None, "NONE"]:
-            winner_sym = bg_result.get("winner_symbol")
-            winner_cand = next(
-                (r for r in analysis_reports if r["symbol"] == winner_sym), None
-            )
-            if winner_cand:
-                rationale = (
-                    f"[BACKGROUND] {bg_result.get('rationale', 'Async Decision')}"
-                )
-                logger.info(f"RISK: 🧠 Valid Background Brain Decision: {winner_sym}")
+        # A. Check Asynchronous Background Brain Result (Priority) - REMOVED (Legacy)
+        # bg_result = reasoning_service.check_background_result()
+        # Direct Flow: Rely on Synchronous Analyst Node Output in State
+        if state.get("signal_side") in ["BUY", "SELL"]:
+            # If Analyst Node already populated state with a decision
+            winner_cand = {
+                "symbol": state.get("symbol"),
+                "price": state.get("price"),
+                "velocity": state.get("velocity"),
+                "acceleration": state.get("acceleration"),
+                "current_alpha": state.get("current_alpha"),
+                "regime": state.get("regime"),
+                "signal_side": state.get("signal_side"),
+                "signal_confidence": state.get("signal_confidence"),
+                "reasoning": state.get("reasoning"),
+            }
+            rationale = f"Analyst Direct: {state.get('reasoning')}"
+            logger.info(f"RISK: 🧠 Valid Analyst Decision: {state['symbol']}")
+        else:
+            winner_cand = None
 
         # B. Run Live Tournament (if no bg result)
         if not winner_cand:

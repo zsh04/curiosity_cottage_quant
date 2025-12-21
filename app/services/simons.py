@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 
 class ExecutionAgent:
     """
-    Manages order lifecycle, executing trades that have passed the Iron Gate (Risk).
+    COMMANDER: The sole point of execution for Ezekiel.
+    Receives approved orders from Risk and routes them to Alpaca.
     """
 
     def __init__(self):

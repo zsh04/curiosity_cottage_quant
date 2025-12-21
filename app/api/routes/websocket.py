@@ -4,6 +4,7 @@ from app.services.state_stream import get_state_broadcaster
 from app.services.redis_bridge import RedisBridge
 import logging
 import asyncio
+import orjson
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +34,10 @@ class BrainStream(WebsocketListener):
                 data = await queue.get()
 
                 # Forward to WebSocket client
-                # Litestar handles JSON serialization
-                await socket.send_json(data)
+                # OPTIMIZATION: Use orjson for HFT-grade serialization speed
+                # Litestar's send_json uses standard json lib. orjson is faster.
+                payload = orjson.dumps(data).decode("utf-8")
+                await socket.send_text(payload)
 
         except Exception as e:
             logger.warning(f"🧠 BrainStream: Connection Closed ({e})")

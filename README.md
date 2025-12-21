@@ -8,7 +8,10 @@ Curiosity Cottage V2 Autonomous Trading System.
 - **Glass Cockpit**: React-based Command Center (`frontend/`) featuring:
   - **Debate Console**: Live visualization of Analyst/Risk debates.
   - **Pro Terminal**: Operational metrics and system controls.
-- **Hybrid Core**: Python 3.12 Engine with LangGraph Agents.
+- **Hybrid Core**: Python 3.11 Engine.
+- **Neural Standardization**:
+  - **Sentiment**: ONNX Runtime (FinBERT) - ~30ms latency.
+  - **Forecast**: Chronos-Bolt (MPS) - Bfloat16 accelerated.
 
 ## Quick Start
 
@@ -18,4 +21,4 @@ Curiosity Cottage V2 Autonomous Trading System.
 
 See `AGENTS.md` for the internal protocol.
 
-See `docs/protocol/mathematical-constitution.md` for the proprietary logic.
+See `docs/00_CONSTITUTION/02_physics_v4.md` for the proprietary logic.

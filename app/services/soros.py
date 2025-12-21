@@ -8,6 +8,8 @@ from faststream import FastStream
 from faststream.redis import RedisBroker
 from app.core.models import ForceVector, TradeSignal, Side, ForecastPacket
 
+from app.agent.macro.agent import MacroAgent
+
 # Configure The Philosopher
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s | SOROS | %(levelname)s | %(message)s"
@@ -37,6 +39,7 @@ class SorosService:
             "OLLAMA_URL", "http://host.docker.internal:11434/api/generate"
         )
         self.model_name = os.getenv("OLLAMA_MODEL", "llama3")
+        self.macro_agent = MacroAgent()
 
     def update_forecast(self, forecast: ForecastPacket):
         self.latest_forecast = forecast
@@ -49,6 +52,33 @@ class SorosService:
         Hosts a debate between Bull and Bear agents via LLM.
         Returns the Judge's Verdict.
         """
+        # 1. Macro Analysis (The Weather)
+        # Run in thread to avoid blocking Async Loop with DB calls
+        macro_context_str = "Macro: UNKNOWN"
+        try:
+            # Minimal state for MacroAgent
+            state = {"symbol": force.symbol, "status": "PENDING"}
+
+            # Run sync macro analysis in thread
+            import asyncio
+
+            regime_state = await asyncio.to_thread(
+                self.macro_agent.analyze_regime, state
+            )
+
+            m_status = regime_state.get("status", "UNKNOWN")
+            m_alpha = regime_state.get("alpha", 0.0)
+            m_corr = regime_state.get("macro_correlation", 0.0)
+
+            macro_context_str = (
+                f"Regime: {m_status}\n"
+                f"Tail Risk (Alpha): {m_alpha:.2f}\n"
+                f"US10Y Corr: {m_corr:.2f}"
+            )
+        except Exception as e:
+            logger.error(f"Macro Analysis Failed: {e}")
+            macro_context_str = "Macro: ERROR (Assume Defensive)"
+
         # Context Construction
         forecast_str = (
             f"P50 Forecast: ${forecast.p50:.2f} (Confidence {forecast.confidence:.2f})"
@@ -62,7 +92,8 @@ class SorosService:
             f"Nash Dist: {force.nash_dist:.2f}\n"
             f"Entropy: {force.entropy:.2f}\n"
             f"Alpha: {force.alpha_coefficient:.2f}\n"
-            f"Chronos: {forecast_str}"
+            f"Chronos: {forecast_str}\n"
+            f"--- MACRO CONTEXT ---\n{macro_context_str}"
         )
 
         prompt = (
@@ -71,6 +102,7 @@ class SorosService:
             f"Task: Conduct a debate.\n"
             f"1. Bull Agent: Argue for a LONG position based on Momentum/Trend.\n"
             f"2. Bear Agent: Argue for a SHORT/HOLD based on Risk/Entropy/Overextension.\n"
+            f"   CRITICAL: If Macro Regime is DEFENSIVE/SLEEPING, Bear must argue for caution unless asset is a safe haven.\n"
             f"3. Judge: Weigh the arguments. Output ONLY JSON.\n\n"
             f"JSON Format Required:\n"
             f"{{\n"

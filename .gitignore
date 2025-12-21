@@ -83,3 +83,9 @@ data/
 *.sqlite3
 *.onnx.data
 *.bin
+
+# Ezekiel IP Protection
+# Internal documentation contains alpha logic, strategy parameters, and research.
+# NEVER commit these to the public repository.
+docs/internal/
+!docs/internal/.gitkeep
