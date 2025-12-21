@@ -1,13 +1,13 @@
-# How to Run a Backtest
+# How to Run a Quantum Holodeck Simulation
 
-**Estimated Time:** 5 minutes  
-**Difficulty:** Beginner
+**Estimated Time:** 5-10 minutes  
+**Difficulty:** Intermediate
 
 ---
 
 ## Overview
 
-This guide shows you how to run a backtest on historical data using the built-in backtest engine.
+The **Quantum Holodeck** is a full-system simulation that backtests the "Oracle" (Chronos) and "Hippocampus" (Market Memory) across a historical timeline. It runs the entire forecasting engine, not just a simple strategy function.
 
 ---
 
@@ -15,117 +15,44 @@ This guide shows you how to run a backtest on historical data using the built-in
 
 Ensure you have:
 
-- The engine installed ([Quickstart Tutorial](../tutorials/01-quickstart.md))
-- Historical data in QuestDB (or Yahoo Finance access)
+1. **Tier 1 Data** in QuestDB (run `scripts/backfill_tier1.py`).
+2. **Market Memory** ingested (run `scripts/ingest_memory.py`).
+3. **MPS/GPU** recommended (Inference is heavy).
 
 ---
 
 ## Steps
 
-### 1. Choose a Strategy
-
-Available strategies in `app/strategies/`:
-
-| Strategy | Description |
-|----------|-------------|
-| `momentum` | Trend-following based on velocity |
-| `mean_reversion` | Mean reversion with Bollinger Bands |
-| `breakout` | Volatility breakout signals |
-| `volatility` | Volatility regime adaptation |
-| `lstm` | Reservoir computing (ESN) |
-
-### 2. Run the Backtest Script
+### 1. Run the Backtest Script
 
 ```bash
-python scripts/run_backtest.py --strategy momentum --symbol SPY --start 2024-01-01 --end 2024-12-01
+# Run a 6-month simulation
+python scripts/run_backtest.py --start 2023-01-01 --end 2023-06-01 --plot
 ```
 
 **Parameters:**
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--strategy` | Strategy name | `momentum` |
-| `--symbol` | Ticker symbol | `SPY` |
-| `--start` | Start date (YYYY-MM-DD) | 1 year ago |
-| `--end` | End date (YYYY-MM-DD) | Today |
-| `--capital` | Initial capital | `100000` |
+| Flag | Description | Format |
+|------|-------------|--------|
+| `--start` | Simulation Start Date | YYYY-MM-DD |
+| `--end` | Simulation End Date | YYYY-MM-DD |
+| `--plot` | Generate Equity Curve image | (Flag) |
 
-### 3. View Results
+### 2. View Results
 
-The script outputs:
+The script will output a simulated trading report:
 
 ```
-═══════════════════════════════════════════════════════
-                    BACKTEST RESULTS
-═══════════════════════════════════════════════════════
-Strategy:        Momentum
-Symbol:          SPY
-Period:          2024-01-01 to 2024-12-01
-
-PERFORMANCE
-───────────────────────────────────────────────────────
-Sharpe Ratio:    1.42
-Total Return:    18.3%
-Max Drawdown:    -8.2%
-Win Rate:        54.2%
-Total Trades:    127
-
-VALIDATION
-───────────────────────────────────────────────────────
-✅ Sharpe >= 1.0
-✅ Return > 15%
-⚠️  Drawdown > 5% (monitor)
-═══════════════════════════════════════════════════════
+==============================
+ BACKTEST REPORT
+==============================
+Return: 12.45%
+Sharpe: 1.82
+Max DD: -5.30%
+==============================
 ```
 
-### 4. Export Results (Optional)
-
-Save results to JSON:
-
-```bash
-python scripts/run_backtest.py --strategy momentum --symbol SPY --output results.json
-```
-
-Results are also saved to `backtest_results/` automatically.
-
----
-
-## Verify
-
-Confirm the backtest completed:
-
-```bash
-ls backtest_results/
-# momentum_SPY_2024-01-01_2024-12-01.json
-```
-
----
-
-## Common Variations
-
-### Run Multiple Symbols
-
-```bash
-for symbol in SPY QQQ AAPL TSLA; do
-    python scripts/run_backtest.py --strategy momentum --symbol $symbol
-done
-```
-
-### Compare Strategies
-
-```bash
-python scripts/run_backtest.py --strategy momentum --symbol SPY
-python scripts/run_backtest.py --strategy mean_reversion --symbol SPY
-python scripts/run_backtest.py --strategy breakout --symbol SPY
-```
-
-### With Physics Veto Enabled
-
-The Physics Veto is enabled by default. It blocks trades when α < 2.0:
-
-```bash
-python scripts/run_backtest.py --strategy momentum --symbol SPY --physics-veto
-```
+If `--plot` is used, check the current directory for **`backtest_equity.png`**.
 
 ---
 
@@ -133,16 +60,9 @@ python scripts/run_backtest.py --strategy momentum --symbol SPY --physics-veto
 
 | Problem | Solution |
 |---------|----------|
-| "No data for symbol" | Ensure QuestDB has historical data or run `scripts/backfill_tier1.py` |
-| "Strategy not found" | Check strategy name matches file in `app/strategies/` |
-| Low Sharpe Ratio | Try different date ranges or symbols |
-
----
-
-## Related
-
-- [How to Add a New Strategy](./02-add-strategy.md)
-- [Backtest Engine Reference](../reference/architecture/backtest-engine.md)
+| "No data loaded" | Check QuestDB. Ensure requested date range exists. |
+| "Slow performance" | Computation is heavy (Neural Inference + Vector Search). Use a shorter time range for testing. |
+| "0 Trades" | Check if Memory is populated or if Confidence thresholds are too high. |
 
 ---
 

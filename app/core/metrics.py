@@ -163,6 +163,51 @@ memory_operations = meter.create_counter(
 )
 
 # ============================================================================
+# FORECASTING METRICS (Chronos-Bolt + RAF)
+# ============================================================================
+
+forecast_uncertainty = meter.create_histogram(
+    name="cc.forecast.uncertainty",
+    description="Spread between P90 and P10 forecasts",
+    unit="1",
+)
+
+forecast_trend = meter.create_gauge(
+    name="cc.forecast.trend",
+    description="Predicted trend percentage (Chronos P50)",
+)
+
+raf_similarity = meter.create_histogram(
+    name="cc.raf.similarity",
+    description="Similarity score of retrieved market analogs",
+    unit="1",
+)
+
+raf_outcome = meter.create_gauge(
+    name="cc.raf.outcome",
+    description="Weighted forward return outcome from RAF",
+)
+
+# ============================================================================
+# BACKTEST METRICS (The Quantum Holodeck)
+# ============================================================================
+
+backtest_sharpe = meter.create_gauge(
+    name="cc.backtest.sharpe",
+    description="Last backtest Sharpe Ratio",
+)
+
+backtest_drawdown = meter.create_gauge(
+    name="cc.backtest.drawdown",
+    description="Last backtest Max Drawdown",
+)
+
+backtest_return = meter.create_gauge(
+    name="cc.backtest.return",
+    description="Last backtest Total Return",
+)
+
+# ============================================================================
 # HELPER FUNCTIONS WITH EXEMPLARS
 # ============================================================================
 
@@ -179,10 +224,10 @@ def record_histogram_with_exemplar(histogram, value: float, attributes: dict):
 
     if span_context.is_valid:
         # Create exemplar with trace context
-        exemplar = {
-            "trace_id": format(span_context.trace_id, "032x"),
-            "span_id": format(span_context.span_id, "016x"),
-        }
+        # exemplar = {
+        #     "trace_id": format(span_context.trace_id, "032x"),
+        #     "span_id": format(span_context.span_id, "016x"),
+        # }
 
         # Record with exemplar (note: exemplar support varies by backend)
         # For now, just record normally - exemplar encoding happens in SDK

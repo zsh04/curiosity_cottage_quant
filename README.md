@@ -1,6 +1,6 @@
 # Curiosity Cottage Quant
 
-### The Ezekiel Operating System (v0.11.0)
+### The Ezekiel Operating System (v0.12.0)
 
 > **"Trust Physics, Not Emotion."**
 
@@ -10,10 +10,9 @@
 
 **Curiosity Cottage Quant (CCQ)** is an autonomous, physics-driven trading system built on the **Ezekiel Protocol**. It is not just a backtester or a bot; it is a **cybernetic organism** managed by a "Council" of AI agents that debate, reason, and execute trades under strict risk constraints.
 
-The system is governed by the **Black Box Doctrine**: Alpha is private; Architecture is public.
-
 ### 🧠 The Council (Decision Engine)
 
+- **The Oracle:** Unified Forecasting Engine (Chronos-Bolt + RAF Memory).
 - **The Analyst:** Pattern recognition & sentiment analysis (FinBERT/ONNX).
 - **The Skeptic:** Devil's advocate & risk challenger.
 - **The Quant:** Statistical arbitrage & math checks (Chronos-Bolt/MPS).
@@ -53,16 +52,6 @@ The knowledge base is organized according to the **Diátaxis** framework.
 - **[How-To Guides](docs/public/how-to/)** — Add strategies, run backtests, or deploy.
 - **[System Architecture](docs/public/reference/architecture/stack.md)** — Diagrams & Stack details.
 - **[API Reference](docs/public/reference/api/rest-endpoints.md)** — REST interactions.
-
-### 🔴 For The Council (Internal Only)
-
-*Mathematical proofs, proprietary alpha logic, and strategy parameters are strictly isolated.*
-
-- `docs/internal/math/` (Physics Specs)
-- `docs/internal/strategies/` (Alpha Logic)
-- `docs/internal/architecture/` (Service Contracts)
-
-> **Note:** Internal docs are **git-ignored** per the [Black Box Doctrine](GOVERNANCE.md).
 
 ---
 

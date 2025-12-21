@@ -8,7 +8,9 @@ from opentelemetry import trace
 from app.agent.state import AgentState
 from app.services.market import MarketService
 from app.services.physics import PhysicsService
-from app.services.forecasting import ForecastingService
+from app.services.forecast import TimeSeriesForecaster
+
+# from app.services.forecasting import ForecastingService # Deprecated
 from app.services.reasoning import ReasoningService
 from app.services.memory import MemoryService
 from app.core import metrics as business_metrics
@@ -35,7 +37,8 @@ class AnalystAgent:
         self.market = MarketService()
         # self.physics = PhysicsService()  # REMOVED: Shared instance causes bleed
         self.physics_map: Dict[str, PhysicsService] = {}  # NEW: Per-symbol factory
-        self.forecasting = ForecastingService()
+        self.oracle = TimeSeriesForecaster()
+        # self.forecasting = ForecastingService()
         self.reasoning = ReasoningService()
         self.memory = MemoryService()  # Quantum Memory
 
@@ -228,21 +231,27 @@ class AnalystAgent:
                     await asyncio.to_thread(save_model_checkpoint, "analyst_lstm", blob)
                     logger.info("💾 ANALYST: Saved LSTM checkpoint to Database.")
 
-            # --- Step 3: FUTURE (Forecasting) ---
-            forecast = await asyncio.to_thread(
-                self.forecasting.predict_trend, history, 10
+            # --- Step 3: THE UNIFIED ORACLE (Forecast + Memory) ---
+            sentiment_snapshot = market_snapshot.get("sentiment", {})
+
+            # Get Context Tensor (Last 64 bars)
+            oracle_context_list = history[-64:] if history else []
+            import torch
+            import numpy as np
+
+            # Simple conversion to tensor (Forecaster handles ndim and device)
+            context_tensor = torch.tensor(oracle_context_list, dtype=torch.float32)
+
+            oracle_result = await self.oracle.predict_ensemble(
+                context_tensor=context_tensor,
+                current_prices=history,  # For RAG normalization
             )
 
-            # --- Step 3.5: MEMORY (Quantum Recall) ---
-            sentiment_snapshot = market_snapshot.get("sentiment", {})
-            historical_regimes = await asyncio.to_thread(
-                self.memory.retrieve_similar,
-                symbol,
-                physics_context,
-                sentiment_snapshot,
-                k=3,
-            )
-            market_snapshot["historical_regimes"] = historical_regimes
+            # Extract Components
+            forecast = oracle_result.get("components", {}).get("chronos", {})
+            historical_regimes = oracle_result.get("components", {}).get("raf", {})
+            oracle_signal_side = oracle_result.get("signal", "NEUTRAL")
+            oracle_confidence = oracle_result.get("confidence", 0.0)
 
             # --- Step 4: COGNITION (Reasoning / Signal) ---
             if not skip_llm:
@@ -250,6 +259,12 @@ class AnalystAgent:
                     "market": market_snapshot,
                     "physics": physics_context,
                     "forecast": forecast,
+                    "regime_memory": historical_regimes,
+                    "oracle_signal": {
+                        "side": oracle_signal_side,
+                        "confidence": oracle_confidence,
+                        "reasoning": oracle_result.get("reasoning", ""),
+                    },
                     "sentiment": sentiment_snapshot,
                     "strategies": {
                         "lstm_signal": lstm_signal,
@@ -260,17 +275,12 @@ class AnalystAgent:
             else:
                 # OPTIMIZATION: Skip LLM for non-primary candidates
                 signal_result = {
-                    "signal_side": "FLAT",
-                    "signal_confidence": 0.0,
-                    "reasoning": "LLM Skipped (Optimization)",
+                    "signal_side": oracle_signal_side
+                    if oracle_signal_side != "NEUTRAL"
+                    else "FLAT",
+                    "signal_confidence": oracle_confidence,
+                    "reasoning": f"Oracle Optimization: {oracle_result.get('reasoning', 'Skipped LLM')}",
                 }
-                # Basic LSTM fallback for signal side
-                if lstm_signal > 0.05:
-                    signal_result["signal_side"] = "BUY"
-                    signal_result["signal_confidence"] = min(abs(lstm_signal) * 5, 0.8)
-                elif lstm_signal < -0.05:
-                    signal_result["signal_side"] = "SELL"
-                    signal_result["signal_confidence"] = min(abs(lstm_signal) * 5, 0.8)
 
             # --- Step 5.5: MEMORIZE (Fire & Forget) ---
             asyncio.create_task(

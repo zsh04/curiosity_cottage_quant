@@ -36,3 +36,10 @@ The Antigravity Prime architecture is personified by five "Giants," each respons
 * **File:** `app/services/soros.py`
 * **Responsibility:** Asynchronously monitors news and social sentiment to detect "Reflexivity" (Feedback loops where potential affects reality).
 * **Output:** `SentimentScore` (Injects into Boyd's OODA Loop).
+
+## 6. The Oracle (The Seer)
+
+* **Role:** Prophecy & Memory
+* **File:** `app/services/forecast.py`
+* **Responsibility:** The "Unified Forecaster". Combines **Chronos-Bolt** (Deep Learning Time-Series) with **Market Memory** (Vector Search/RAF) to predict future price paths and outcomes.
+* **Output:** `EnsembleForecast` (P10/P50/P90, Trend, Analog Outcomes).
