@@ -16,14 +16,17 @@ docs/
 │   └── operations/          "Runbooks"
 │
 └── internal/                🔴 Internal: For The Council/Core Team
+    ├── math/                "Kalman, Hill, Kelly formulas"
+    ├── architecture/        "Data Flow, Backtest Engine"
+    ├── api/                 "WebSocket, Redis protocols"
     ├── strategies/          "The Power Law Alpha Logic"
-    ├── research/            "Chronos vs. T5 Benchmarks"
+    ├── research/            "Benchmarks with P&L"
     ├── adr/                 "Architecture Decision Records"
     └── templates/           "Document Templates"
 ```
 
 > [!CAUTION]
-> **`docs/internal/` is git-ignored.** This content never leaves your machine.
+> **`docs/internal/` is git-ignored.** This content never leaves your machine. All mathematical specifications, thresholds, and alpha logic reside there.
 
 ---
 
@@ -49,49 +52,25 @@ docs/
 
 ### Reference (Information-Oriented)
 
-#### Architecture
+#### Architecture (Public-Safe)
 
 | Document | Description |
 |----------|-------------|
 | [stack.md](./public/reference/architecture/stack.md) | Technology stack |
-| [data-flow.md](./public/reference/architecture/data-flow.md) | Data flow diagrams |
-| [service-contracts.md](./public/reference/architecture/service-contracts.md) | Service SLAs |
-| [backtest-engine.md](./public/reference/architecture/backtest-engine.md) | Backtest methodology |
-| [market-scanner.md](./public/reference/architecture/market-scanner.md) | Universe selection |
 | [domain-models.md](./public/reference/architecture/domain-models.md) | Pydantic schemas |
-| [chronos.md](./public/reference/architecture/chronos.md) | Forecasting service |
-| [council.md](./public/reference/architecture/council.md) | Strategy voting |
 | [frontend-components.md](./public/reference/architecture/frontend-components.md) | React components |
 | [frontend-state.md](./public/reference/architecture/frontend-state.md) | Frontend state management |
 
-#### API
+#### API (Public-Safe)
 
 | Document | Description |
 |----------|-------------|
 | [rest-endpoints.md](./public/reference/api/rest-endpoints.md) | REST API Reference |
-| [websocket-protocol.md](./public/reference/api/websocket-protocol.md) | WebSocket TELEMETRY |
-| [redis-protocol.md](./public/reference/api/redis-protocol.md) | Redis patterns |
-
-#### Math
-
-| Document | Description |
-|----------|-------------|
-| [kalman-filter.md](./public/reference/math/kalman-filter.md) | 3-State Kinematic Kalman Filter |
-| [hill-estimator.md](./public/reference/math/hill-estimator.md) | Tail Exponent Estimation |
-| [kelly-sizing.md](./public/reference/math/kelly-sizing.md) | BES Position Sizing |
-| [physics-engine.md](./public/reference/math/physics-engine.md) | 5-Pillar Physics Model |
-
-#### Database
-
-| Document | Description |
-|----------|-------------|
-| [schemas.md](./public/reference/database/schemas.md) | QuestDB, LanceDB, Redis |
 
 #### General
 
 | Document | Description |
 |----------|-------------|
-| [glossary.md](./public/reference/glossary.md) | Term definitions (60+ terms) |
 | [TECHNICAL_REFERENCE.md](./public/reference/TECHNICAL_REFERENCE.md) | System overview |
 
 ---
@@ -114,64 +93,59 @@ docs/
 
 ---
 
-## 🔴 Internal Documentation
+## 🔴 Internal Documentation (Git-Ignored)
 
-> **Location:** `docs/internal/` (git-ignored)
+> **Location:** `docs/internal/` — **NEVER COMMITTED**
 
-### Strategies
+### Math (Alpha Logic)
 
-- Alpha generation logic
-- Strategy parameter configurations
-- Edge-specific implementations
+- `kalman-filter.md` — 3-State Kinematic Filter specs
+- `hill-estimator.md` — Tail exponent (α) estimation
+- `kelly-sizing.md` — BES position sizing
+- `physics-engine.md` — 5-Pillar Physics Model
 
-### Research
+### Architecture (Implementation Details)
 
-- Model benchmarks (Chronos vs. T5)
-- Backtest results with P&L
-- Parameter optimization studies
+- `backtest-engine.md` — Vectorized simulation
+- `market-scanner.md` — Universe selection thresholds
+- `data-flow.md` — System sequence diagrams
+- `service-contracts.md` — Service SLAs
+- `chronos.md` — Forecasting service
+- `council.md` — Strategy voting
 
-### ADRs (Architecture Decision Records)
+### API (Protocols)
 
-- Decisions with alpha implications
-- Trade-off analysis with sensitive data
+- `websocket-protocol.md` — TELEMETRY packet schema
+- `redis-protocol.md` — Key patterns, Pub/Sub
+
+### Database
+
+- `schemas.md` — QuestDB, LanceDB, Redis
+
+### Other
+
+- `glossary.md` — Term definitions (60+ terms)
 
 ### Templates
 
-- [01-directive.md](./internal/templates/01-directive.md) — Task assignment
-- [02-adr.md](./internal/templates/02-adr.md) — Architecture Decision Record
-- [03-incident-report.md](./internal/templates/03-incident-report.md) — Post-mortem
-- [04-tutorial.md](./internal/templates/04-tutorial.md) — Tutorial template
-- [05-how-to.md](./internal/templates/05-how-to.md) — How-to template
+- `01-directive.md` — Task assignment
+- `02-adr.md` — Architecture Decision Record
+- `03-incident-report.md` — Post-mortem
+- `04-tutorial.md` — Tutorial template
+- `05-how-to.md` — How-to template
 
 ---
 
-## 📊 Coverage Matrix
+## 🔒 Security Policy: The Black Box Doctrine
 
-| System | Logic | Math | Flow | Technical | Code | API | Architecture |
-|--------|:-----:|:----:|:----:|:---------:|:----:|:---:|:------------:|
-| Backtest Engine | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
-| Market Scanner | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Kalman Filter | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
-| Hill Estimator | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
-| BES Sizing | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
-| REST API | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| WebSocket | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Redis | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Frontend | ✅ | — | ✅ | ✅ | ✅ | — | ✅ |
-
----
-
-## 📈 Statistics
-
-| Metric | Count |
-|--------|-------|
-| **Tutorial Files** | 1 |
-| **How-To Guides** | 3 |
-| **Reference Docs** | 19 |
-| **Explanation Docs** | 2 |
-| **Operations Docs** | 2 |
-| **Templates** | 5 |
-| **Total Files** | **32+** |
+| Category | Public? | Internal? | Examples |
+|----------|:-------:|:---------:|----------|
+| **Usage Docs** | ✅ | — | Tutorials, How-To Guides |
+| **API Endpoints** | ✅ | — | REST paths (no thresholds) |
+| **Math Formulas** | ❌ | ✅ | Kalman, Hill, Kelly |
+| **Threshold Values** | ❌ | ✅ | α < 2.0, λ scaling |
+| **Strategy Logic** | ❌ | ✅ | Alpha generation |
+| **Backtest Results** | ❌ | ✅ | P&L, Sharpe ratios |
 
 ---
 
