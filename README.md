@@ -1,6 +1,6 @@
 # Curiosity Cottage Quant
 
-### The Shannon Channel (v0.12.0)
+### Quantum Holodeck V2 (v0.13.0)
 
 > **"Trust Physics, Not Emotion."**
 
@@ -8,16 +8,16 @@
 
 ## 🏛️ System Overview
 
-**Curiosity Cottage Quant (CCQ)** is an autonomous, physics-driven trading system built on the **Hybrid Metal Architecture**. It is not just a backtester or a bot; it is a **cybernetic organism** managed by a "Council" of AI agents that debate, reason, and execute trades under strict risk constraints.
+**Curiosity Cottage Quant (CCQ)** is an autonomous, physics-driven trading system built on the **Hybrid Metal Architecture**, featuring a **10-Decile Quantum Holodeck** for parallel universe simulation. It is not just a backtester or a bot; it is a **cybernetic organism** managed by a "Council" of AI agents that debate, reason, and execute trades under strict risk constraints.
 
 ### 2. The Council (Cognitive Stack)
 
 The system is governed by a "Bicameral Mind" of specialized agents:
 
-- **Soros (The Philosopher):** Scans the global universe for regime changes and volatility.
-- **Boyd (The Strategist):** Executes the OODA Loop to orient and decide on tactics.
-- **Taleb (The Guardian):** Enforces risk limits and "black swan" protection.
-- **Simons (The Executioner):** Handles high-precision order slicing and routing.
+- **Soros (The Philosopher):** Scans the global universe for regime changes (Quantum State Observation).
+- **Boyd (The Strategist):** Executes the OODA Loop to orient and decide on tactics (Reasoning Core).
+- **Taleb (The Guardian):** Enforces 10-decile physics veto and asymmetric skew limits (Black Swan Protection).
+- **Simons (The Executioner):** Handles high-precision order slicing and predatory slippage mitigation.
 
 ### ⚛️ The Physics Engine (Risk Core)
 
