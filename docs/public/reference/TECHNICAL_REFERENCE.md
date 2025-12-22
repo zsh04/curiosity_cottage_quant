@@ -112,6 +112,23 @@ The domain logic layer. Agents do not talk to APIs directly; they talk to Servic
   - *Key Code*: `KinematicKalmanFilter` class implementation.
   - *Reference*: `docs/00_CONSTITUTION/02_physics_v4.md`.
 
+- **`forecast.py`**: **The Oracle** (New in v3.1).
+  - *Role*: Time-series forecasting.
+  - *Engine*: `amazon/chronos-bolt-small` (Pre-trained foundation model).
+  - *Integration*: Uses HuggingFace Transformers + MPS acceleration.
+  - *Output*: Probabilistic forecasts (P10, P50, P90).
+
+- **`rag_forecast.py`**: **The Hippocampus** (New in v3.1).
+  - *Role*: Retrieval Augmented Generation (Market Memory).
+  - *Engine*: LanceDB (Vector Database).
+  - *Process*: Search closest 64-day pattern -> Filter by `cutoff_timestamp` -> Weighted Average Outcome.
+
+- **`backtest.py`**: **The Quantum Holodeck** (New in v3.1).
+  - *Role*: Vectorized Time-Travel Simulator.
+  - *Purpose*: Validates the Oracle & Hippocampus offline.
+  - *Design*: Strict causality loop (tqdm) with slippage modeling.
+  - *Key Method*: `run()` - Orchestrates the full simulation loop.
+
 - **`reasoning.py`**: **The Philosopher**.
   - *Role*: LLM Interaction.
   - *Key Method*: `analyze_signal()` - Prompts Ollama with structured context.

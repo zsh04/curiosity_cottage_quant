@@ -59,10 +59,13 @@ class ProductionVerifier:
     def check_llm_config(self):
         """Verify LLM model is configured"""
         model = os.getenv("LLM_MODEL", "NOT_SET")
+        valid_models = ["gemma2:9b", "google/gemma-2-9b-it"]
+        is_valid = model in valid_models
+
         self.results["llm_config"] = {
-            "status": "PASS" if model == "gemma2:9b" else "WARN",
+            "status": "PASS" if is_valid else "WARN",
             "model": model,
-            "message": "Correct" if model == "gemma2:9b" else "Check .env",
+            "message": "Correct" if is_valid else f"Expected one of {valid_models}",
         }
 
     def check_otel_config(self):

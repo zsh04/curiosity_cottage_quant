@@ -1,45 +1,90 @@
 # The Council of Giants (System Personas)
 
-The Antigravity Prime architecture is personified by five "Giants," each responsible for a critical domain of the trading lifecycle.
+The Antigravity Prime architecture is personified by "The Council," a collective of historical and archetypal entities that govern the system's consciousness.
 
-## 1. Feynman (The Engine)
+## 1. The Silicon Handshake (Physical Manifestation)
 
-* **Role:** Physics & Kinematics
+The Council is physically distributed across the Apple Silicon chip, creating a "Bicameral Mind":
+
+| Giant | Domain | Silicon Residence |
+| :--- | :--- | :--- |
+| **Feynman** | Physics | **Performance Cores (CPU)** |
+| **Chronos** | Prophecy | **MPS / GPU** |
+| **Soros** | Intuition | **Neural Engine (ANE)** |
+| **Simons** | Execution | **Efficiency Cores (CPU)** |
+| **Munger** | Memory | **NVMe / RAM** |
+
+---
+
+## 2. The Active Council
+
+### 🏰 The Governance Layer
+
+#### 1. Feynman (The Physicist) - "The Engine"
+
+* **Role:** Kinematics & Laws of Motion
 * **File:** `app/services/feynman.py`
-* **Responsibility:** Calculates the raw forces of the market (Mass, Momentum, Entropy, Nash Distance).
-* **Output:** a `PhysicsVector` (Velocity, Acceleration, Regime).
+* **Philosophy:** "Markets have mass and momentum. Respect the laws."
+* **Responsibilities:** Calculates Mass, Momentum, Entropy, Nash Distance.
 
-## 2. Boyd (The Strategist)
+#### 2. Taleb (The Risk Guardian) - "The Shield"
 
-* **Role:** OODA Loop & Orientation
-* **File:** `app/agent/nodes/boyd.py`
-* **Responsibility:** Observes the Physics Vector, Orients via Strategy (Ambush vs. Sniper), Decides functionality, and Acts (Signal Generation).
-* **Output:** `TradeSignal` (Buy/Sell, Confidence).
-
-## 3. Taleb (The Shield)
-
-* **Role:** Risk & Convexity
+* **Role:** Convexity & Anti-Fragility
 * **File:** `app/agent/nodes/taleb.py`
-* **Responsibility:** The "Iron Gate". Vetoes trades based on hidden risks (Entropy > 0.5), Black Swan potential (Kurtosis), and Convexity (Kelly Sizing).
-* **Output:** `ApprovedSize` (Notional Amount or 0.0 for Veto).
+* **Philosophy:** "It is better to be safe than precise."
+* **Responsibilities:** Enforces the **Physics Veto**. Calculates Heavy-Tail Alpha (α) and Kelly Sizing.
 
-## 4. Simons (The Executioner)
+#### 3. Nash (The Auditor) - "The Judge"
 
-* **Role:** HFT Execution
-* **File:** `app/agent/nodes/simons.py`
-* **Responsibility:** Algorithmic execution. Slices orders, manages slippage, and handles the "Grim Trigger" (emergency exit).
-* **Output:** `FillReport` (Price, Qty, Slippage).
+* **Role:** Equilibrium & Post-Mortem
+* **File:** `app/services/nash.py` (Implied)
+* **Philosophy:** "Every loss is a failure of game theory."
+* **Responsibilities:** Analyzes drawdowns and structural failures.
 
-## 5. Soros (The Feeler)
+### 🧠 The Cognitive Layer
+
+#### 4. Boyd (The Strategist) - "The Pilot"
+
+* **Role:** OODA Loop (Observe-Orient-Decide-Act)
+* **File:** `app/agent/nodes/boyd.py`
+* **Philosophy:** "Speed of orientation beats speed of movement."
+* **Responsibilities:** Selects tactics (Ambush vs. Snipe) based on Feynman's physics.
+
+#### 5. The Oracle (Chronos) - "The Seer"
+
+* **Role:** Prophecy & Probabilistic Time-Travel
+* **File:** `app/services/forecast.py`
+* **Philosophy:** "The future is a probability cloud, not a point."
+* **Responsibilities:** Generates P10/P50/P90 price paths using Deep Learning.
+    > [!WARNING]
+    > **Latency**: ~2.3s (High Cognitive Load).
+
+#### 6. Munger (The Librarian) - "The Memory"
+
+* **Role:** Latticework & Analog Retrieval
+* **File:** `app/services/memory.py` (LanceDB)
+* **Philosophy:** "History doesn't repeat, but it rhymes."
+* **Responsibilities:** Retrieves the top 5 historical analogs (RAG) to validate current setups.
+
+### ⚡ The Reflex Layer
+
+#### 7. Soros (The Feeler) - "The Nerve"
 
 * **Role:** Reflexivity & Sentiment
 * **File:** `app/services/soros.py`
-* **Responsibility:** Asynchronously monitors news and social sentiment to detect "Reflexivity" (Feedback loops where potential affects reality).
-* **Output:** `SentimentScore` (Injects into Boyd's OODA Loop).
+* **Philosophy:** "Perception alters reality."
+* **Responsibilities:** Ingests news/sentiment via FinBERT to detect feedback loops.
 
-## 6. The Oracle (The Seer)
+#### 8. Shannon (The Signalman) - "The Wire"
 
-* **Role:** Prophecy & Memory
-* **File:** `app/services/forecast.py`
-* **Responsibility:** The "Unified Forecaster". Combines **Chronos-Bolt** (Deep Learning Time-Series) with **Market Memory** (Vector Search/RAF) to predict future price paths and outcomes.
-* **Output:** `EnsembleForecast` (P10/P50/P90, Trend, Analog Outcomes).
+* **Role:** Information Velocity & Telemetry
+* **File:** `app/api/websocket.py`
+* **Philosophy:** "Noise is the enemy of signal."
+* **Responsibilities:** Ensures zero-loss transmission of telemetry to the Instrument Cluster.
+
+#### 9. Simons (The Executioner) - "The Blade"
+
+* **Role:** HFT Execution
+* **File:** `app/agent/nodes/simons.py`
+* **Philosophy:** "There is no alpha without capture."
+* **Responsibilities:** Slices orders, manages slippage, and pulls the **Grim Trigger**.

@@ -22,7 +22,10 @@ logging.basicConfig(level=logging.INFO)
 
 class MarketMemory:
     """
-    Vector Database for Market Patterns using LanceDB.
+    The Librarian (Munger).
+    Deep Storage for Historical Analogs.
+
+    Uses vector embeddings (LanceDB) to find "rhymes" in history.
     """
 
     def __init__(self, uri: str = settings.LANCEDB_URI):

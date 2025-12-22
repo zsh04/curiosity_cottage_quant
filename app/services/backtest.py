@@ -27,7 +27,15 @@ logging.basicConfig(level=logging.INFO)
 class BacktestEngine:
     """
     The Quantum Holodeck.
-    Runs the Unified Forecaster on historical data with strict causality.
+
+    A vectorized simulation engine that allows "The Council" to re-live history.
+    It simulates:
+    1. Time Travel (Historical Re-play via QuestDB)
+    2. Parallel Universes (Vectorized independent symbol tracking)
+    3. Counterfactual Outcomes (What if?)
+
+    Unlike event-driven backtesters, this engine prioritizes speed over tick-precision.
+    It is designed to validate "The Oracle's" prophecies at scale.
     """
 
     def __init__(self, start_date: str, end_date: str):

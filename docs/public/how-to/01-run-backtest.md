@@ -54,6 +54,21 @@ Max DD: -5.30%
 
 If `--plot` is used, check the current directory for **`backtest_equity.png`**.
 
+### 3. "The Reality Offset" (Reliability)
+
+> [!WARNING]
+> **The Simulation Gap**: This backtest assumes **Infinite Liquidity** and **Zero Latency**.
+
+Real-world results will deviate. Apply these standardized "Reality Offsets" to your Sharpe Ratio:
+
+| Asset Class | Slippage/Spread | Latency Impact | Sharpe Penalty |
+| :--- | :--- | :--- | :--- |
+| **S&P 500 (SPY)** | 0.01% | Low | -0.2 |
+| **Small Cap (IWM)** | 0.05% | Medium | -0.5 |
+| **Crypto (BTC)** | 0.10% | High | -0.8 |
+
+**Rule of Thumb:** If your Backtest Sharpe is < 1.5, your Live Sharpe will likely be < 1.0 (Unprofitable).
+
 ---
 
 ## Troubleshooting

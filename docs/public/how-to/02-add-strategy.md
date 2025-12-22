@@ -11,18 +11,16 @@ This guide shows you how to implement and register a new trading strategy in the
 
 ---
 
-## Before You Begin
+## Pre-requisites
 
-Ensure you have:
+* Familiarity with Pandas and Python.
+* Understanding of the `BaseStrategy` class.
 
-- Understanding of the [Council Architecture](../reference/architecture/council.md)
-- Familiarity with Python and NumPy
+> [!WARNING]
+> **The Latency Paradox**: The "Analyst Agent" (LLM Reasoning) introduces a **~2.3 second latency** between Observation and Signal.
+> Your strategy MUST be designed to survive this delay. Scalping strategies (<1s) will fail.
 
----
-
-## Steps
-
-### 1. Create the Strategy File
+## 1. Create the Strategy File
 
 Create a new file in `app/strategies/`:
 
@@ -234,9 +232,9 @@ def calculate_signal(self, prices, physics, sentiment=None, **kwargs):
 
 ## Related
 
-- [Strategy Council Reference](../reference/architecture/council.md)
-- [How to Run a Backtest](./01-run-backtest.md)
-- [Physics Engine](../reference/math/physics-engine.md)
+* [Strategy Council Reference](../reference/architecture/council.md)
+* [How to Run a Backtest](./01-run-backtest.md)
+* [Physics Engine](../reference/math/physics-engine.md)
 
 ---
 

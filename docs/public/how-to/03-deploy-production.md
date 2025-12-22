@@ -158,13 +158,27 @@ curl http://localhost:8000/api/health
 # {"status":"ok"}
 ```
 
-Check logs:
-
-```bash
-tail -f /var/log/cc-engine.log
 ```
 
-### 7. Configure Firewall (Optional)
+### 7. Security Hardening (MANDATORY)
+
+> [!CAUTION]
+> **Do not deploy without completing this checklist.** The default configuration is open for development convenience.
+
+#### The "Iron Wall" Checklist
+
+1.  [ ] **Network Isolation**: Ensure Redis (6379) and QuestDB (9000/8812) are NOT exposed to the public internet. Bind to `127.0.0.1` or internal Docker network only.
+2.  [ ] **API Gateway**: Place Nginx or Caddy in front of Litestar (Port 8000).
+3.  [ ] **Authentication**:
+    *   Implement **JWT Authentication** middleware in `app/middleware/auth.py`.
+    *   Reject all `WebSocket` connections without a valid Bearer token.
+4.  [ ] **CORS Lockdown**: Update `main.py` to strict origin policy:
+    ```python
+    cors_config = CORSConfig(allow_origins=["https://your-domain.com"])
+    ```
+5.  [ ] **Rate Limiting**: Enable `RedisRateLimitBackend` on public `GET` endpoints (Limit: 60req/min).
+
+### 8. Configure Firewall (Optional)
 
 If you need remote access:
 

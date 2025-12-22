@@ -58,14 +58,41 @@ class ReasoningService:
         # Let's assume standard 'ollama:llama3.1'.
 
         try:
-            self.agent = Agent(
-                f"ollama:{model_name}",
-                result_type=TradeDecision,
-                system_prompt="You are the Chief Risk Officer (CRO) of a quantitative hedge fund. Analyze the data and make a trading decision.",
-            )
-            logger.info(
-                f"🧠 ReasoningService initialized with Pydantic AI (Model: {model_name})"
-            )
+            # Platform Check for Silicon Handshake
+            import platform
+
+            processor = platform.processor()
+            is_silicon = "arm" in processor.lower() if processor else False
+
+            # Check if user explicitly forced Ollama via env
+            force_ollama = os.getenv("FORCE_OLLAMA", "false").lower() == "true"
+
+            if is_silicon and not force_ollama:
+                # 🍏 Apple Silicon Path: Native MLX
+                logger.info(
+                    "🍏 Apple Silicon Detected. Engaging Quantum Holodeck (MLX Native)."
+                )
+                from app.adapters.mlx_adapter import MLXModel
+
+                # Use "google/gemma-2-9b-it" which matches the legacy loader key
+                model_adapter = MLXModel(model_name="google/gemma-2-9b-it")
+                self.agent = Agent(
+                    model_adapter,
+                    output_type=TradeDecision,
+                    system_prompt="You are the Chief Risk Officer (CRO) of a quantitative hedge fund. Analyze the data and make a trading decision.",
+                )
+                self.mode = "MLX_NATIVE"
+            else:
+                # 🐧 Linux/Cloud Path: Ollama Fallback
+                logger.info(f"☁️ Using Ollama Bridge (Model: {model_name})")
+                self.agent = Agent(
+                    f"ollama:{model_name}",
+                    output_type=TradeDecision,
+                    system_prompt="You are the Chief Risk Officer (CRO) of a quantitative hedge fund. Analyze the data and make a trading decision.",
+                )
+                self.mode = "OLLAMA_BRIDGE"
+
+            logger.info(f"🧠 ReasoningService initialized (Mode: {self.mode})")
         except Exception as eobj:
             logger.warning(
                 f"Failed to init Pydantic AI Agent: {eobj}. Fallback logic may be needed."

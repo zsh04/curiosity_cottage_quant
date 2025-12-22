@@ -10,6 +10,13 @@ logger = logging.getLogger(__name__)
 
 
 class BrainStream(WebsocketListener):
+    """
+    The Signalman (Shannon).
+
+    Maintains Information Velocity with the Instrument Cluster (Frontend).
+    "Noise is the enemy of Signal."
+    """
+
     path = "/ws/stream"
 
     async def on_accept(self, socket: WebSocket) -> None:

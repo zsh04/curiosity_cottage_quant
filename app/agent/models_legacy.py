@@ -22,15 +22,22 @@ class ModelFactory:
         if "gemma" not in self.models:
             print("Loading Gemma 2 (9B) via MLX...")
             if load is None:
-                print("MLX-LM not found (Linux/CI Env). Using Mock.")
+                # Fallback for non-Silicon / CI environments
+                print("⚠️ MLX-LM not found. Using Mock.")
                 self.models["gemma"] = ("MOCK_MODEL", "MOCK_TOKENIZER")
                 return self.models["gemma"]
 
-            # Note: This requires the model to be downloaded.
-            # First run might be slow.
-            model, tokenizer = load("google/gemma-2-9b-it")
-            self.models["gemma"] = (model, tokenizer)
-            print("Gemma 2 Loaded.")
+            # Real Silicon Load
+            try:
+                # Use the path or repo id
+                # Trust_remote_code might be needed for some models, gemma is usually standard.
+                model, tokenizer = load("google/gemma-2-9b-it")
+                self.models["gemma"] = (model, tokenizer)
+                print("✅ Gemma 2 Loaded (MLX Native).")
+            except Exception as e:
+                print(f"❌ Failed to load MLX model: {e}")
+                self.models["gemma"] = ("MOCK_MODEL", "MOCK_TOKENIZER")
+
         return self.models["gemma"]
 
     def load_chronos(self):
