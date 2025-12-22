@@ -21,6 +21,15 @@ from redis.asyncio import Redis
 from app.core.config import settings
 from app.services.forecast import TimeSeriesForecaster
 from app.dal.backtest import BacktestDAL
+from app.core.health import SystemHealth
+from app.core.constants import (
+    DEFAULT_SLIPPAGE,
+    FEE_PER_SHARE,
+    RISK_FREE_RATE,
+    ANNUALIZATION_FACTOR,
+    MINUTES_PER_DAY,
+    TRADING_DAYS,
+)
 
 # Logger
 logger = logging.getLogger("BacktestEngine")
@@ -49,6 +58,7 @@ class BacktestEngine:
         # 1. Initialize Oracle (Unified Forecaster)
         logger.info("🧠 Initializing Oracle for Simulation...")
         self.forecaster = TimeSeriesForecaster()
+        self.health_monitor = SystemHealth()
 
         # 2. Portfolio State
         self.portfolio = {
@@ -130,6 +140,29 @@ class BacktestEngine:
 
         try:
             for step_idx, t in enumerate(tqdm(timeline)):
+                # 0. Kill Switch Check
+                is_halted = await self.redis.get("SYSTEM:HALT")
+                if is_halted and is_halted.decode().lower() == "true":
+                    logger.warning(
+                        f"🛑 SYSTEM HALT DETECTED at {t}. Stopping Backtest."
+                    )
+                    break
+
+                # 0.1 Law Zero: The Operational Health Tensor
+                health = self.health_monitor.get_health()
+                if health < 0.999:  # MIN_HEALTH
+                    logger.critical(
+                        f"LAW ZERO VIOLATION. Health: {health:.4f}. HALTING."
+                    )
+                    # Cancel all active orders (Simulated by clearing logic or explicit call if broker exists)
+                    # In this backtester, 'broker.cancel_all' concept maps to clearing internal state if needed,
+                    # but here we just break the loop as requested.
+                    # The prompt said: "await self.broker.cancel_all()" but this class doesn't seem to have self.broker.
+                    # It has self.portfolio.
+                    # I will log and break, effectively halting.
+                    # If there was a real broker connected, I'd cancel.
+                    break
+
                 # 1. Prepare Batch
                 current_prices = {}
                 context_batch = []
@@ -167,16 +200,18 @@ class BacktestEngine:
                     trend = res.get("trend", 0.0)
 
                     # Decile Arrays
-                    # [q05, q15, q25, q35, q50, q65, q75, q85, q95]
+                    # Decile Arrays
+                    # [q05(0), q15(1), q25(2), q35(3), q45(4), q55(5), q65(6), q75(7), q85(8), q95(9)]
                     q_vals = res.get("q_values", [])
 
-                    if len(q_vals) < 9:
+                    if len(q_vals) < 10:
                         # Fallback / Error
                         continue
 
                     q05 = q_vals[0]
-                    q50 = q_vals[4]
-                    q95 = q_vals[8]
+                    # Midpoint is avg of q45(4) and q55(5)
+                    q50 = (q_vals[4] + q_vals[5]) / 2
+                    q95 = q_vals[9]
                     price = current_prices[symbol]
 
                     # --- Skew & Vol Metrics ---
@@ -315,7 +350,7 @@ class BacktestEngine:
             # slippage = 0.0002 * (1 + (implied_vol * 10))
             # implied_vol = vol_width
 
-            base_slip = 0.0002
+            base_slip = DEFAULT_SLIPPAGE
             # E.g. Vol Width 0.05 -> 1 + 0.5 = 1.5x -> 0.0003 (3bps)
             # E.g. Vol Width 0.20 -> 1 + 2.0 = 3.0x -> 0.0006 (6bps)
             slippage_pct = base_slip * (1.0 + (vol_width * 10.0))
@@ -327,7 +362,7 @@ class BacktestEngine:
 
             # Buy High, Sell Low
             exec_price = price + slippage_amt if qty > 0 else price - slippage_amt
-            fee = abs(qty) * 0.005  # $0.005 per share
+            fee = abs(qty) * FEE_PER_SHARE  # $0.005 per share
 
             cost_basis = abs(qty) * exec_price
 
@@ -395,7 +430,26 @@ class BacktestEngine:
         end_eq = eq["equity"].iloc[-1]
 
         total_ret = (end_eq - start_eq) / start_eq
-        sharpe = ret.mean() / ret.std() * np.sqrt(252 * 390) if ret.std() > 0 else 0
+
+        # Risk Free Rate Adjustment
+        rf_per_min = RISK_FREE_RATE / (TRADING_DAYS * MINUTES_PER_DAY)
+        excess_ret = ret - rf_per_min
+
+        # Sharpe
+        sharpe = (
+            (excess_ret.mean() / ret.std()) * ANNUALIZATION_FACTOR
+            if ret.std() > 0
+            else 0
+        )
+
+        # Sortino
+        downside_risk = excess_ret[excess_ret < 0].std()
+        sortino = (
+            (excess_ret.mean() / downside_risk) * ANNUALIZATION_FACTOR
+            if downside_risk > 0
+            else 0
+        )
+
         max_dd = (eq["equity"] / eq["equity"].cummax() - 1).min()
 
         logger.info("=" * 30)
@@ -414,6 +468,7 @@ class BacktestEngine:
             "metrics": {
                 "total_return": total_ret,
                 "sharpe_ratio": sharpe,
+                "sortino_ratio": sortino,
                 "max_drawdown": max_dd,
                 "final_equity": end_eq,
             },

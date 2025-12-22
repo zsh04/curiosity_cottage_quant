@@ -1,8 +1,8 @@
 import logging
 import asyncio
 import time
-
-from typing import Dict, Any
+import orjson
+from typing import Dict, Any, Optional
 from opentelemetry import trace
 
 from app.agent.state import AgentState
@@ -17,11 +17,10 @@ from app.core import metrics as business_metrics
 from app.strategies.lstm import LSTMPredictionStrategy
 from app.strategies import ENABLED_STRATEGIES
 from app.services.global_state import (
-    get_global_state_service,
-    get_current_snapshot_id,
     save_model_checkpoint,
     load_latest_checkpoint,
 )
+from app.core.vectors import PhysicsVector, ReflexivityVector, OODAVector
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -58,7 +57,6 @@ class BoydAgent:
                 # FALLBACK TO FILE (Migration support)
                 logger.info("BOYD: No DB checkpoint found. Trying file...")
                 self.lstm_model.load_state("data/models/lstm_analyst.pkl")
-
         except Exception as e:
             logger.warning(f"Failed to load LSTM state: {e}")
 
@@ -73,6 +71,62 @@ class BoydAgent:
             logger.info(f"BOYD: ⚛️ Spawning new Feynman Bridge for {symbol}")
             self.feynman_map[symbol] = FeynmanBridge()
         return self.feynman_map[symbol]
+
+    def _read_reflexivity(self, symbol: str) -> ReflexivityVector:
+        """
+        Read Soros Reflexivity State.
+        Uses one of the Feynman Bridges (Redis Client) to peek.
+        """
+        # Hack: Borrow Redis from first available bridge or create checks
+        bridge = self._get_feynman_bridge(symbol)
+        try:
+            # Assuming Soros writes to "reflexivity:state:{symbol}"
+            data = bridge.redis.get(f"reflexivity:state:{symbol}")
+            if data:
+                payload = orjson.loads(data)
+                # payload wrapper: {symbol: ..., reflexivity: {...}}
+                ref_dict = payload.get("reflexivity", {})
+                return ReflexivityVector(**ref_dict)
+        except Exception as e:
+            # logger.warning(f"Reflexivity Read Error: {e}")
+            pass
+
+        return ReflexivityVector(sentiment_delta=0.0, reflexivity_index=0.0)
+
+    def _calculate_ooda(
+        self, physics: PhysicsVector, reflexivity: ReflexivityVector
+    ) -> OODAVector:
+        """
+        The OODA Loop Decision (Urgency).
+        Inputs: Physics (Kinematics), Reflexivity (Self-Correction).
+        Output: Urgency Score (0.0 to 1.0).
+        """
+        # Heuristic:
+        # High Momentum -> High Urgency (Chase)
+        # High Reflexivity -> Low Urgency (Artificial)
+
+        # Normalize Momentum (Assuming typical p around 0.001 - 0.01?)
+        # Let's say p > 0.0005 is significant.
+        p_score = min(1.0, abs(physics.momentum) * 1000.0)
+
+        # Jerk Score (Acceleration change)
+        j_score = min(1.0, abs(physics.jerk) * 2000.0)
+
+        base_urgency = (p_score * 0.7) + (j_score * 0.3)
+
+        # Reflexivity Veto (The Soros Test)
+        # If correlation > 0.8, we dampen urgency significantly.
+        # "Boyd.urgency must be < 0.2" if Index > 0.8.
+
+        dampener = 1.0
+        if reflexivity.reflexivity_index > 0.8:
+            dampener = 0.1  # Crush it
+        elif reflexivity.reflexivity_index > 0.5:
+            dampener = 0.5
+
+        final_urgency = base_urgency * dampener
+
+        return OODAVector(urgency_score=final_urgency)
 
     async def _analyze_single(
         self, symbol: str, skip_llm: bool = False
@@ -131,6 +185,17 @@ class BoydAgent:
                 physics_history.append(current_price)
 
             # --- Step 2: PHYSICS (Kinematics & Regime) ---
+            # Retrieve Vector from Redis (Preferred) or Fallback
+            forces_dict = feynman.get_forces(symbol)
+            try:
+                physics_vec = PhysicsVector(**forces_dict)
+            except:
+                physics_vec = PhysicsVector(mass=0, momentum=0, entropy=0, jerk=0)
+
+            # Use strict vector values if available/nonzero, else rely on legacy calc for fallback?
+            # get_forces reads from Redis, so it should be current if FeynmanService is running.
+
+            # Legacy kinematics for LSTM feeding
             if feynman.is_initialized and current_price > 0:
                 kinematics = await asyncio.to_thread(
                     feynman.calculate_kinematics, new_price=current_price
@@ -140,7 +205,15 @@ class BoydAgent:
                     feynman.calculate_kinematics, prices=physics_history
                 )
 
-            logger.info(f"DEBUG: {symbol} Raw Velocity: {kinematics.get('velocity')}")
+            # --- Step 2.b: REFLEXIVITY (Soros Check) ---
+            reflexivity_vec = self._read_reflexivity(symbol)
+
+            # --- Step 2.c: OODA (Boyd Decision) ---
+            ooda_vec = self._calculate_ooda(physics_vec, reflexivity_vec)
+
+            logger.info(
+                f"DEBUG: {symbol} Urgency: {ooda_vec.urgency_score:.2f} | Reflexivity: {reflexivity_vec.reflexivity_index:.2f}"
+            )
 
             # Regime Analysis
             internal_buffer = feynman.price_history_buffer
@@ -160,7 +233,14 @@ class BoydAgent:
                 **regime_analysis,
                 **hurst_analysis,
                 **qho_analysis,
+                "physics_vector": physics_vec.model_dump(),
+                "reflexivity_vector": reflexivity_vec.model_dump(),
+                "ooda_vector": ooda_vec.model_dump(),
             }
+
+            # VETO by Urgency if needed?
+            # If Urgency < 0.2, maybe we should force FLAT?
+            # For now, we hoist it into result_packet.
 
             # --- Step 2.1: THE COUNCIL (Algorithmic Signals) ---
             strat_signals = {}
@@ -273,6 +353,8 @@ class BoydAgent:
                     "price": market_snapshot.get("price", 0.0),
                     "history": history,  # Careful with size, but needed for state
                     "chronos_forecast": forecast,  # Propagate real forecast
+                    "urgency": ooda_vec.urgency_score,  # Hoist Urgency
+                    "reflexivity_index": reflexivity_vec.reflexivity_index,
                     "success": True,
                 }
             )

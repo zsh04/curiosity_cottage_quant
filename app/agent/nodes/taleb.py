@@ -6,6 +6,7 @@ from app.lib.physics import Regime
 from app.agent.risk.bes import BesSizing
 from app.core import metrics as business_metrics
 from app.services.global_state import get_global_state_service, get_current_snapshot_id
+from app.core.constants import MAX_DRAWDOWN, FAT_FINGER_CAP
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ class RiskManager:
     2. Sizing: Bayesian sizing based on Volatility Stop + Physics Scalar.
     """
 
-    MAX_DRAWDOWN_LIMIT = 0.02
+    MAX_DRAWDOWN_LIMIT = MAX_DRAWDOWN
 
     def __init__(self):
         self.bes = BesSizing()

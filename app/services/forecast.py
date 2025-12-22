@@ -277,9 +277,9 @@ class TimeSeriesForecaster:
         Structure: {'q_values': [...], 'q_labels': [...]}
         """
         batch_size = tensor.shape[0]
-        # Deciles we want: 0.05 to 0.95
-        target_labels = [0.05, 0.15, 0.25, 0.35, 0.50, 0.65, 0.75, 0.85, 0.95]
-        default_res = {"q_values": [0.0] * 9, "q_labels": target_labels, "trend": 0.0}
+        # Deciles we want: 0.05 to 0.95 (10 items)
+        target_labels = [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95]
+        default_res = {"q_values": [0.0] * 10, "q_labels": target_labels, "trend": 0.0}
 
         if not self.pipeline:
             return [default_res] * batch_size
@@ -321,7 +321,8 @@ class TimeSeriesForecaster:
             q15 = q10 + 0.5 * (q20 - q10)
             q25 = q20 + 0.5 * (q30 - q20)
             q35 = q30 + 0.5 * (q40 - q30)
-            # q50 is native
+            q45 = q40 + 0.5 * (q50 - q40)
+            q55 = q50 + 0.5 * (q60 - q50)
             q65 = q60 + 0.5 * (q70 - q60)
             q75 = q70 + 0.5 * (q80 - q70)
             q85 = q80 + 0.5 * (q90 - q80)
@@ -342,7 +343,8 @@ class TimeSeriesForecaster:
                     float(q15[i]),
                     float(q25[i]),
                     float(q35[i]),
-                    float(q50[i]),
+                    float(q45[i]),
+                    float(q55[i]),
                     float(q65[i]),
                     float(q75[i]),
                     float(q85[i]),

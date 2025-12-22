@@ -6,22 +6,24 @@
 
 ---
 
+> ⚠️ **LAW ZERO ENFORCED:** System requires >99.9% Health Score (Latency/Jitter) to trade. If the `SystemHealth` tensor degrades, the engine halts.
+
 ## 🏛️ System Overview
 
 **Curiosity Cottage Quant (CCQ)** is an autonomous, physics-driven trading system built on the **Hybrid Metal Architecture**, featuring a **10-Decile Quantum Holodeck** for parallel universe simulation. It is not just a backtester or a bot; it is a **cybernetic organism** managed by a "Council" of AI agents that debate, reason, and execute trades under strict risk constraints.
 
 ### 2. The Council (Cognitive Stack)
 
-The system is governed by a "Bicameral Mind" of specialized agents:
+A deterministic logic layer where Agents exchange strict **mathematical vectors** (Physics, Reflexivity, OODA) to solve for execution urgency. There is no voting; only physics.
 
-- **Feynman (The Physicist):** Calculates the 5-Pillar Physics Vector (Mass, Momentum, Entropy, etc.).
+- **Feynman (The Physicist):** Emits `PhysicsVector` (Mass, Momentum, Entropy, Jerk).
+- **Soros (The Feeler):** Emits `ReflexivityVector` to detect self-inflicted feedback loops.
+- **Boyd (The Strategist):** Emits `OODAVector` (Urgency) by fusing Physics & Reflexivity.
 - **Taleb (The Guardian):** Enforces 10-decile physics veto and asymmetric skew limits.
-- **Boyd (The Strategist):** Executes the OODA Loop to orient and decide on tactics.
-- **Soros (The Feeler):** Observes quantum state changes and sentiment regimes.
 - **Chronos (The Oracle):** Generates high-resolution probabilistic time-series forecasts.
 - **Simons (The Executioner):** Handles high-precision order slicing and predatory slippage.
 - **Hypatia (The Librarian):** Manages the Unified Data Access Layer (QuestDB/LanceDB).
-- **Shannon (The Signalman):** Ensures zero-loss telemetry transmission via the Shannon Channel.
+- **Shannon (The Signalman):** Ensures zero-loss telemetry transmission.
 
 ### ⚛️ The Physics Engine (Risk Core)
 
@@ -62,6 +64,16 @@ The knowledge base is organized according to the **Diátaxis** framework.
 - **[How-To Guides](docs/public/how-to/)** — Add strategies, run backtests, or deploy.
 - **[System Architecture](docs/public/reference/architecture/stack.md)** — Diagrams & Stack details.
 - **[API Reference](docs/public/reference/api/rest-endpoints.md)** — REST interactions.
+
+---
+
+## 🛡️ Testing & Verification
+
+The system employs **Adversarial Reflexivity Testing** (The Soros Loop) to ensure robust decision making:
+
+- **The Bait:** Injects correlated volume/price shocks to simulate self-inflicted moves.
+- **The Trap:** Verifies that `Soros` detects high Reflexivity Index (>0.8).
+- **The Veto:** Ensures `Boyd` crushes Urgency (<0.2) when reflexivity is high.
 
 ---
 

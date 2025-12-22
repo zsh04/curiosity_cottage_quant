@@ -6,6 +6,7 @@ from typing import Dict, Any, Union
 from faststream import FastStream
 from faststream.redis import RedisBroker
 from scipy.stats import entropy
+from app.core.vectors import PhysicsVector
 
 # Configure The Wolf
 logging.basicConfig(
@@ -62,31 +63,23 @@ class FeynmanService:
         if self.cursor >= self.window_size:
             self.is_filled = True
 
-    def calculate_forces(self) -> Dict[str, float]:
+    def calculate_forces(self) -> PhysicsVector:
         """
         The 5 Pillars of Physics.
         If the buffer isn't sufficiently full for stats, we return zeros.
         """
-        if self.cursor < 2:
+        if self.cursor < 4:  # Need 4 points for Jerk (3 diffs)
             return self._empty_vector()
 
-        # Determine valid window slice
-        # If filled, use whole buffer. If not, the valid data is at the END because we roll LEFT.
-        # Wait:
-        # Array: [0, 0, 0, x1, x2, x3]
-        # Roll(-1): [0, 0, x1, x2, x3, 0] -> Insert at -1 -> [0, 0, x1, x2, x3, x4]
-        # YES. Valid data is always at the TAIL (last `cursor` elements), until filled.
-
         valid_len = self.window_size if self.is_filled else self.cursor
-
-        # Slicing for active data
         active_prices = self.prices[-valid_len:]
         active_vols = self.volumes[-valid_len:]
-        active_trades = self.trades[-valid_len:]
+        active_prices = self.prices[-valid_len:]
+        active_vols = self.volumes[-valid_len:]
+        # active_trades = self.trades[-valid_len:] # Unused since friction removed from Vector
 
         # --- 1. Mass ($m$) ---
         # m = V * CLV
-        # CLV = ((C - L) - (H - C)) / (H - L)
         current_price = active_prices[-1]
         current_vol = active_vols[-1]
 
@@ -102,32 +95,42 @@ class FeynmanService:
 
         mass = current_vol * clv
 
-        # --- 2. Momentum ($p$) ---
+        # --- 2. Momentum ($p$) & Jerk ($j$) ---
         # p = m * v
-        # Velocity = Log Return of last tick vs previous tick
+        # Velocity = Log Return
         velocity = 0.0
-        if len(active_prices) > 1 and active_prices[-2] > 0:
-            velocity = np.log(current_price / active_prices[-2])
+        jerk = 0.0
+
+        if len(active_prices) > 3:
+            # Velocity (v) = ln(p_t / p_t-1)
+            # Acceleration (a) = v_t - v_t-1
+            # Jerk (j) = a_t - a_t-1
+
+            # Last 4 prices needed for 3 velocities -> 2 accels -> 1 jerk
+            recent = active_prices[-4:]
+
+            # Velocities: p[-1]/p[-2], p[-2]/p[-3], p[-3]/p[-4]
+            v_t = np.log(recent[-1] / recent[-2]) if recent[-2] > 0 else 0
+            v_t_1 = np.log(recent[-2] / recent[-3]) if recent[-3] > 0 else 0
+            v_t_2 = np.log(recent[-3] / recent[-4]) if recent[-4] > 0 else 0
+
+            velocity = v_t
+
+            # Accelerations
+            a_t = v_t - v_t_1
+            a_t_1 = v_t_1 - v_t_2
+
+            # Jerk
+            jerk = a_t - a_t_1
 
         momentum = mass * velocity
 
-        # --- 3. Boyd Friction ($\gamma$) ---
-        # Friction = TradeCount / Volume
-        friction = 0.0
-        if current_vol > 0:
-            friction = active_trades[-1] / current_vol
-
         # --- 4. Shannon Entropy ($H$) ---
-        # Measures the Chaos of the distribution of returns.
         entropy_val = 0.0
         if len(active_prices) > 5:
-            # np.diff is fast
             returns = np.diff(np.log(active_prices))
-            # Histogram for probability density
             hist_counts, _ = np.histogram(returns, bins="auto", density=True)
-            # Filter zeros for log
             hist_counts = hist_counts[hist_counts > 0]
-            # Normalize to prob
             probs = hist_counts / np.sum(hist_counts)
             entropy_val = entropy(probs, base=2)
 
@@ -143,38 +146,26 @@ class FeynmanService:
             if sigma > 1e-9:
                 nash_distance = (current_price - mode_price) / sigma
 
-        # The Verdict
-        regime = "MEAN_REVERTING"
-        if abs(nash_distance) > 2.0:
-            regime = "TRENDING"
-        if entropy_val > 0.8:
-            regime = "CHAOS"
+        return PhysicsVector(
+            mass=float(mass),
+            momentum=float(momentum),
+            entropy=float(entropy_val),
+            jerk=float(jerk),
+            nash_dist=float(nash_distance),
+            alpha_coefficient=2.5,  # Default/Placeholder
+            price=float(current_price),
+        )
 
-        # Alpha Coefficient (Hill Estimator Proxy: 1 / Entropy approx or constant for now)
-        # Real Hill estimator requires tail sort. For <5ms, using 2.5 (Safe/Gaussian) default
-        # to ensure it passes Soros Gates (Alpha > 2.0).
-        alpha_coeff = 2.5
-
-        return {
-            "mass": float(mass),
-            "momentum": float(momentum),
-            "friction": float(friction),
-            "entropy": float(entropy_val),
-            "nash_dist": float(nash_distance),  # Renamed to match Contract
-            "alpha_coefficient": float(alpha_coeff),
-            "price": float(current_price),
-            "regime": regime,
-        }
-
-    def _empty_vector(self):
-        return {
-            "mass": 0.0,
-            "momentum": 0.0,
-            "friction": 0.0,
-            "entropy": 0.0,
-            "nash_distance": 0.0,
-            "regime": "WAIT",
-        }
+    def _empty_vector(self) -> PhysicsVector:
+        return PhysicsVector(
+            mass=0.0,
+            momentum=0.0,
+            entropy=0.0,
+            jerk=0.0,
+            nash_dist=0.0,
+            alpha_coefficient=2.5,
+            price=0.0,
+        )
 
 
 # Instantiate the Wolf
@@ -193,8 +184,8 @@ async def handle_tick(msg: Union[bytes, Dict[str, Any]]):
         data = orjson.loads(msg) if isinstance(msg, bytes) else msg
         symbol = data.get("symbol", "UNKNOWN")
         price = float(data.get("price", 0.0))
-        volume = float(data.get("size", 0.0))  # Assuming 'size' is volume
-        trades = int(data.get("updates", 1))  # Assuming count if available, else 1
+        volume = float(data.get("size", 0.0))
+        trades = int(data.get("updates", 1))
 
         # Load the chamber
         kernel.update_buffer(price, volume, trades)
@@ -206,17 +197,13 @@ async def handle_tick(msg: Union[bytes, Dict[str, Any]]):
         packet = {
             "symbol": symbol,
             "timestamp": data.get("timestamp"),
-            "vectors": forces,
+            "vectors": forces.model_dump(),
         }
 
         # Wolf Logging
-        if forces["entropy"] > 0.9:
+        if forces.entropy > 0.9:
             logger.warning(
-                f"CHAOS DETECTED on {symbol}. Entropy: {forces['entropy']:.2f}. Discarding."
-            )
-        elif forces["regime"] == "TRENDING":
-            logger.info(
-                f"TREND DETECTED {symbol} | Momentum: {forces['momentum']:.4f} | Nash: {forces['nash_dist']:.2f}"
+                f"CHAOS DETECTED on {symbol}. Entropy: {forces.entropy:.2f}. Discarding."
             )
 
         # BRIDGE: Write State to Key for synchronous access by Agents
@@ -224,7 +211,7 @@ async def handle_tick(msg: Union[bytes, Dict[str, Any]]):
         try:
             if hasattr(broker, "redis"):
                 await broker.redis.set(
-                    f"physics:state:{symbol}", orjson.dumps(forces), ex=10
+                    f"physics:state:{symbol}", orjson.dumps(forces.model_dump()), ex=10
                 )
         except Exception as e:
             logger.error(f"Feynman State Write Error: {e}")
@@ -242,14 +229,13 @@ async def handle_tick(msg: Union[bytes, Dict[str, Any]]):
             ts = data.get("timestamp")
 
             neutral_forces = kernel._empty_vector()
-            neutral_forces["regime"] = "ERROR_FALLBACK"
 
             packet = {
                 "symbol": symbol,
                 "timestamp": ts,
-                "vectors": neutral_forces,
+                "vectors": neutral_forces.model_dump(),
                 "error": str(e),
             }
             await broker.publish(orjson.dumps(packet), channel="physics.forces")
-        except:
+        except Exception:
             logger.critical("Double Fault in Feynman. Physics collapsed.")

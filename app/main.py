@@ -13,11 +13,11 @@ import asyncio
 from app.agent.loop import run_agent_service
 
 # Import Controllers
-from api.routes.system import SystemController
-from api.routes.signals import SignalsController
-from api.routes.actions import ActionsController
-from api.routes.orders import OrdersController
-from api.routes.market import MarketController
+from app.api.routes.system import SystemController
+from app.api.routes.signals import SignalsController
+from app.api.routes.actions import ActionsController
+from app.api.routes.orders import OrdersController
+from app.api.routes.market import MarketController
 from app.api.routes.telemetry import TelemetryController
 from app.api.routes.websocket import BrainStream
 from app.api.routes.backtest import BacktestController, BacktestStream
