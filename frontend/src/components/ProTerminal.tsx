@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData, ColorType } from 'lightweight-charts';
-import { Activity, Zap, Shield, Globe, Terminal, Cpu } from 'lucide-react';
+import { Activity, Zap, Shield, Globe, Terminal, Cpu, AlertTriangle } from 'lucide-react';
+import { TelemetryConnectionManager, ConnectionState } from '../connection_manager';
 
 interface Position {
     symbol: string;
@@ -19,7 +20,7 @@ interface ScannerCandidate {
     volatility: number;
 }
 
-interface TelemetryPacket {
+export interface TelemetryPacket {
     market?: {
         symbol?: string;
         price?: number;
@@ -38,7 +39,7 @@ interface TelemetryPacket {
 
 const ProTerminal: React.FC = () => {
     // --- STATE ---
-    const [isConnected, setIsConnected] = useState<boolean>(false);
+    const [connectionState, setConnectionState] = useState<ConnectionState>('DISCONNECTED');
     const [systemMode, setSystemMode] = useState<string>('PAPER');
     const [positions, setPositions] = useState<Position[]>([]);
     const [telemetry, setTelemetry] = useState<TelemetryPacket | null>(null);
@@ -161,50 +162,43 @@ const ProTerminal: React.FC = () => {
     // --- WEBSOCKET STREAM ---
     useEffect(() => {
         const WS_URL = 'ws://localhost:8000/api/ws/stream';
-        let ws: WebSocket;
 
-        const connect = () => {
-            ws = new WebSocket(WS_URL);
-            ws.onopen = () => {
-                setIsConnected(true);
-                addLog("System Connected to Nucleus.");
-            };
-            ws.onmessage = (event) => {
-                try {
-                    const packet: TelemetryPacket = JSON.parse(event.data);
-                    setTelemetry(packet);
+        const manager = new TelemetryConnectionManager({
+            url: WS_URL,
+            initialBackoffMs: 1000,
+            maxBackoffMs: 30000,
+            criticalThresholdMs: 10000,
+            onStateChange: (state) => setConnectionState(state),
+            onLog: (msg) => addLog(msg),
+            onMessage: (packet) => {
+                setTelemetry(packet);
 
-                    // Log Reasoning/Debate
-                    if (packet.signal && packet.signal.reasoning) {
-                        addLog(`[ANALYST] ${packet.signal.reasoning}`);
+                // Log Reasoning/Debate
+                if (packet.signal && packet.signal.reasoning) {
+                    addLog(`[ANALYST] ${packet.signal.reasoning}`);
+                }
+
+                // Real-time Chart Update
+                if (packet.market && packet.market.history && candleSeriesRef.current) {
+                    const bars = packet.market.history;
+                    if (bars.length > 0) {
+                        const latest = bars[bars.length - 1];
+                        // Update current candle
+                        candleSeriesRef.current.update({
+                            time: latest.timestamp ? latest.timestamp.split('T')[0] : '2024-01-01',
+                            open: latest.open,
+                            high: latest.high,
+                            low: latest.low,
+                            close: latest.close
+                        } as CandlestickData);
                     }
+                }
+            }
+        });
 
-                    // Real-time Chart Update
-                    if (packet.market && packet.market.history && candleSeriesRef.current) {
-                        const bars = packet.market.history;
-                        if (bars.length > 0) {
-                            const latest = bars[bars.length - 1];
-                            // Update current candle
-                            candleSeriesRef.current.update({
-                                time: latest.timestamp ? latest.timestamp.split('T')[0] : '2024-01-01',
-                                open: latest.open,
-                                high: latest.high,
-                                low: latest.low,
-                                close: latest.close
-                            } as CandlestickData);
-                        }
-                    }
-                } catch (e) { console.error(e); }
-            };
-            ws.onclose = () => {
-                setIsConnected(false);
-                addLog("Connection Lost. Retrying...");
-                setTimeout(connect, 3000);
-            };
-        };
+        manager.connect();
 
-        connect();
-        return () => ws?.close();
+        return () => manager.disconnect();
     }, []);
 
     // --- ACTIONS ---
@@ -270,17 +264,26 @@ const ProTerminal: React.FC = () => {
     return (
         <div className="flex flex-col h-screen p-4 gap-4 font-mono text-sm">
             {/* --- HEADER --- */}
-            <header className="glass-panel p-4 rounded-xl flex justify-between items-center z-10">
+            <header className={`glass-panel p-4 rounded-xl flex justify-between items-center z-10 transition-colors duration-500 ${connectionState === 'CRITICAL' ? 'border-red-500/50 shadow-[0_0_30px_rgba(239,68,68,0.2)]' : ''}`}>
                 <div className="flex items-center gap-3">
-                    <Globe className={`w-5 h-5 ${isConnected ? 'text-green-400' : 'text-red-500 animate-pulse'}`} />
+                    <Globe className={`w-5 h-5 ${connectionState === 'CONNECTED' ? 'text-green-400' : connectionState === 'CRITICAL' ? 'text-red-500 animate-pulse' : 'text-yellow-500'}`} />
                     <h1 className="text-xl font-bold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 neon-text-blue">
                         CURIOSITY<span className="text-white font-light opacity-50"> // QUANT</span>
                     </h1>
                 </div>
 
                 <div className="flex items-center gap-6">
+                    {/* CRITICAL ALERT BANNER */}
+                    {connectionState === 'CRITICAL' && (
+                        <div className="flex items-center gap-2 text-red-500 font-bold animate-pulse px-3 py-1 bg-red-900/20 rounded border border-red-500/50">
+                            <AlertTriangle size={16} /> CRITICAL: TELEMETRY LOST
+                        </div>
+                    )}
+
                     <div className="flex gap-4 text-xs opacity-70">
-                        <div className="flex items-center gap-1"><Cpu size={14} /> PING: {isConnected ? '12ms' : '--'}</div>
+                        <div className="flex items-center gap-1"><Cpu size={14} />
+                            STATUS: <span className={`${connectionState === 'CONNECTED' ? 'text-green-400' : connectionState === 'CRITICAL' ? 'text-red-500 font-bold' : 'text-yellow-500'}`}>{connectionState}</span>
+                        </div>
                         <div className="flex items-center gap-1"><Zap size={14} /> MODE: {systemMode}</div>
                     </div>
 

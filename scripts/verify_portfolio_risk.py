@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock
 # Add project root to path
 sys.path.insert(0, os.getcwd())
 
-from app.agent.nodes.risk import RiskManager, AgentState, TradingStatus
+from app.agent.nodes.taleb import RiskManager, AgentState, TradingStatus
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("VERIFY_PORTFOLIO")

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.11
 """
 QUICK FIXES FOR CRITICAL AUDIT FAILURES
 Applies all fixes identified in the system audit.

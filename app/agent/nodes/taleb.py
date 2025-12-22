@@ -1,7 +1,6 @@
 import logging
 import time
-from typing import Optional
-from app.agent.state import AgentState, TradingStatus, OrderSide
+from app.agent.state import AgentState, TradingStatus
 from app.lib.physics import Regime
 from app.agent.risk.bes import BesSizing
 from app.core import metrics as business_metrics
@@ -129,13 +128,12 @@ class RiskManager:
 
         # Check Critical Regime
         if regime == Regime.CRITICAL.value:
-            state["status"] = TradingStatus.HALTED_PHYSICS
-            state["approved_size"] = 0.0
-            msg = f"PHYSICS VETO: Critical Regime detected for {state.get('symbol')}. Trading Halted."
+            # Phase 33.3: Relaxed Veto -> Fractal Sizing
+            # We do NOT halt. We let the BES Sizing reduce exposure drastically (via Alpha).
+            msg = f"PHYSICS WARNING: Critical Regime detected for {state.get('symbol')}. Applying Fractal Sizing."
             logger.warning(msg)
-            business_metrics.vetoes_total.add(
-                1, {"reason": "critical_regime"}
-            )  # Metric
+            # No Halt. Proceed to sizing.
+            # state["status"] = TradingStatus.HALTED_PHYSICS # REMOVED
             return state
 
         return state

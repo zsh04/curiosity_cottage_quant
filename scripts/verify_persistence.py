@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.getcwd())
 
-from app.agent.nodes.analyst import (
-    AnalystAgent,
+from app.agent.boyd import (
+    BoydAgent,
     save_model_checkpoint,
     load_latest_checkpoint,
 )
@@ -60,21 +60,22 @@ def test_persistence_logic():
     # 4. Agent Integration Test (Dry Run)
     print("\nTesting Analyst Integration...")
     # Mock load_latest to return None (trigger fallback/init) or return blob
-    with patch("app.agent.nodes.analyst.load_latest_checkpoint") as mock_load:
+    with patch("app.agent.boyd.load_latest_checkpoint") as mock_load:
         mock_load.return_value = None  # Simulate fresh start
 
         # Initialize agent (should try to load)
-        # We have to patch MarketService etc to avoid real init
         with (
-            patch("app.agent.nodes.analyst.MarketService"),
-            patch("app.agent.nodes.analyst.PhysicsService"),
-            patch("app.agent.nodes.analyst.ForecastingService"),
-            patch("app.agent.nodes.analyst.ReasoningService"),
-            patch("app.agent.nodes.analyst.MemoryService"),
+            patch("app.agent.boyd.MarketService"),
+            patch("app.agent.boyd.FeynmanBridge"),
+            patch("app.agent.boyd.TimeSeriesForecaster"),
+            patch("app.agent.boyd.ReasoningService"),
+            patch("app.agent.boyd.MemoryService"),
         ):
-            agent = AnalystAgent()
+            agent = BoydAgent()
             # Check if it tried to load
-            mock_load.assert_called_with("analyst_lstm")
+            mock_load.assert_called_with(
+                "boyd_bi_lstm"
+            )  # Updated persistence key for Boyd
             print("✅ Analyst attempted to load from DB on init.")
 
 

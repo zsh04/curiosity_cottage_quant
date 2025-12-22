@@ -16,6 +16,22 @@ class OrderSide(str, Enum):
     FLAT = "FLAT"
 
 
+class CognitiveState(TypedDict):
+    """
+    Self-regulating psychological state of the agent.
+
+    Attributes:
+        consecutive_losses: Running count of bad trades.
+        anxiety_score: Float 0.0-1.0. Increases with losses/volatility.
+                        > 0.7 triggers defensive sizing.
+        regret_matrix: List of missed opportunities (Symbol, Expected Return).
+    """
+
+    consecutive_losses: int
+    anxiety_score: float
+    regret_matrix: List[dict]
+
+
 class AgentState(TypedDict):
     """
     State for the Curiosity Cottage V2 trading engine, supporting the
@@ -70,4 +86,8 @@ class AgentState(TypedDict):
     history: List[float]  # Required for Charts
 
     # --- Portfolio Awareness (Phase 13) ---
+    # --- Portfolio Awareness (Phase 13) ---
     current_positions: List[dict]
+
+    # --- Phase 32: Meta-Cognition ---
+    cognitive_state: CognitiveState

@@ -32,7 +32,9 @@ The Council is physically distributed across the Apple Silicon chip, creating a 
 * **Role:** Convexity & Anti-Fragility
 * **File:** `app/agent/nodes/taleb.py`
 * **Philosophy:** "It is better to be safe than precise."
-* **Responsibilities:** Enforces the **Physics Veto**. Calculates Heavy-Tail Alpha (α) and Kelly Sizing.
+* **Philosophy:** "It is better to be safe than precise."
+* **Responsibilities:** Enforces **Fractal Risk Sizing**. Calculates Heavy-Tail Alpha (α).
+* **Psychology:** **Anxiety Regulation** (Halves position size when stress/consecutive losses > 0.7).
 
 #### 3. Nash (The Auditor) - "The Judge"
 
@@ -56,6 +58,7 @@ The Council is physically distributed across the Apple Silicon chip, creating a 
 * **File:** `app/services/forecast.py`
 * **Philosophy:** "The future is a probability cloud, not a point."
 * **Responsibilities:** Generates P10/P50/P90 price paths using Deep Learning.
+* **Constraints:** **Relativity** (Must harmonize with higher timeframe trends).
     > [!WARNING]
     > **Latency**: ~2.3s (High Cognitive Load).
 
@@ -87,4 +90,4 @@ The Council is physically distributed across the Apple Silicon chip, creating a 
 * **Role:** HFT Execution
 * **File:** `app/agent/nodes/simons.py`
 * **Philosophy:** "There is no alpha without capture."
-* **Responsibilities:** Slices orders, manages slippage, and pulls the **Grim Trigger**.
+* **Responsibilities:** Slices orders, manages **Friction** (Slippage/Latency), and pulls the **Grim Trigger**.

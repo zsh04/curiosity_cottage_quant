@@ -44,7 +44,7 @@ async def run_verification():
     sys.modules["app.services.market"] = mock_market_module
 
     # NOW import risk
-    from app.agent.nodes.risk import risk_node
+    from app.agent.nodes.taleb import risk_node
 
     # 2. PROMPT: Multi-Candidate State (Superposition)
     state = AgentState(

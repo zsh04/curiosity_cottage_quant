@@ -49,7 +49,7 @@ setup_telemetry(service_name="cc-business-verifier")
 
 from app.agent.nodes.analyst import AnalystAgent
 from app.agent.nodes.risk import RiskManager, TradingStatus
-from app.agent.nodes.execution import ExecutionAgent
+from app.agent.nodes.simons import ExecutionAgent
 from app.agent.state import AgentState
 from app.services.memory import MemoryService
 
@@ -141,7 +141,7 @@ async def run_verification():
         # (Copied from risk.py mainly to hit metrics)
         # Actually risk_node calls manager.check_circuit_breaker etc.
         # Let's import the node function.
-        from app.agent.nodes.risk import risk_node
+        from app.agent.nodes.taleb import risk_node
 
         state = risk_node(state)
 

@@ -4,13 +4,13 @@ import orjson
 import logging
 from typing import Dict, Any, List
 
-logger = logging.getLogger("physics_bridge")
+logger = logging.getLogger("feynman_bridge")
 
 
-class PhysicsService:
+class FeynmanBridge:
     """
-    The Bridge.
-    Reads live physics state directly from the Redis Keys written by FeynmanService.
+    The Feynman Bridge.
+    Reads live physics state directly from the Redis Keys written by FeynmanService (The Kernel).
     """
 
     def __init__(self):
@@ -30,7 +30,7 @@ class PhysicsService:
             if data:
                 return orjson.loads(data)
         except Exception as e:
-            logger.debug(f"Physics Bridge Miss ({symbol}): {e}")
+            logger.debug(f"Feynman Bridge Miss ({symbol}): {e}")
 
         # Fallback / Zero Gravity
         return {
@@ -47,17 +47,10 @@ class PhysicsService:
         self, prices: List[float] = None, new_price: float = None
     ) -> Dict[str, float]:
         """
-        Legacy adapter for Analyst Agent.
+        Legacy adapter for Boyd Agent.
         If a symbol context existed, we would query get_forces.
         Since this method is stateless (passing prices/new_price), we implement basic fallback kinematics
         or return data from Redis if we could infer symbol (which we can't here easily without state).
-
-        However, the Analyst now spawns a PhysicsService per symbol.
-        But wait, this class as written above is generic.
-        If Analyst expects per-symbol instance, we might need to store symbol in __init__?
-
-        The user provided code is generic. Let's stick to the requested implementation.
-        It mocks kinematics from the passed prices list if needed.
         """
         import numpy as np
 

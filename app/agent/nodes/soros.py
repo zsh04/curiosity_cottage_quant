@@ -45,11 +45,11 @@ FALLBACK_UNIVERSE = [
 scanner_service = MarketScanner()
 
 
-@tracer.start_as_current_span("node_macro_scanner_parallel")
-def macro_node(state: AgentState) -> Dict[str, Any]:
+@tracer.start_as_current_span("node_soros_scanner")
+def soros_node(state: AgentState) -> Dict[str, Any]:
     """
-    Parallel Macro Scanner Node.
-    Mission: Hunt for Volatility (The "Energy" of the market).
+    Soros Node (The Philosopher / Macro Scanner).
+    Mission: Hunt for Volatility (The "Energy" of the market) and Reflexivity.
     Now powered by Dynamic Market Scanner (Alpaca).
     """
     start_time = time.time()

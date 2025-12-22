@@ -13,6 +13,7 @@ from abc import ABC, abstractmethod
 import queue
 import logging
 import random
+import time
 from datetime import timedelta
 from typing import Optional
 
@@ -55,7 +56,7 @@ class ExecutionModel(ABC):
         pass
 
 
-class RealisticExecution(ExecutionModel):
+class FrictionExecution(ExecutionModel):
     """
     Production-grade execution simulator with market microstructure.
 
@@ -93,15 +94,6 @@ class RealisticExecution(ExecutionModel):
     ) -> tuple[float, float]:
         """
         Simulate realistic order execution.
-
-        Process:
-        1. Determine base price (mid, bid, or ask)
-        2. Apply spread (Buys pay ask, Sells receive bid)
-        3. Add slippage (volatility + market impact)
-        4. Calculate commission
-
-        Returns:
-            (fill_price, commission)
         """
         span = trace.get_current_span()
         span.set_attribute("order.symbol", order.symbol)
@@ -109,60 +101,41 @@ class RealisticExecution(ExecutionModel):
         span.set_attribute("order.quantity", order.quantity)
         span.set_attribute("order.type", order.order_type)
 
-        # Step 1: Get base price from market data
-        mid_price = market_data.close  # Use close as mid price
+        # Step 1: Base Price (Close as Mid)
+        mid_price = market_data.close
 
-        # Step 2: Apply Bid-Ask Spread
-        spread = mid_price * (self.spread_bps / 10000.0)  # bps to decimal
+        # Step 2: Dynamic Slippage (The "Friction")
+        # Base slip + Volatility Factor
+        # High volatility -> High slippage
+        # E.g. 5bps base * (1 + 0.01 vol * 100) = 5bps * 2 = 10bps
+        base_slip_bps = 5.0
+        volatility_factor = volatility * 100
+        slippage_bps = base_slip_bps * (1 + volatility_factor)
+
+        # Market Impact
+        impact_bps = self.impact_factor * (order.quantity**0.5)
+
+        total_slippage_bps = slippage_bps + impact_bps
+        slippage_pct = total_slippage_bps / 10000.0
 
         if order.direction == "BUY":
-            # Buys pay the ask (mid + half spread)
-            base_price = mid_price + (spread / 2.0)
-        else:  # SELL
-            # Sells receive the bid (mid - half spread)
-            base_price = mid_price - (spread / 2.0)
+            fill_price = mid_price * (1 + slippage_pct)
+        else:
+            fill_price = mid_price * (1 - slippage_pct)
 
-        span.set_attribute("execution.spread", spread)
-        span.set_attribute("execution.base_price", base_price)
-
-        # Step 3: Apply Dynamic Slippage
-        # Slippage = Volatility component + Market Impact component
-
-        # Volatility slippage: Random noise scaled by volatility
-        volatility_slippage = np.random.normal(0, volatility)
-
-        # Market impact: Larger orders have more impact
-        # Impact scales with sqrt(quantity) to model liquidity
-        impact = self.impact_factor * np.sqrt(order.quantity / 100) * volatility
-
-        # Total slippage (positive hurts buyer, negative hurts seller)
-        if order.direction == "BUY":
-            # Buyers pay more (positive slippage)
-            total_slippage = abs(volatility_slippage) + impact
-        else:  # SELL
-            # Sellers receive less (negative slippage)
-            total_slippage = -(abs(volatility_slippage) + impact)
-
-        fill_price = base_price * (1 + total_slippage)
-
-        span.set_attribute("execution.volatility_slippage", volatility_slippage)
-        span.set_attribute("execution.market_impact", impact)
-        span.set_attribute("execution.total_slippage_pct", total_slippage * 100)
+        span.set_attribute("execution.slippage_bps", slippage_bps)
+        span.set_attribute("execution.impact_bps", impact_bps)
         span.set_attribute("execution.fill_price", fill_price)
 
-        # Step 4: Calculate Commission
+        # Step 3: Commission
         commission = max(
             self.min_commission, order.quantity * self.commission_per_share
         )
 
-        span.set_attribute("execution.commission", commission)
-
-        # Log execution details
-        slippage_bps = total_slippage * 10000
         logger.debug(
-            f"🎯 Fill: {order.direction} {order.quantity} {order.symbol} "
-            f"@ ${fill_price:.2f} (slippage: {slippage_bps:.2f}bps, "
-            f"commission: ${commission:.2f})"
+            f"⚡ Friction Exec: {order.symbol} {order.direction} | "
+            f"Slip: {slippage_bps:.2f}bps | Impact: {impact_bps:.2f}bps | "
+            f"Price: ${mid_price:.2f} -> ${fill_price:.2f}"
         )
 
         return fill_price, commission
@@ -190,7 +163,7 @@ class SimulatedExecutionHandler:
         latency_ms: int = 100,
         data_feed=None,
     ):
-        self.execution_model = execution_model or RealisticExecution()
+        self.execution_model = execution_model or FrictionExecution()
         self.latency_ms = latency_ms
         self.data_feed = data_feed
 
@@ -247,6 +220,12 @@ class SimulatedExecutionHandler:
         # TODO: Calculate volatility from recent price history
         # For now, use fixed 1% daily volatility
         volatility = 0.01
+
+        if self.latency_ms > 0:
+            # Random jitter: +/- 50% of latency
+            jitter = random.uniform(0.5, 1.5)
+            # SIMULATED NETWORK LATENCY
+            time.sleep((self.latency_ms * jitter) / 1000.0)
 
         fill_price, commission = self.execution_model.simulate_fill(
             order=event, market_data=market_data, volatility=volatility

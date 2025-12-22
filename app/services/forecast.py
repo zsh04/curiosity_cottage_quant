@@ -13,6 +13,7 @@ import torch
 import numpy as np
 from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor
+from enum import Enum
 
 from app.core.config import settings
 from app.services.rag_forecast import MarketMemory
@@ -132,7 +133,34 @@ class TimeSeriesForecaster:
         # Await Chronos
         chronos_result = await chronos_future
 
-        # STEP C: Fusion & Guardrails
+        # Step C: Relativity (Timeframe Harmony)
+        # Assuming context_tensor is 1m data (Horizon 12m)
+        # We need a proxy for the higher timeframe (5m).
+        # For efficiency, we won't run a second inference pass yet (latency).
+        # We will infer the HTF Trend from the LTF Context Window.
+        # "Zoom Out" = aggregate last 60 points of 1m data -> 12 points of 5m data?
+        # Or simply check if the 1m context trend aligns with the 1m forecast.
+
+        # RELATIVITY OPERATOR Logic:
+        # 1. Calculate historical trend of the context window (Past Velocity)
+        # 2. Compare with Forecast Trend (Future Velocity)
+        # 3. If Past was Up and Future is Up -> Concordance
+        # 4. If Past was Down and Future is Up -> Reversion (Lower Confidence)
+
+        # NOTE: A true HTF check needs 5m bars. For now, we use "Past vs Future" as the relativity check
+        # until we wire up multi-timeframe inputs in Phase 33.
+
+        context_prices = context_tensor.cpu().numpy().flatten()
+        if len(context_prices) > 10:
+            start_p = context_prices[0]
+            end_p = context_prices[-1]
+            past_trend = (end_p - start_p) / start_p if start_p != 0 else 0.0
+        else:
+            past_trend = 0.0
+
+        chronos_result["past_trend"] = float(past_trend)
+
+        # STEP D: Fusion & Guardrails
         return self._fuse_signals(chronos_result, raf_result)
 
     def _run_chronos_batch(self, tensor: torch.Tensor) -> Dict[str, float]:
@@ -221,6 +249,18 @@ class TimeSeriesForecaster:
                 # Trust Neural, ignore weak memory
                 confidence = 0.6
                 reasoning = f"Divergence: Neural ({chronos_trend:.2%}) overrides weak Memory ({raf_trend:.2%})."
+
+                confidence = 0.6
+                reasoning = f"Divergence: Neural ({chronos_trend:.2%}) overrides weak Memory ({raf_trend:.2%})."
+
+        # RELATIVITY PENALTY (Timeframe / Trend Alignment)
+        past_trend = chronos.get("past_trend", 0.0)
+        # If fighting the trend (Reversion), reduce confidence
+        # Unless relying on Mean Reversion Strategy explicitly?
+        # For "The Oracle" (Trend Follower), we punish fighting the immediate past trend.
+        if np.sign(chronos_trend) != np.sign(past_trend) and abs(past_trend) > 0.001:
+            confidence *= 0.8  # 20% Penalty for counter-trend
+            reasoning += f" [Relativity: Fighting Trend ({past_trend:.2%})]"
 
         # Determine Signal
         if c_dir > 0:

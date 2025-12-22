@@ -110,12 +110,14 @@ The domain logic layer. Agents do not talk to APIs directly; they talk to Servic
   - *Role*: Heavy math & State estimation.
   - *Key Method*: `calculate_physics_state(df)` - Runs Kalman Filter + Hill Estimator (Alpha).
   - *Key Code*: `KinematicKalmanFilter` class implementation.
+  - *feature*: **Adaptive Noise Scaling** (v3.3.1) - Scales `R` (Measurement Noise) by `(1+vol^2)` to resist Levy Flights.
   - *Reference*: `docs/00_CONSTITUTION/02_physics_v4.md`.
 
 - **`forecast.py`**: **The Oracle** (New in v3.1).
   - *Role*: Time-series forecasting.
   - *Engine*: `amazon/chronos-bolt-small` (Pre-trained foundation model).
   - *Integration*: Uses HuggingFace Transformers + MPS acceleration.
+  - *Logic*: `RelativityOperator` (v3.2) enforces trend harmony between 1m (Context) and 5m (Forecast).
   - *Output*: Probabilistic forecasts (P10, P50, P90).
 
 - **`rag_forecast.py`**: **The Hippocampus** (New in v3.1).
@@ -128,6 +130,12 @@ The domain logic layer. Agents do not talk to APIs directly; they talk to Servic
   - *Purpose*: Validates the Oracle & Hippocampus offline.
   - *Design*: Strict causality loop (tqdm) with slippage modeling.
   - *Key Method*: `run()` - Orchestrates the full simulation loop.
+  - *Execution*: `FrictionExecution` (v3.2) adds dynamic volatility-based slippage and network jitter latency.
+
+- **`state.py`**: **The Conscious Mind**.
+  - *Role*: Global State Definition.
+  - *Feature*: `CognitiveState` (v3.2) - Tracks `anxiety_score` and `regret_matrix`.
+  - *Logic*: If `anxiety > 0.7`, Risk Node halves position sizing automatically.
 
 - **`reasoning.py`**: **The Philosopher**.
   - *Role*: LLM Interaction.
@@ -165,13 +173,12 @@ Located in `frontend/`. React + Vite + TailwindCSS.
   - **Telemetry Gate**: Blocks render until `initTelemetry()` completes.
   - **Tabs**: Switcher for "Consciousness" vs "Operations".
 
-- **`components/DebateConsole.jsx`**: The Visualization.
-  - **WebSocket**: Connects to `ws://localhost:8000/api/ws/brain`.
-  - **State**: Uses `useWebSocket` (native).
-  - **UI**:
-    - *Analysts*: Cards with Sentiment/Physics indicators.
-    - *Arena*: Auto-scrolling text log of "Thoughts".
-    - *Verdict*: Dynamic status dashboard.
+- **`connection_manager.ts`**: **Telemetry Resilience** (v3.1.3).
+  - *Role*: Hardened WebSocket Client.
+  - *Features*:
+    - **Exponential Backoff**: 1s -> 30s retry logic.
+    - **Heartbeat**: Detects "Dead Air" (>10s silence) -> CRITICAL State.
+  - *Integration*: `ProTerminal.tsx` uses this for visual "Red Alert" states.
 
 ---
 

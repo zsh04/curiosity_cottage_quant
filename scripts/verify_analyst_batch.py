@@ -7,7 +7,7 @@ import os
 # Add project root to path (Force local import)
 sys.path.insert(0, os.getcwd())
 
-from app.agent.nodes.analyst import analyst_node
+from app.agent.boyd import boyd_node
 from app.agent.state import AgentState, TradingStatus
 
 # Setup Logging
@@ -32,11 +32,11 @@ def create_mock_state():
 
 
 # Mock dependencies
-@patch("app.agent.nodes.analyst.MarketService")
-@patch("app.agent.nodes.analyst.PhysicsService")
-@patch("app.agent.nodes.analyst.ForecastingService")
-@patch("app.agent.nodes.analyst.ReasoningService")
-def test_analyst_batch(MockReasoning, MockForecast, MockPhysics, MockMarket):
+@patch("app.agent.boyd.MarketService")
+@patch("app.agent.boyd.FeynmanBridge")
+@patch("app.agent.boyd.TimeSeriesForecaster")
+@patch("app.agent.boyd.ReasoningService")
+async def test_analyst_batch(MockReasoning, MockForecast, MockPhysics, MockMarket):
     print("🚀 Starting Analyst Batch Verification...")
 
     # Setup Mocks
@@ -82,7 +82,7 @@ def test_analyst_batch(MockReasoning, MockForecast, MockPhysics, MockMarket):
 
     # Run
     state = create_mock_state()
-    result_state = analyst_node(state)
+    result_state = await boyd_node(state)
 
     # Checks
     print("\n📊 Verification Results:")
@@ -122,4 +122,4 @@ def test_analyst_batch(MockReasoning, MockForecast, MockPhysics, MockMarket):
 
 
 if __name__ == "__main__":
-    test_analyst_batch()
+    asyncio.run(test_analyst_batch())

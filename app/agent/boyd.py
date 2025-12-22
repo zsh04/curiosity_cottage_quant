@@ -7,13 +7,15 @@ from opentelemetry import trace
 
 from app.agent.state import AgentState
 from app.services.market import MarketService
-from app.services.feynman import FeynmanEngine
-from app.services.forecasting import ForecastingService
+from app.services.feynman_bridge import FeynmanBridge
+from app.services.forecast import TimeSeriesForecaster
+
+# from app.services.forecasting import ForecastingService # Deprecated
 from app.services.reasoning import ReasoningService
 from app.services.memory import MemoryService
 from app.core import metrics as business_metrics
 from app.strategies.lstm import LSTMPredictionStrategy
-from app.lib.physics import Regime
+from app.strategies import ENABLED_STRATEGIES
 from app.services.global_state import (
     get_global_state_service,
     get_current_snapshot_id,
@@ -25,25 +27,30 @@ logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
 
-class AnalystAgent:
+class BoydAgent:
     """
     The Council of Giants: 'Boyd' (The Strategist).
     Uses 'Feynman' (Physics) for OODA Loop Orientation.
+    Implements the core Analyst/Strategist logic.
     """
 
     def __init__(self):
         # Instantiate Services
         self.market = MarketService()
-        self.physics_map: Dict[str, FeynmanEngine] = {}  # NEW: Per-symbol factory
-        self.forecasting = ForecastingService()
+        self.feynman_map: Dict[str, FeynmanBridge] = {}  # Per-symbol Physics Bridge
+        self.oracle = TimeSeriesForecaster()
         self.reasoning = ReasoningService()
         self.memory = MemoryService()  # Quantum Memory
 
         # Strategy & Persistence
         self.lstm_model = LSTMPredictionStrategy()
+
+        # Initialize The Council
+        self.strategies = [Cls() for Cls in ENABLED_STRATEGIES]
+        logger.info(f"BOYD: Initialized Council with {len(self.strategies)} experts.")
         try:
             # TRY DB LOAD
-            blob = load_latest_checkpoint("analyst_lstm")
+            blob = load_latest_checkpoint("boyd_bi_lstm")
             if blob:
                 self.lstm_model.load_state_bytes(blob)
                 logger.info("BOYD: Loaded LSTM state from Database.")
@@ -57,14 +64,15 @@ class AnalystAgent:
 
         self.cycle_count = 0
 
-    def _get_feynman_engine(self, symbol: str) -> FeynmanEngine:
+    def _get_feynman_bridge(self, symbol: str) -> FeynmanBridge:
         """
-        Factory method to get or create a unique FeynmanEngine for a symbol.
+        Factory method to get or create a unique FeynmanBridge for a symbol.
+        Ensures strict state isolation.
         """
-        if symbol not in self.physics_map:
-            logger.info(f"BOYD: ⚛️ Spawning new Feynman Engine for {symbol}")
-            self.physics_map[symbol] = FeynmanEngine()
-        return self.physics_map[symbol]
+        if symbol not in self.feynman_map:
+            logger.info(f"BOYD: ⚛️ Spawning new Feynman Bridge for {symbol}")
+            self.feynman_map[symbol] = FeynmanBridge()
+        return self.feynman_map[symbol]
 
     async def _analyze_single(
         self, symbol: str, skip_llm: bool = False
@@ -86,8 +94,24 @@ class AnalystAgent:
         logger.info(f"DEBUG: Analyzing {symbol} with skip_llm={skip_llm}")
 
         try:
-            # Get Isolated Physics Engine
-            feynman = self._get_feynman_engine(symbol)
+            # Get Isolated Physics Engine (Feynman)
+            feynman = self._get_feynman_bridge(symbol)
+
+            # --- PHASE 0: WARM-UP (If needed) ---
+            if not feynman.is_initialized:
+                startup_bars = await asyncio.to_thread(
+                    self.market.get_startup_bars, symbol, limit=100
+                )
+                # Warmup Physics
+                await asyncio.to_thread(feynman.calculate_kinematics, startup_bars)
+
+                # Warmup/Init LSTM (feed returns)
+                import pandas as pd
+
+                if startup_bars:
+                    df_warmup = pd.DataFrame({"close": startup_bars})
+                    self.lstm_model.calculate_signal(df_warmup)
+                    logger.info(f"🔥 BOYD: Warm-up complete for {symbol}")
 
             # --- Step 1: SENSES (Market Data) ---
             market_snapshot = await asyncio.to_thread(
@@ -97,35 +121,75 @@ class AnalystAgent:
             # Extract basics
             history = market_snapshot.get("history", [])
             current_price = market_snapshot.get("price", 0.0)
-
-            # Infer High/Low/Volume if not in snapshot (often snapshot has full bar data)
-            # Assuming market_snapshot has 'quote' or 'bar'
-            # If simplistic, we use current_price for all
-            high = market_snapshot.get("high", current_price)
-            low = market_snapshot.get("low", current_price)
-            volume = market_snapshot.get("volume", 1000.0)  # Default volume if missing
-            trade_count = market_snapshot.get("trade_count", 100)  # Default
-
-            # --- Step 2: FEYNMAN PHYSICS (Forces) ---
-            # Update Feynman Engine
-            forces = await asyncio.to_thread(
-                feynman.calculate_forces,
-                price=current_price,
-                volume=volume,
-                trade_count=trade_count,
-                high=high,
-                low=low,
+            logger.info(
+                f"Checking Data {symbol}: Price={current_price} Hist={len(history)}"
             )
 
-            logger.info(f"DEBUG: {symbol} Momentum: {forces.get('momentum')}")
+            # --- DYNAMIC PHYSICS INJECTION ---
+            physics_history = history.copy()
+            if current_price > 0:
+                physics_history.append(current_price)
 
-            physics_context = forces
+            # --- Step 2: PHYSICS (Kinematics & Regime) ---
+            if feynman.is_initialized and current_price > 0:
+                kinematics = await asyncio.to_thread(
+                    feynman.calculate_kinematics, new_price=current_price
+                )
+            else:
+                kinematics = await asyncio.to_thread(
+                    feynman.calculate_kinematics, prices=physics_history
+                )
+
+            logger.info(f"DEBUG: {symbol} Raw Velocity: {kinematics.get('velocity')}")
+
+            # Regime Analysis
+            internal_buffer = feynman.price_history_buffer
+
+            regime_analysis = await asyncio.to_thread(
+                feynman.analyze_regime, internal_buffer
+            )
+            hurst_analysis = await asyncio.to_thread(
+                feynman.calculate_hurst_and_mode, physics_history
+            )
+            qho_analysis = await asyncio.to_thread(
+                feynman.calculate_qho_levels, physics_history
+            )
+
+            physics_context = {
+                **kinematics,
+                **regime_analysis,
+                **hurst_analysis,
+                **qho_analysis,
+            }
+
+            # --- Step 2.1: THE COUNCIL (Algorithmic Signals) ---
+            strat_signals = {}
+            if history:
+                try:
+                    import pandas as pd
+
+                    dates = market_snapshot.get("dates", [])
+                    if len(dates) == len(history):
+                        df = pd.DataFrame(
+                            {"close": history}, index=pd.to_datetime(dates)
+                        )
+                    else:
+                        df = pd.DataFrame({"close": history})
+
+                    for strat in self.strategies:
+                        try:
+                            # Most strategies expect a DF
+                            sig = strat.calculate_signal(df)
+                            strat_signals[strat.name] = sig  # -1.0 to 1.0
+                        except Exception as e:
+                            logger.warning(f"Strategy {strat.name} failed: {e}")
+                except Exception as e:
+                    logger.error(f"Council Session Failed: {e}")
 
             # --- Step 2.5: STRATEGY (LSTM Model) ---
-            # Update/Predict with latest data
             lstm_signal = 0.0
             if history:
-                import pandas as pd  # Import locally to avoid top-level cost if rare
+                import pandas as pd
 
                 df_latest = pd.DataFrame({"close": history})
                 lstm_signal = self.lstm_model.calculate_signal(df_latest)
@@ -133,29 +197,30 @@ class AnalystAgent:
             # Persistence Check
             self.cycle_count += 1
             if self.cycle_count % 100 == 0:
-                # Save to DB
                 blob = self.lstm_model.get_state_bytes()
                 if blob:
-                    await asyncio.to_thread(save_model_checkpoint, "analyst_lstm", blob)
+                    await asyncio.to_thread(save_model_checkpoint, "boyd_bi_lstm", blob)
                     logger.info("💾 BOYD: Saved LSTM checkpoint to Database.")
 
-            # --- Step 3: FUTURE (Forecasting) ---
-            forecast = await asyncio.to_thread(
-                self.forecasting.predict_trend, history, 10
-            )
-
-            # --- Step 3.5: MEMORY (Quantum Recall) ---
+            # --- Step 3: THE UNIFIED ORACLE (Forecast + Memory) ---
             sentiment_snapshot = market_snapshot.get("sentiment", {})
 
-            # Mapping for Memory (Adapter)
-            historical_regimes = await asyncio.to_thread(
-                self.memory.retrieve_similar,
-                symbol,
-                physics_context,
-                sentiment_snapshot,
-                k=3,
+            # Get Context Tensor (Last 64 bars)
+            oracle_context_list = history[-64:] if history else []
+            import torch
+
+            context_tensor = torch.tensor(oracle_context_list, dtype=torch.float32)
+
+            oracle_result = await self.oracle.predict_ensemble(
+                context_tensor=context_tensor,
+                current_prices=history,  # For RAG normalization
             )
-            market_snapshot["historical_regimes"] = historical_regimes
+
+            # Extract Components
+            forecast = oracle_result.get("components", {}).get("chronos", {})
+            historical_regimes = oracle_result.get("components", {}).get("raf", {})
+            oracle_signal_side = oracle_result.get("signal", "NEUTRAL")
+            oracle_confidence = oracle_result.get("confidence", 0.0)
 
             # --- Step 4: COGNITION (Reasoning / Signal) ---
             if not skip_llm:
@@ -163,27 +228,28 @@ class AnalystAgent:
                     "market": market_snapshot,
                     "physics": physics_context,
                     "forecast": forecast,
+                    "regime_memory": historical_regimes,
+                    "oracle_signal": {
+                        "side": oracle_signal_side,
+                        "confidence": oracle_confidence,
+                        "reasoning": oracle_result.get("reasoning", ""),
+                    },
                     "sentiment": sentiment_snapshot,
-                    "strategies": {"lstm_signal": lstm_signal},
+                    "strategies": {
+                        "lstm_signal": lstm_signal,
+                        **strat_signals,
+                    },  # Inject Council & LSTM
                 }
-
-                signal_result = await asyncio.to_thread(
-                    self.reasoning.generate_signal, reasoning_context
-                )
+                signal_result = await self.reasoning.generate_signal(reasoning_context)
             else:
                 # OPTIMIZATION: Skip LLM for non-primary candidates
                 signal_result = {
-                    "signal_side": "FLAT",
-                    "signal_confidence": 0.0,
-                    "reasoning": "LLM Skipped (Optimization)",
+                    "signal_side": oracle_signal_side
+                    if oracle_signal_side != "NEUTRAL"
+                    else "FLAT",
+                    "signal_confidence": oracle_confidence,
+                    "reasoning": f"Oracle Optimization: {oracle_result.get('reasoning', 'Skipped LLM')}",
                 }
-                # Basic LSTM fallback for signal side
-                if lstm_signal > 0.05:
-                    signal_result["signal_side"] = "BUY"
-                    signal_result["signal_confidence"] = min(abs(lstm_signal) * 5, 0.8)
-                elif lstm_signal < -0.05:
-                    signal_result["signal_side"] = "SELL"
-                    signal_result["signal_confidence"] = min(abs(lstm_signal) * 5, 0.8)
 
             # --- Step 5.5: MEMORIZE (Fire & Forget) ---
             asyncio.create_task(
@@ -198,17 +264,15 @@ class AnalystAgent:
                     "signal_side": signal_result.get("signal_side", "FLAT"),
                     "signal_confidence": signal_result.get("signal_confidence", 0.0),
                     "reasoning": signal_result.get("reasoning", ""),
-                    "velocity": forces["velocity"],
-                    "acceleration": 0.0,  # Not calculated in Feynman yet
-                    "regime": forces["regime"],
-                    "current_alpha": forces["current_alpha"],
-                    "hurst": 0.5,  # Feynman maps this to Entropy/Nash
-                    "strategy_mode": "AMBUSH"
-                    if forces["regime"] == "AMBUSH"
-                    else "SNIPER",
+                    "velocity": kinematics["velocity"],
+                    "acceleration": kinematics["acceleration"],
+                    "regime": regime_analysis["regime"],
+                    "current_alpha": regime_analysis["alpha"],
+                    "hurst": hurst_analysis["hurst"],
+                    "strategy_mode": hurst_analysis["strategy_mode"],
                     "price": market_snapshot.get("price", 0.0),
-                    "history": history,
-                    "chronos_forecast": forecast,
+                    "history": history,  # Careful with size, but needed for state
+                    "chronos_forecast": forecast,  # Propagate real forecast
                     "success": True,
                 }
             )
@@ -222,7 +286,7 @@ class AnalystAgent:
 
     async def analyze(self, state: AgentState) -> AgentState:
         """
-        Quantum Batch Analysis.
+        Quantum Batch Analysis (OODA Loop).
         """
         analysis_start_time = time.time()
         candidates = state.get("watchlist", [])
@@ -235,11 +299,15 @@ class AnalystAgent:
 
         if not candidates:
             # Fallback
+            logger.warning(
+                f"BOYD: No candidates found. Fallback to single symbol: {target_symbol}"
+            )
             candidates = [{"symbol": target_symbol}]
 
         primary_symbol = state.get("symbol", "SPY")
         tasks = []
 
+        # --- PARALLEL EXECUTION (Conditional LLM) ---
         for candidate_item in candidates:
             symbol = candidate_item["symbol"]
             is_primary = symbol == primary_symbol
@@ -270,6 +338,35 @@ class AnalystAgent:
         state["analysis_reports"] = enriched_candidates
         state["candidates"] = enriched_candidates
 
+        if primary_data and primary_data.get("success"):
+            # Check for Physics Veto (CRITICAL Regime)
+            if primary_data.get("regime") == "Critical":
+                logger.warning(
+                    f"BOYD: Primary {primary_symbol} is in CRITICAL regime. Initiating searching for alternative..."
+                )
+                primary_data = None  # Discard
+
+        if not primary_data:
+            # Fallback / Auto-Selection: Pick highest confidence success
+            valid_candidates = [
+                c
+                for c in enriched_candidates
+                if c.get("success") and c.get("regime") != "Critical"
+            ]
+            if valid_candidates:
+                # Sort by confidence desc
+                valid_candidates.sort(
+                    key=lambda x: x.get("signal_confidence", 0.0), reverse=True
+                )
+                primary_data = valid_candidates[0]
+                primary_symbol = primary_data.get("symbol")
+                state["symbol"] = primary_symbol  # Update State
+                logger.info(
+                    f"BOYD: 🔄 Switched Primary to {primary_symbol} (Conf: {primary_data.get('signal_confidence'):.2f})"
+                )
+            else:
+                logger.warning("BOYD: No valid alternative candidates found.")
+
         # HOIST PRIMARY SIGNAL
         if primary_data and primary_data.get("success"):
             logger.info(f"BOYD: 🚀 Hoisting signal for {primary_symbol}")
@@ -291,6 +388,9 @@ class AnalystAgent:
             )
 
         successful = [c for c in enriched_candidates if c.get("success")]
+        logger.info(
+            f"BOYD: Batch Analysis Complete. {len(successful)}/{len(enriched_candidates)} successful."
+        )
 
         # Telemetry
         latency = (time.time() - analysis_start_time) * 1000
@@ -298,14 +398,17 @@ class AnalystAgent:
         business_metrics.candidate_count.record(len(candidates))
         business_metrics.signals_total.add(len(successful))
 
+        logger.info(f"⏱️ Boyd Latency: {latency:.2f}ms")
+
         return state
 
 
-_analyst_agent_instance = AnalystAgent()
+# --- GLOBAL INSTANCE ---
+_boyd_agent_instance = BoydAgent()
 
 
-def analyst_node(state: AgentState) -> AgentState:
+async def boyd_node(state: AgentState) -> AgentState:
     """
-    LangGraph Node Wrapper (Synchronous).
+    LangGraph/Pipeline Node Wrapper (Async) for Boyd (The Strategist).
     """
-    return asyncio.run(_analyst_agent_instance.analyze(state))
+    return await _boyd_agent_instance.analyze(state)

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.11
 """
 Frontend-Backend Link Verification Script
 Tests that data flows from database -> API -> frontend correctly.

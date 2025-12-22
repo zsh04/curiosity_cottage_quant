@@ -4,14 +4,14 @@ import os
 # Add project root to path
 sys.path.append(os.getcwd())
 
-from app.services.physics import PhysicsService
+from app.services.feynman_bridge import FeynmanBridge
 import numpy as np
 
 
 def test_quantum_tunneling():
     print("🧪 QUANTUM PHYSICS VERIFICATION")
     print("==============================")
-    physics = PhysicsService()
+    physics = FeynmanBridge()
 
     # 1. Classical Breakout Case (High Energy)
     # Price close to resistance, High Volatility

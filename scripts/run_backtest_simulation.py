@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.11
 """
 Backtest Simulation Runner for CC-V2 Autonomous Trading System
 

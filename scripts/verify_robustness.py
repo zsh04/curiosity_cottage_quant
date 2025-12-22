@@ -9,7 +9,7 @@ from typing import Dict, Any
 # Add project root to path
 sys.path.insert(0, os.getcwd())
 
-from app.agent.nodes.analyst import analyst_node, AnalystAgent
+from app.agent.boyd import boyd_node, BoydAgent
 from app.agent.state import AgentState, TradingStatus
 from app.lib.physics import Regime
 
@@ -22,7 +22,7 @@ os.environ["ALPACA_API_KEY"] = "pk_dummy"
 os.environ["ALPACA_API_SECRET"] = "sk_dummy"
 
 
-def verify_robustness():
+async def verify_robustness():
     print("🚀 Starting Quantum Robustness Verification (Resilient Collapse)...")
 
     # Scenario:
@@ -40,16 +40,19 @@ def verify_robustness():
         "status": TradingStatus.ACTIVE,
         "messages": [],
         "candidates": candidates,
+        "symbol": "CRASH_CO",  # Primary candidate
         "cash": 100000.0,
+        "portfolio": {},
+        "risk_verdict": {},
     }
 
     # Mock Services
     with (
-        patch("app.agent.nodes.analyst.MarketService") as MockMarket,
-        patch("app.agent.nodes.analyst.PhysicsService") as MockPhysics,
-        patch("app.agent.nodes.analyst.ForecastingService") as MockForecast,
-        patch("app.agent.nodes.analyst.ReasoningService") as MockReason,
-        patch("app.agent.nodes.analyst.MemoryService") as MockMemory,
+        patch("app.agent.boyd.MarketService") as MockMarket,
+        patch("app.agent.boyd.FeynmanBridge") as MockPhysics,
+        patch("app.agent.boyd.TimeSeriesForecaster") as MockForecast,
+        patch("app.agent.boyd.ReasoningService") as MockReason,
+        patch("app.agent.boyd.MemoryService") as MockMemory,
     ):
         # 1. Market Mock
         def mock_get_snapshot(symbol):
@@ -92,7 +95,7 @@ def verify_robustness():
         pass
 
     # We need to patch the METHOD method on the class for the test duration
-    original_analyze_single = AnalystAgent._analyze_single
+    original_analyze_single = BoydAgent._analyze_single
 
     async def mock_analyze_single(self, symbol: str) -> Dict[str, Any]:
         result = {
@@ -144,11 +147,11 @@ def verify_robustness():
 
     # Apply Patch
     with patch.object(
-        AnalystAgent, "_analyze_single", side_effect=mock_analyze_single, autospec=True
+        BoydAgent, "_analyze_single", side_effect=mock_analyze_single, autospec=True
     ):
         print("🧪 Testing Analyst Node with mocked results...")
         start_t = time.time()
-        result_state = analyst_node(state)
+        result_state = await boyd_node(state)
         end_t = time.time()
 
         print(f"⏱️ Execution Time: {end_t - start_t:.4f}s")
@@ -173,4 +176,4 @@ def verify_robustness():
 
 
 if __name__ == "__main__":
-    verify_robustness()
+    asyncio.run(verify_robustness())

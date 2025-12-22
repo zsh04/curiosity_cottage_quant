@@ -13,7 +13,7 @@ from alpaca.data.live.crypto import CryptoDataStream
 from alpaca.data.live.stock import StockDataStream
 
 # Internal Imports
-from app.services.physics import PhysicsService
+from app.services.feynman_bridge import FeynmanBridge
 from app.agent.nodes.analyst import (
     AnalystAgent,
 )  # Used for warmup helper if needed, or just direct Physics
@@ -34,7 +34,7 @@ LOOKBACK_MINUTES = 5
 class LiveSimulator:
     def __init__(self):
         self.running = True
-        self.physics = PhysicsService()
+        self.physics = FeynmanBridge()
         self.history_buffer = deque(
             maxlen=LOOKBACK_MINUTES + 1
         )  # Store (time, price) tuples

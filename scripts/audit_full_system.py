@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.11
 """
 COMPREHENSIVE END-TO-END SYSTEM AUDIT
 Simulates a full trading cycle and validates every component.

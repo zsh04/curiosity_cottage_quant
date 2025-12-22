@@ -42,15 +42,65 @@ class PerformanceReporter:
             "total_return_pct": total_return * 100,
             "sharpe_ratio": sharpe,
             "max_drawdown_pct": max_drawdown * 100,
+            "sortino_ratio": self._calculate_sortino(returns),
+            "tail_ratio": self._calculate_tail_ratio(returns),
+            "win_rate": self._calculate_win_rate(returns)
         }
+
+    def _calculate_sortino(self, returns: pd.Series, risk_free: float = 0.0) -> float:
+        """
+        Sortino Ratio: Excess Return / Downside Deviation.
+        Only penalizes harmful volatility.
+        """
+        if len(returns) < 2:
+            return 0.0
+        
+        excess_returns = returns - risk_free
+        downside_returns = excess_returns[excess_returns < 0]
+        
+        if len(downside_returns) == 0:
+            return 10.0 # Perfect score (no losses)
+            
+        downside_std = np.std(downside_returns) * np.sqrt(365 * 24) # Annualized
+        annualized_return = returns.mean() * (365 * 24)
+        
+        if downside_std == 0:
+            return 10.0
+            
+        return float(annualized_return / downside_std)
+
+    def _calculate_tail_ratio(self, returns: pd.Series) -> float:
+        """
+        Tail Ratio: P95 (Gains) / abs(P5 (Losses)).
+        Wrapper for 'Predatory Physics' (Positive Skew).
+        > 1.0 implies larger wins than losses.
+        """
+        if len(returns) < 10:
+            return 0.0
+            
+        p95 = np.percentile(returns, 95)
+        p5 = np.percentile(returns, 5)
+        
+        if p5 == 0:
+            return 10.0 # Infinite ratio
+            
+        return float(abs(p95 / p5))
+
+    def _calculate_win_rate(self, returns: pd.Series) -> float:
+        if len(returns) == 0:
+            return 0.0
+        wins = returns[returns > 0]
+        return len(wins) / len(returns)
 
     def generate_report(self):
         metrics = self.calculate_metrics()
         if not metrics:
             return "No trades or history."
 
-        return {
             "Total Return": f"{metrics['total_return_pct']:.2f}%",
             "Sharpe Ratio": f"{metrics['sharpe_ratio']:.2f}",
+            "Sortino Ratio": f"{metrics['sortino_ratio']:.2f}",
+            "Tail Ratio": f"{metrics['tail_ratio']:.2f}",
             "Max Drawdown": f"{metrics['max_drawdown_pct']:.2f}%",
+            "Win Rate": f"{metrics['win_rate']:.1%}",
         }

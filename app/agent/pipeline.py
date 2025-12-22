@@ -1,9 +1,9 @@
 import logging
 from app.agent.state import AgentState, TradingStatus
-from app.agent.nodes.macro import macro_node
-from app.agent.nodes.analyst import analyst_node
-from app.agent.nodes.risk import risk_node
-from app.services.simons import ExecutionAgent
+from app.agent.nodes.soros import soros_node
+from app.agent.boyd import boyd_node
+from app.agent.nodes.taleb import risk_node
+from app.agent.nodes.simons import ExecutionAgent
 
 logger = logging.getLogger(__name__)
 
@@ -27,16 +27,16 @@ class TradingPipeline:
         cycle_id = state.get("cycle_id", "unknown")
 
         try:
-            # --- 1. MACRO NODE (The Scanner) ---
+            # --- 1. SOROS NODE (The Scanner) ---
             # Determine universe context, broad market regime.
             # In V2, this might select the symbol if not provided, or just add context.
             # For now, we assume it enhances state.
-            state = macro_node(state)
+            state = soros_node(state)
 
             # --- 2. ANALYST NODE (The Brain) ---
             # Deep analysis, Reason + Council Strategies.
             # Output: signal_side, signal_confidence, reasoning
-            state = await analyst_node(state)
+            state = await boyd_node(state)
 
             # --- 3. RISK NODE (The Gate) ---
             # Physics Veto, Portfolio Constraints, Sizing.

@@ -69,7 +69,7 @@ This project is run as a **Directive-Driven** organization.
 
 ```bash
 # 1. Install Dependencies
-pip install -r requirements.txt
+python3.11 -m pip install -r requirements.txt
 
 # 2. Run the Engine
 uvicorn app.main:app --reload

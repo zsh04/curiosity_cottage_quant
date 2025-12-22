@@ -48,6 +48,8 @@ The script will output a simulated trading report:
 ==============================
 Return: 12.45%
 Sharpe: 1.82
+Sortino: 2.15
+Tail Ratio: 1.12
 Max DD: -5.30%
 ==============================
 ```
@@ -67,7 +69,11 @@ Real-world results will deviate. Apply these standardized "Reality Offsets" to y
 | **Small Cap (IWM)** | 0.05% | Medium | -0.5 |
 | **Crypto (BTC)** | 0.10% | High | -0.8 |
 
-**Rule of Thumb:** If your Backtest Sharpe is < 1.5, your Live Sharpe will likely be < 1.0 (Unprofitable).
+**Rule of Thumb:**
+
+- **Sharpe < 1.0**: Unprofitable.
+- **Tail Ratio < 1.0**: Negative Skew (Gambler's Ruin risk).
+- **Sortino > 2.0**: Excellent downside protection.
 
 ---
 

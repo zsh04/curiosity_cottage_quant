@@ -207,6 +207,16 @@ backtest_return = meter.create_gauge(
     description="Last backtest Total Return",
 )
 
+backtest_sortino = meter.create_gauge(
+    name="cc.backtest.sortino",
+    description="Last backtest Sortino Ratio (Downside Risk)",
+)
+
+backtest_tail_ratio = meter.create_gauge(
+    name="cc.backtest.tail_ratio",
+    description="Last backtest Tail Ratio (Reward Skew)",
+)
+
 # ============================================================================
 # HELPER FUNCTIONS WITH EXEMPLARS
 # ============================================================================

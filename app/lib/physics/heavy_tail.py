@@ -60,12 +60,19 @@ class HeavyTailEstimator:
         """Calculate Alpha on the current window."""
         if len(self.returns) < 20:  # Minimum data check
             return 3.0  # Default Gaussian
+        alpha, _ = self.hill_estimator(np.array(self.returns))
+        return alpha
+
+    def get_current_alpha_with_reliability(self) -> Tuple[float, str]:
+        """Calculate Alpha and Reliability."""
+        if len(self.returns) < 20:
+            return 3.0, "Low"
         return self.hill_estimator(np.array(self.returns))
 
     @staticmethod
     def hill_estimator(
         data: Union[pd.Series, np.ndarray], tail_percentile: Optional[float] = None
-    ) -> float:
+    ) -> Tuple[float, str]:
         """
         Calculates the Hill Estimator for the tail exponent (Alpha).
 
@@ -82,7 +89,7 @@ class HeavyTailEstimator:
             tail_percentile: Optional fixed percentile. If None, uses adaptive sizing.
 
         Returns:
-            float: The estimated Alpha (tail exponent).
+            (alpha, reliability_score): Tuple of alpha and reliability string ("Low", "High").
         """
         if isinstance(data, pd.Series):
             data = data.values
@@ -94,6 +101,9 @@ class HeavyTailEstimator:
         sorted_data = np.sort(abs_data)[::-1]
 
         n = len(sorted_data)
+
+        # Reliability Check (Task 4)
+        reliability = "High" if n >= 500 else "Low"
 
         # ADAPTIVE TAIL SIZE for statistical robustness
         if tail_percentile is None:
@@ -114,7 +124,7 @@ class HeavyTailEstimator:
                 k = min_tail_size
             else:
                 # Not enough data for reliable estimation
-                return 3.0  # Default to Gaussian
+                return 3.0, "Low"  # Default to Gaussian
 
         # Select the tail
         tail = sorted_data[:k]
@@ -122,7 +132,7 @@ class HeavyTailEstimator:
 
         if x_min <= 0:
             # Avoid log of zero or negative
-            return 3.0
+            return 3.0, "Low"
 
         # Hill calculation
         # ln(X_i / X_min) = ln(X_i) - ln(X_min)
@@ -130,10 +140,10 @@ class HeavyTailEstimator:
             log_ratios = np.log(tail / x_min)
             hill_val = np.mean(log_ratios)
         except (RuntimeWarning, ValueError):
-            return 3.0
+            return 3.0, "Low"
 
         if hill_val <= 0:
-            return 3.0
+            return 3.0, "Low"
 
         alpha = 1.0 / hill_val
 
@@ -141,7 +151,7 @@ class HeavyTailEstimator:
         # Clamp to [0.5, 10.0] to avoid numerical instabilities
         alpha = np.clip(alpha, 0.5, 10.0)
 
-        return float(alpha)
+        return float(alpha), reliability
 
     @staticmethod
     def get_regime(alpha: float) -> RegimeMetrics:

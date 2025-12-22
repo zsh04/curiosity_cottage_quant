@@ -67,7 +67,9 @@ class KinematicKalmanFilter:
         self.init_buffer = []
         self.init_buffer_size = 3  # Use 3 measurements for initial estimates
 
-    def update(self, measurement: float) -> StateEstimate:
+    def update(
+        self, measurement: float, volatility_factor: float = 0.0
+    ) -> StateEstimate:
         """
         Performs one step of Predict-Update cycle.
 
@@ -119,8 +121,14 @@ class KinematicKalmanFilter:
         # Innovation (y) = z - H * x_pred
         y = measurement - self.H @ x_pred
 
-        # Innovation Covariance (S) = H * P_pred * H^T + R
-        S = self.H @ P_pred @ self.H.T + self.R
+        # Adaptive Noise Scaling (Phase 33.1)
+        # If volatility is high, increase measurement noise (R) to trust the model more (stiffer filter)
+        # mitigating "whipsaw" from non-Gaussian noise (Levy Flights).
+        vol_factor = max(0.0, volatility_factor)
+        R_adaptive = self.R * (1.0 + vol_factor**2)
+
+        # Innovation Covariance (S) = H * P_pred * H^T + R_adaptive
+        S = self.H @ P_pred @ self.H.T + R_adaptive
 
         # Kalman Gain (K) = P_pred * H^T * inv(S)
         K = P_pred @ self.H.T @ np.linalg.inv(S)

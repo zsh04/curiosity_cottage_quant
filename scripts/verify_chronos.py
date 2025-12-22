@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.11
 """
 Chronos Forecasting Verification Script
 Tests the cc_engine -> cc_chronos microservice integration.

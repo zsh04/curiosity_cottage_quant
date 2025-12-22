@@ -41,7 +41,7 @@ sys.modules["app.lib.physics"] = physics_mock
 # We might need to patch imports INSIDE risk.py if they are 'from x import y'
 # But sys.modules injection should handle 'from app.lib.physics import Regime'
 
-from app.agent.nodes.risk import RiskManager
+from app.agent.nodes.taleb import risk_node, RiskManager
 from app.agent.state import AgentState, TradingStatus
 
 # Setup logging
@@ -76,7 +76,7 @@ def test_circuit_breaker():
     }
 
     logger.info("🧪 TEST 1: Testing Safe State (1% Drawdown)...")
-    result_safe = manager.check_governance(safe_state)
+    result_safe = manager.check_circuit_breaker(safe_state)
 
     if result_safe["status"] == TradingStatus.ACTIVE:
         logger.info("✅ PASS: System remained ACTIVE under 1% drawdown.")
@@ -109,7 +109,7 @@ def test_circuit_breaker():
     }
 
     logger.info("\n🧪 TEST 2: Testing Breached State (2.5% Drawdown)...")
-    result_breached = manager.check_governance(breached_state)
+    result_breached = manager.check_circuit_breaker(breached_state)
 
     if result_breached["status"] == TradingStatus.HALTED_DRAWDOWN:
         logger.info("✅ PASS: System HALTED correctly under 2.5% drawdown.")

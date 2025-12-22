@@ -3,7 +3,6 @@ Bayesian Expected Shortfall (BES) Sizing Module
 Integrates Heavy Tail Physics (Alpha) with Chronos Probabilistic Forecasts to determine safe position sizing.
 """
 
-import numpy as np
 from scipy.stats import norm
 
 
@@ -16,24 +15,23 @@ class BesSizing:
         """
         Calculate lambda (conviction/scaling factor) based on the Heavy Tail Alpha.
 
-        Logic:
-        - Alpha <= 2.0: Deep risk (Levy Stable/Critical). VETO trade (0.0).
-        - 2.0 < Alpha <= 3.0: Transition zone. Linear scaling from 0.0 to 1.0.
-        - Alpha > 3.0: Gaussian regime (Safe). Full confidence (1.0).
+        Logic (Fractal Sizing):
+        - Continuous scaling based on Alpha relative to Gaussian baseline (3.0).
+        - Formula: Lambda = Clamp(Alpha / 3.0, 0.1, 1.0)
+        - Alpha 1.5 -> ~0.5 (Half Size)
+        - Alpha 3.0 -> 1.0 (Full Size)
 
         Args:
             alpha: Hill Estimator Alpha from HeavyTailEstimator.
 
         Returns:
-            float: Lambda scaling factor between 0.0 and 1.0.
+            float: Lambda scaling factor between 0.1 and 1.0.
         """
-        if alpha <= 2.0:
-            return 0.0
-        elif alpha > 3.0:
-            return 1.0
-        else:
-            # Linear scaling: 2.0 -> 0.0, 3.0 -> 1.0
-            return alpha - 2.0
+        # Continuous Fractal Sizing
+        # We clamp at 0.1 to avoid complete zero (maintain some exposure/observation)
+        # unless alpha is dangerously close to 1.0 (Infinite Mean), but 0.1 is safe "skin in game".
+        scaling_factor = alpha / 3.0
+        return max(0.1, min(scaling_factor, 1.0))
 
     def estimate_es(self, forecast: dict, confidence: float = 0.95) -> float:
         """
@@ -52,11 +50,8 @@ class BesSizing:
         # Extract latest forecast values
         try:
             # Handle if inputs are lists or arrays
-            median_val = (
-                forecast["median"][-1]
-                if hasattr(forecast["median"], "__getitem__")
-                else forecast["median"]
-            )
+            # We only need low/high for sigma calculation here.
+            # median_val is not used in this method.
             low_val = (
                 forecast["low"][-1]
                 if hasattr(forecast["low"], "__getitem__")

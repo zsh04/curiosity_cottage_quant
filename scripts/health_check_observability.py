@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.11
 """
 Comprehensive Health Check Script for Curiosity Cottage Observability Stack
 Verifies: Database, OTEL Collector, Python Backend, React Frontend, Grafana Cloud

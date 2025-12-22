@@ -7,7 +7,7 @@ import sys
 import pandas as pd
 from sqlalchemy import text
 from app.dal.database import SessionLocal
-from app.services.physics import PhysicsService
+from app.services.feynman_bridge import FeynmanBridge
 from app.adapters.chronos import ChronosAdapter
 from app.adapters.sentiment import SentimentAdapter
 from app.strategies.lstm import LSTMPredictionStrategy
@@ -89,7 +89,7 @@ def test_physics():
     """Test 4: Physics Service (Kinematics)."""
     print("🔍 Test 4: Physics Service...")
     try:
-        physics = PhysicsService()
+        physics = FeynmanBridge()
 
         # Test kinematics calculation
         dummy_prices = [100.0, 101.0, 102.0, 103.0, 102.5, 104.0]

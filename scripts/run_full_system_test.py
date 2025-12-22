@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.11
 import os
 import sys
 import logging
@@ -31,7 +31,7 @@ from app.backtest.execution import SimulatedExecutionHandler, RealisticExecution
 from app.backtest.portfolio import Portfolio
 from app.backtest.feed import HistoricalCSVDataFeed
 from app.backtest.strategy_wrapper import AnalystStrategy
-from app.agent.nodes.risk import risk_node
+from app.agent.nodes.taleb import risk_node
 # from app.backtest.reporting import calculate_performance_metrics # Not available
 
 # Config

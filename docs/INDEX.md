@@ -101,7 +101,7 @@ docs/
 
 - `kalman-filter.md` — 3-State Kinematic Filter specs
 - `hill-estimator.md` — Tail exponent (α) estimation
-- `kelly-sizing.md` — BES position sizing
+- [BES Sizing](./internal/math/bes-sizing.md) — BES position sizing
 - `physics-engine.md` — 5-Pillar Physics Model
 
 ### Architecture (Implementation Details)
