@@ -169,6 +169,7 @@ INSTRUCTIONS:
                 # Run Pydantic AI
                 # Note: run is async
                 result = await self.agent.run(prompt)
+                logger.info(f"DEBUG: Agent Run returned type: {type(result)}")
                 decision = result.data  # TradeDecision object
 
                 signal_side = decision.action
@@ -242,6 +243,30 @@ INSTRUCTIONS:
             "winner_symbol": None,
             "rationale": "Tournament Logic Pending Migration to Pydantic AI",
         }
+
+    def check_background_result(self) -> Dict[str, Any] | None:
+        """
+        Check if any background optimization/tournament tasks have completed.
+        Returns the result if ready, else None.
+        """
+        keys_to_remove = []
+        result = None
+
+        for task_id, future in self.pending_tasks.items():
+            if future.done():
+                try:
+                    result = future.result()
+                    keys_to_remove.append(task_id)
+                    # For now only return the first completed one
+                    break
+                except Exception as e:
+                    logger.error(f"Background Task {task_id} failed: {e}")
+                    keys_to_remove.append(task_id)
+
+        for k in keys_to_remove:
+            self.pending_tasks.pop(k, None)
+
+        return result
 
 
 # Singleton Instance

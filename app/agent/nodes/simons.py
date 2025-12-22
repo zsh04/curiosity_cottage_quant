@@ -4,6 +4,7 @@ Responsible for executing trades based on Risk-approved sizing.
 """
 
 import time
+from app.core.telemetry import tracer
 import logging
 import uuid
 from app.agent.state import AgentState, TradingStatus
@@ -15,9 +16,10 @@ from app.core import metrics as business_metrics
 logger = logging.getLogger(__name__)
 
 
-class ExecutionAgent:
+class SimonsAgent:
     """
-    COMMANDER: The sole point of execution for Ezekiel.
+    Jim Simons: The Quant.
+    Role: Execution & State Management.
     Receives approved orders from Risk and routes them to Alpaca.
     """
 
@@ -172,9 +174,11 @@ class ExecutionAgent:
         return state
 
 
-def execution_node(state: AgentState) -> AgentState:
+@tracer.start_as_current_span("node_simons_execution")
+def simons_node(state: AgentState) -> AgentState:
     """
-    LangGraph node for execution.
+    Simons Node: Execution Logic.
     """
-    agent = ExecutionAgent()
+    logger.info("--- NODE: SIMONS (EXECUTION) ---")
+    agent = SimonsAgent()
     return agent.execute(state)

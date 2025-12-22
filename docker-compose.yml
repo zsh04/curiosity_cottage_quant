@@ -28,9 +28,9 @@ services:
     container_name: cc_db
     image: questdb/questdb:latest
     ports:
-      - "9000:9000"   # ILP
+      - "9000:9000"   # HTTP / Console
+      - "9009:9009"   # ILP (InfluxDB Line Protocol)
       - "8812:8812"   # PG Wire
-      - "9003:9003"   # Console
     volumes:
       - questdb_data:/root/.questdb/db
     networks:

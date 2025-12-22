@@ -20,6 +20,7 @@ from api.routes.orders import OrdersController
 from api.routes.market import MarketController
 from app.api.routes.telemetry import TelemetryController
 from app.api.routes.websocket import BrainStream
+from app.api.routes.backtest import BacktestController, BacktestStream
 
 # Database & State
 from app.dal.database import init_db, SessionLocal, async_session_maker
@@ -93,6 +94,8 @@ app = Litestar(
         MarketController,
         TelemetryController,
         BrainStream,
+        BacktestController,
+        BacktestStream,
     ],
     path="/api",  # Base path for all routes
     cors_config=cors_config,

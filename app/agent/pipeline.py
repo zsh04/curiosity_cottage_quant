@@ -2,8 +2,8 @@ import logging
 from app.agent.state import AgentState, TradingStatus
 from app.agent.nodes.soros import soros_node
 from app.agent.boyd import boyd_node
-from app.agent.nodes.taleb import risk_node
-from app.agent.nodes.simons import ExecutionAgent
+from app.agent.nodes.taleb import taleb_node
+from app.agent.nodes.simons import SimonsAgent, simons_node
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ class TradingPipeline:
     """
 
     def __init__(self):
-        self.execution_agent = ExecutionAgent()
+        self.simons_agent = SimonsAgent()
         logger.info("🚂 TradingPipeline Initialized (Linear Architecture)")
 
     async def run(self, initial_state: AgentState) -> AgentState:
@@ -27,23 +27,22 @@ class TradingPipeline:
         cycle_id = state.get("cycle_id", "unknown")
 
         try:
-            # --- 1. SOROS NODE (The Scanner) ---
-            # Determine universe context, broad market regime.
-            # In V2, this might select the symbol if not provided, or just add context.
-            # For now, we assume it enhances state.
+            # --- 1. SOROS (The Philosopher) ---
+            # Global Regime Scan
             state = soros_node(state)
 
-            # --- 2. ANALYST NODE (The Brain) ---
-            # Deep analysis, Reason + Council Strategies.
-            # Output: signal_side, signal_confidence, reasoning
+            # --- 2. BOYD (The Strategist) ---
+            # OODA Loop & Analysis
             state = await boyd_node(state)
 
-            # --- 3. RISK NODE (The Gate) ---
-            # Physics Veto, Portfolio Constraints, Sizing.
-            # Output: approved_size, status (ACTIVE/HALTED)
-            state = risk_node(state)
+            # --- 3. TALEB (The Skeptic) ---
+            # Risk Veto & Sizing
+            state = taleb_node(state)
 
-            # --- 4. VETO CHECK ---
+            # --- 4. SIMONS (The Quant) ---
+            # Execution
+            state = simons_node(state)
+
             # --- 4. VETO CHECK ---
             if state.get("status") in [
                 TradingStatus.HALTED_PHYSICS,
@@ -54,15 +53,12 @@ class TradingPipeline:
                 return state
 
             # --- 5. EXECUTION NODE (The Hands) ---
-            # If size validated, route to broker.
-            approved_size = state.get("approved_size", 0.0)
-            if approved_size > 0:
-                logger.info(
-                    f"⚡ Executing Trade for Cycle {cycle_id} | Size: ${approved_size}"
-                )
-                state = self.execution_agent.execute(state)
+            # Execution logic is handled by simons_node (Line 44).
+            # We just log if needed, or rely on state updates.
+            if state.get("approved_size", 0.0) > 0:
+                logger.info(f"⚡ Cycle {cycle_id} Execution Processed by Simons.")
             else:
-                logger.info(f"💤 No Execution for Cycle {cycle_id} (Size 0)")
+                logger.info(f"💤 Cycle {cycle_id} No Execution (Size 0 or Veto).")
 
         except Exception as e:
             logger.error(f"💥 Pipeline Crash in Cycle {cycle_id}: {e}", exc_info=True)

@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+service Brain {
+  // Chronos: Time Series Forecasting
+  rpc Forecast (ForecastRequest) returns (ForecastResponse);
+  
+  // FinBERT: Sentiment Analysis
+  rpc AnalyzeSentiment (SentimentRequest) returns (SentimentResponse);
+}
+
+message ForecastRequest {
+  string ticker = 1;
+  repeated double prices = 2; // Historical context
+  int32 horizon = 3;          // How many steps to predict
+}
+
+message ForecastResponse {
+  repeated double p10 = 1; // Bear case
+  repeated double p50 = 2; // Base case
+  repeated double p90 = 3; // Bull case
+}
+
+message SentimentRequest {
+  repeated string headlines = 1;
+}
+
+message SentimentResponse {
+  double sentiment_score = 1; // -1.0 to 1.0
+  double confidence = 2;
+}

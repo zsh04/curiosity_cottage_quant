@@ -21,7 +21,7 @@ graph TD
     subgraph "The Cognitive Engine"
         Macro[Macro Node] -->|Candidates| Analyst[Analyst Node]
         Analyst -->|Signal| Risk[Risk Node]
-        Risk -->|Verdict| Execution[Execution Node]
+        Risk -->|Verdict| Simons[Simons Node]
     end
     
     subgraph "Service Layer"
@@ -39,7 +39,8 @@ graph TD
     Physics -->|Calc| Chronos[Chronos-Bolt (MPS)]
     Reasoning -->|Inference| Ollama[Ollama (Llama 3.1)]
     
-    Execution -->|Trade| AlpacaAPI
+    Simons -->|Trade| AlpacaAPI
+    Simons -->|Log| QuestDB
     
     subgraph "Observability"
         OTEL[OTEL Collector] -->|Export| GrafanaCloud
@@ -79,12 +80,14 @@ The system runs on an event-driven loop, managed by `app/agent/loop.py`.
   3. **Sizing**: Calculates Kelly Fraction * Volatility Adjustment.
 - **Output**: `TOURNAMENT_VERDICT` (Approved Size or Rejection).
 
-### 4. Execution (`app/agent/nodes/execution.py`)
+### 4. Execution (`app/agent/nodes/simons.py`)
 
 - **Input**: Verdict (Approved Size).
 - **Process**:
   - Validates cash/margin.
   - Routes order to Alpaca via `MarketService`.
+  - Logs execution to `QuestDB` (trades table).
+- **Role**: **The Quant** (Simons Persona).
 - **Output**: Order Confirmation / fill data.
 
 ### 5. Broadcast (`app/api/routes/websocket.py`)

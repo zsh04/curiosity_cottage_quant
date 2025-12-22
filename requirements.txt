@@ -51,3 +51,4 @@ pytz
 # ... existing ...
 
 
+sentence-transformers

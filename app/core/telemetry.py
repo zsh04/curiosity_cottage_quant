@@ -53,3 +53,7 @@ def setup_telemetry(service_name: str = "curiosity-cottage-engine"):
 
     print("Telemetry: OTLP Setup Complete (Trace, Metrics, Logs)")
     return True
+
+
+# Export a global tracer for application use
+tracer = trace.get_tracer("curiosity-cottage-engine")

@@ -11,13 +11,16 @@ import pandas as pd
 import numpy as np
 import torch
 import requests
+import orjson
+import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from tqdm import tqdm
+from redis.asyncio import Redis
 
 from app.core.config import settings
 from app.services.forecast import TimeSeriesForecaster
-from app.services.rag_forecast import MarketMemory
+from app.dal.backtest import BacktestDAL
 
 # Logger
 logger = logging.getLogger("BacktestEngine")
@@ -38,9 +41,10 @@ class BacktestEngine:
     It is designed to validate "The Oracle's" prophecies at scale.
     """
 
-    def __init__(self, start_date: str, end_date: str):
+    def __init__(self, start_date: str, end_date: str, run_id: Optional[str] = None):
         self.start_date = pd.to_datetime(start_date)
         self.end_date = pd.to_datetime(end_date)
+        self.run_id = run_id
 
         # 1. Initialize Oracle (Unified Forecaster)
         logger.info("🧠 Initializing Oracle for Simulation...")
@@ -52,10 +56,16 @@ class BacktestEngine:
             "positions": {},  # {symbol: quantity}
             "equity_curve": [],
             "history": [],
+            "trades": [],
         }
 
         # 3. Data Cache
         self.market_data: Dict[str, pd.DataFrame] = {}
+
+        # 4. Persistence & Streaming
+        self.dal = BacktestDAL()
+        self.redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        self.redis = Redis.from_url(self.redis_url, decode_responses=False)
 
     def load_data(self):
         """
@@ -65,6 +75,11 @@ class BacktestEngine:
         """
         universe = settings.WATCHLIST
         logger.info(f"💾 Loading Data for {len(universe)} symbols...")
+        # (Remaining load logic is fine, can stay synchronous or use dal/client if moved to async)
+        # Keeping existing requests implementation for now as it's purely internal setup
+        # But wait, BacktestDAL uses aiohttp. Ideally load_data should be async too if using aiohttp.
+        # But existing code uses `requests.get`. We will stick to `requests` for now to minimize refactoring scope
+        # unless forced. But `load_data` was sync in checking so we keep it.
 
         # We need a bit of buffer BEFORE start_date for context (64 bars)
         buffer_start = self.start_date - pd.Timedelta(hours=4)  # ample buffer
@@ -114,90 +129,83 @@ class BacktestEngine:
         timeline = pd.date_range(
             start=self.start_date, end=self.end_date, freq="1min", tz="UTC"
         )
-        logger.info(f"🎬 Starting Simulation: {len(timeline)} steps.")
+        total_steps = len(timeline)
+        logger.info(f"🎬 Starting Simulation: {total_steps} steps.")
 
         # Context window size
         CTX_LEN = 64
 
-        # Debug counter
-        matches_found = 0
+        try:
+            for step_idx, t in enumerate(tqdm(timeline)):
+                # 1. Prepare Batch
+                current_prices = {}
+                context_batch = []
+                symbols_in_batch = []
 
-        for t in tqdm(timeline):
-            # 1. Prepare Batch
-            current_prices = {}
-            context_batch = []
-            symbols_in_batch = []
+                for symbol, df in self.market_data.items():
+                    if t in df.index:
+                        # Get price at t
+                        price = float(df.loc[t]["close"])
+                        current_prices[symbol] = price
 
-            for symbol, df in self.market_data.items():
-                if t in df.index:
-                    matches_found += 1
-                    # Get price at t
-                    price = float(df.loc[t]["close"])
-                    current_prices[symbol] = price
+                        history_slice = df.loc[:t].iloc[-CTX_LEN:]
 
-                    # Get context (previous 64 bars ending at t)
-                    # Slicing: since index is sorted, we can slice.
-                    # We need strictly the last 64 rows UP TO t.
-                    # df.loc[:t] includes t.
-                    # Optimization: slice by integer position if possible, but index lookup is safe.
-                    history_slice = df.loc[:t].iloc[-CTX_LEN:]
+                        if len(history_slice) == CTX_LEN:
+                            # Vectors
+                            ctx_vals = history_slice["close"].values.astype(np.float32)
+                            context_batch.append(ctx_vals)
+                            symbols_in_batch.append(symbol)
 
-                    if len(history_slice) == CTX_LEN:
-                        # Vectors
-                        ctx_vals = history_slice["close"].values.astype(np.float32)
-                        context_batch.append(ctx_vals)
-                        symbols_in_batch.append(symbol)
+                if not context_batch:
+                    continue
 
-            if not context_batch:
-                logger.debug(
-                    f"No context batch for timestamp {t}. Skipping."
-                )  # Added debug log
-                continue
-
-            # Convert to Tensor
-            batch_tensor = torch.tensor(np.array(context_batch), dtype=torch.float32)
-
-            # 2. Predict (Ensemble)
-            # We treat the batch as a batch for Chronos?
-            # Our current predict_ensemble takes 'current_prices' as a LIST.
-            # But here we have multiple symbols.
-            # The current TimeSeriesForecaster.predict_ensemble signature:
-            # (context_tensor, current_prices: List[float]) -> Dict
-            # It expects a single stream or batch?
-            # Reviewing forecast.py:
-            # predict_ensemble takes context_tensor (Batch x Time).
-            # But 'current_prices' is used for RAF.
-            # RAF logic: "if len(current_prices) >= window_size: recent_window = current_prices[-window:]"
-            # This implies 'current_prices' is history for ONE symbol. Not a list of prices for the batch.
-
-            # FIX: We need to loop per symbol for the Ensemble call roughly, OR update Forecaster to handle batch RAF.
-            # Forecaster RAF logic is single-vector.
-            # For Simulation MVP, we can iterate the batch or run sequentially.
-            # Given we want "Vectorized Backtest", we should ideally vectorise RAF too.
-            # But RAF search is per-vector.
-            # Let's iterate for now. The Chronos part handles batching natively? current logic uses [0] index for result.
-
-            # Temporary Loop for Simulation Safety
-            for i, symbol in enumerate(symbols_in_batch):
-                ctx = batch_tensor[i]  # (64,)
-                raw_history = context_batch[i].tolist()  # List[float]
-
-                # Predict
-                packet = await self.forecaster.predict_ensemble(
-                    ctx, raw_history, cutoff_timestamp=t
+                # Convert to Tensor
+                batch_tensor = torch.tensor(
+                    np.array(context_batch), dtype=torch.float32
                 )
 
-                # Signal Processing
-                signal = packet.get("signal", "NEUTRAL")  # BUY/SELL/NEUTRAL/FLAT
-                conf = packet.get("confidence", 0.0)
+                # 2. Predict (Ensemble)
+                # Temporary Loop for Simulation Safety
+                for i, symbol in enumerate(symbols_in_batch):
+                    ctx = batch_tensor[i]  # (64,)
+                    raw_history = context_batch[i].tolist()  # List[float]
 
-                # 3. Execution (Sim)
-                self._execute(symbol, signal, conf, current_prices[symbol], t)
+                    # Predict
+                    packet = await self.forecaster.predict_ensemble(
+                        ctx, raw_history, cutoff_timestamp=t
+                    )
 
-            # Update Equity Curve
-            self._update_equity(t)
+                    # Signal Processing
+                    signal = packet.get("signal", "NEUTRAL")  # BUY/SELL/NEUTRAL/FLAT
+                    conf = packet.get("confidence", 0.0)
 
-        self._report()
+                    # 3. Execution (Sim)
+                    self._execute(symbol, signal, conf, current_prices[symbol], t)
+
+                # Update Equity Curve & Stream
+                await self._update_equity(t, step_idx, total_steps)
+
+            # Final Report
+            report = await self._report()
+
+            # Persist to QuestDB
+            if self.run_id and report:
+                await self.dal.log_completion(self.run_id, report)
+                # Stream Completion
+                await self.redis.publish(
+                    f"backtest:{self.run_id}",
+                    orjson.dumps({"type": "COMPLETED", "metrics": report}),
+                )
+
+        except Exception as e:
+            logger.error(f"Backtest Failed: {e}")
+            if self.run_id:
+                await self.redis.publish(
+                    f"backtest:{self.run_id}",
+                    orjson.dumps({"type": "FAILED", "error": str(e)}),
+                )
+        finally:
+            await self.redis.close()
 
     def _execute(
         self, symbol: str, signal: str, confidence: float, price: float, t: datetime
@@ -237,31 +245,60 @@ class BacktestEngine:
             )
 
             # Log Trade
-            # logger.info(f"x {t} {signal} {symbol} {qty:.2f} @ {exec_price:.2f}")
+            self.portfolio["trades"].append(
+                {
+                    "symbol": symbol,
+                    "timestamp": t,
+                    "side": signal,
+                    "qty": qty,
+                    "price": exec_price,
+                    "cost": cost if qty > 0 else (abs(qty) * exec_price) - fee,
+                    "fee": fee,
+                }
+            )
 
-    def _update_equity(self, t: datetime):
+    async def _update_equity(self, t: datetime, step: int, total: int):
         val = self.portfolio["cash"]
         for sym, qty in self.portfolio["positions"].items():
             if qty != 0:
                 # Need current price.
-                # Optimization: passed via arg or lookup
-                # Taking from cache
                 if t in self.market_data[sym].index:
                     price = self.market_data[sym].loc[t]["close"]
                     val += qty * price
 
-        self.portfolio["equity_curve"].append({"timestamp": t, "equity": val})
+        # Calculate Drawdown
+        current_eq = val
+        self.portfolio["history"].append(current_eq)
+        peak = max(self.portfolio["history"])
+        drawdown = (current_eq / peak - 1) if peak > 0 else 0
 
-    def _report(self):
+        self.portfolio["equity_curve"].append(
+            {"timestamp": t, "equity": current_eq, "drawdown": drawdown}
+        )
+
+        # Stream Progress to Dragonfly
+        if self.run_id and step % 10 == 0:
+            packet = {
+                "type": "progress",
+                "progress": round(step / total, 4),
+                "equity": round(current_eq, 2),
+                "timestamp": t.isoformat(),
+            }
+            await self.redis.publish(f"backtest:{self.run_id}", orjson.dumps(packet))
+
+    async def _report(self):
         eq = pd.DataFrame(self.portfolio["equity_curve"])
         if eq.empty:
             logger.info("No trades.")
-            return
+            return {"metrics": {}, "equity": [], "trades": []}
 
         eq.set_index("timestamp", inplace=True)
         ret = eq["equity"].pct_change().dropna()
 
-        total_ret = (eq["equity"].iloc[-1] - 100000) / 100000
+        start_eq = 100000.0  # Assumed initial
+        end_eq = eq["equity"].iloc[-1]
+
+        total_ret = (end_eq - start_eq) / start_eq
         sharpe = ret.mean() / ret.std() * np.sqrt(252 * 390) if ret.std() > 0 else 0
         max_dd = (eq["equity"] / eq["equity"].cummax() - 1).min()
 
@@ -272,6 +309,21 @@ class BacktestEngine:
         logger.info(f"Sharpe: {sharpe:.2f}")
         logger.info(f"Max DD: {max_dd:.2%}")
         logger.info("=" * 30)
+
+        # Log Logic: Call QuestDB async log_equity_curve
+        if self.run_id:
+            await self.dal.log_equity_curve(self.run_id, self.portfolio["equity_curve"])
+
+        return {
+            "metrics": {
+                "total_return": total_ret,
+                "sharpe_ratio": sharpe,
+                "max_drawdown": max_dd,
+                "final_equity": end_eq,
+            },
+            "equity": self.portfolio["equity_curve"],
+            "trades": self.portfolio["trades"],
+        }
 
 
 if __name__ == "__main__":

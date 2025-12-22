@@ -1,3 +1,4 @@
+from app.core.telemetry import tracer
 import logging
 import time
 from app.agent.state import AgentState, TradingStatus
@@ -206,7 +207,13 @@ class RiskManager:
         return approved_notional
 
 
-def risk_node(state: AgentState) -> AgentState:
+@tracer.start_as_current_span("node_taleb_risk")
+def taleb_node(state: AgentState) -> AgentState:
+    """
+    Taleb Node (The Skeptic):
+    Applies the "Black Box" Risk Veto (Physics Engine) and ensures survival.
+    """
+    logger.info("--- NODE: TALEB (RISK GUARDIAN) ---")  # Ensure messages list exists
     manager = RiskManager()
     start_time = time.time()
     success = True

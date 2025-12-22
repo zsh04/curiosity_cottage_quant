@@ -12,39 +12,8 @@ from sqlalchemy import (
 
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
-from pgvector.sqlalchemy import Vector
 
 Base = declarative_base()
-
-
-class MarketStateEmbedding(Base):
-    """
-    Stores the 'Quantum State' (Physics + Sentiment) as a high-dimensional vector.
-    Used for RAG (retrieval-augmented generation) by the Analyst Node.
-    """
-
-    __tablename__ = "market_state_embeddings"
-    __table_args__ = (
-        Index(
-            "idx_market_embeddings_hnsw",
-            "embedding",
-            postgresql_using="hnsw",
-            postgresql_with={"m": 16, "ef_construction": 64},
-            postgresql_ops={"embedding": "vector_cosine_ops"},
-        ),
-        Index("idx_market_embeddings_symbol_time", "symbol", "timestamp"),
-        {"schema": "public"},
-    )
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    timestamp = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
-    symbol = Column(String(10), nullable=False)
-
-    # Metadata stored as JSONB for flexible queries
-    metadata_ = Column("metadata", JSON, default={})
-
-    # The Quantum State Vector (1536 dims for openai/text-embedding-3-small)
-    embedding = Column(Vector(1536))
 
 
 class AgentStateSnapshot(Base):
@@ -165,43 +134,3 @@ class TradeJournal(Base):
 # ============================================
 # TIME-SERIES MODELS (TimescaleDB Hypertables)
 # ============================================
-
-
-class MarketTick(Base):
-    """
-    Market tick data stored in TimescaleDB hypertable.
-    Optimized for high-frequency time-series queries.
-    """
-
-    __tablename__ = "market_ticks"
-    __table_args__ = (
-        Index("idx_market_ticks_symbol_time", "symbol", "time"),
-        {"schema": "public"},
-    )
-
-    time = Column(DateTime, primary_key=True, nullable=False)
-    symbol = Column(String(10), primary_key=True, nullable=False)
-    price = Column(Float)  # Legacy/Last
-    open = Column(Float)
-    high = Column(Float)
-    low = Column(Float)
-    close = Column(Float)
-    volume = Column(Float)
-
-
-class MacroTick(Base):
-    """
-    Macro indicator ticks (US10Y, VIX, DXY) for Protocol #3 (Macro Context).
-    Stored in TimescaleDB hypertable for efficient regime analysis.
-    """
-
-    __tablename__ = "macro_ticks"
-    __table_args__ = (
-        Index("idx_macro_ticks_symbol_time", "symbol", "time"),
-        {"schema": "public"},
-    )
-
-    time = Column(DateTime, primary_key=True, nullable=False)
-    symbol = Column(String(10), primary_key=True, nullable=False)
-    value = Column(Float)
-    regime_tag = Column(String(50), nullable=True)  # e.g., "STABLE", "VOLATILE"

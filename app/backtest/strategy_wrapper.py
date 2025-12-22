@@ -129,7 +129,7 @@ class AnalystStrategy(Strategy):
                     )
 
             except Exception as e:
-                logger.error(f"❌ AnalystAgent failed: {e}", exc_info=True)
+                logger.error(f"❌ BoydAgent failed: {e}", exc_info=True)
 
     def _construct_agent_state(self, event: MarketEvent) -> AgentState:
         """
