@@ -14,10 +14,14 @@
 
 The system is governed by a "Bicameral Mind" of specialized agents:
 
-- **Soros (The Philosopher):** Scans the global universe for regime changes (Quantum State Observation).
-- **Boyd (The Strategist):** Executes the OODA Loop to orient and decide on tactics (Reasoning Core).
-- **Taleb (The Guardian):** Enforces 10-decile physics veto and asymmetric skew limits (Black Swan Protection).
-- **Simons (The Executioner):** Handles high-precision order slicing and predatory slippage mitigation.
+- **Feynman (The Physicist):** Calculates the 5-Pillar Physics Vector (Mass, Momentum, Entropy, etc.).
+- **Taleb (The Guardian):** Enforces 10-decile physics veto and asymmetric skew limits.
+- **Boyd (The Strategist):** Executes the OODA Loop to orient and decide on tactics.
+- **Soros (The Feeler):** Observes quantum state changes and sentiment regimes.
+- **Chronos (The Oracle):** Generates high-resolution probabilistic time-series forecasts.
+- **Simons (The Executioner):** Handles high-precision order slicing and predatory slippage.
+- **Hypatia (The Librarian):** Manages the Unified Data Access Layer (QuestDB/LanceDB).
+- **Shannon (The Signalman):** Ensures zero-loss telemetry transmission via the Shannon Channel.
 
 ### ⚛️ The Physics Engine (Risk Core)
 
