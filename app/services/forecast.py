@@ -135,19 +135,7 @@ class TimeSeriesForecaster:
 
         # Step C: Relativity (Timeframe Harmony)
         # Assuming context_tensor is 1m data (Horizon 12m)
-        # We need a proxy for the higher timeframe (5m).
-        # For efficiency, we won't run a second inference pass yet (latency).
-        # We will infer the HTF Trend from the LTF Context Window.
-        # "Zoom Out" = aggregate last 60 points of 1m data -> 12 points of 5m data?
-        # Or simply check if the 1m context trend aligns with the 1m forecast.
-
-        # RELATIVITY OPERATOR Logic:
-        # 1. Calculate historical trend of the context window (Past Velocity)
-        # 2. Compare with Forecast Trend (Future Velocity)
-        # 3. If Past was Up and Future is Up -> Concordance
-        # 4. If Past was Down and Future is Up -> Reversion (Lower Confidence)
-
-        # NOTE: A true HTF check needs 5m bars. For now, we use "Past vs Future" as the relativity check
+        # We use "Past vs Future" as the relativity check
         # until we wire up multi-timeframe inputs in Phase 33.
 
         context_prices = context_tensor.cpu().numpy().flatten()
@@ -165,7 +153,7 @@ class TimeSeriesForecaster:
 
     def _run_chronos_batch(self, tensor: torch.Tensor) -> Dict[str, float]:
         """
-        Blocking inference call.
+        Blocking inference call (Sync).
         """
         if not self.pipeline:
             return {"p10": 0.0, "p50": 0.0, "p90": 0.0, "trend": 0.0}
@@ -213,11 +201,6 @@ class TimeSeriesForecaster:
     ) -> Dict[str, Any]:
         """
         Combine Neural (Chronos) and Memory (RAF) signals.
-
-        Logic:
-        1. If both agree on Direction -> Boost Confidence.
-        2. If RAF confidence is high (>0.8) and contradicts Chronos -> Veto/Dampen.
-        3. If Chronos Spread is wide (High Uncertainty) -> Rely on RAF.
         """
         chronos_trend = chronos.get("trend", 0.0)
         raf_trend = raf.get("weighted_outcome", 0.0)
@@ -250,14 +233,9 @@ class TimeSeriesForecaster:
                 confidence = 0.6
                 reasoning = f"Divergence: Neural ({chronos_trend:.2%}) overrides weak Memory ({raf_trend:.2%})."
 
-                confidence = 0.6
-                reasoning = f"Divergence: Neural ({chronos_trend:.2%}) overrides weak Memory ({raf_trend:.2%})."
-
         # RELATIVITY PENALTY (Timeframe / Trend Alignment)
         past_trend = chronos.get("past_trend", 0.0)
         # If fighting the trend (Reversion), reduce confidence
-        # Unless relying on Mean Reversion Strategy explicitly?
-        # For "The Oracle" (Trend Follower), we punish fighting the immediate past trend.
         if np.sign(chronos_trend) != np.sign(past_trend) and abs(past_trend) > 0.001:
             confidence *= 0.8  # 20% Penalty for counter-trend
             reasoning += f" [Relativity: Fighting Trend ({past_trend:.2%})]"
@@ -272,5 +250,115 @@ class TimeSeriesForecaster:
             "signal": signal_type,
             "confidence": float(confidence),
             "reasoning": reasoning,
-            "components": {"chronos": chronos, "raf": raf},
+            "chronos": chronos,
+            "raf": raf,
+            "meta": {"relativity": past_trend},
         }
+
+    async def predict_batch(self, context_tensor: torch.Tensor) -> List[Dict[str, Any]]:
+        """
+        Hyper-Speed Batch Logic (The Holodeck).
+        Bypasses the Loop. Runs pure Tensor inference.
+        """
+        if context_tensor.ndim == 1:
+            context_tensor = context_tensor.unsqueeze(0)
+
+        # Run in Executor (Blocking Call)
+        return await asyncio.get_running_loop().run_in_executor(
+            self.executor, self._run_chronos_batch_inference, context_tensor
+        )
+
+    def _run_chronos_batch_inference(
+        self, tensor: torch.Tensor
+    ) -> List[Dict[str, Any]]:
+        """
+        Blocking Batch Inference.
+        Returns a list of result dicts aligned with the input batch.
+        Structure: {'q_values': [...], 'q_labels': [...]}
+        """
+        batch_size = tensor.shape[0]
+        # Deciles we want: 0.05 to 0.95
+        target_labels = [0.05, 0.15, 0.25, 0.35, 0.50, 0.65, 0.75, 0.85, 0.95]
+        default_res = {"q_values": [0.0] * 9, "q_labels": target_labels, "trend": 0.0}
+
+        if not self.pipeline:
+            return [default_res] * batch_size
+
+        try:
+            # 1. Device Transfer
+            if tensor.device.type != self.device:
+                tensor = tensor.to(self.device, dtype=self.dtype)
+
+            # 2. Inference (Bolt)
+            # Shapes: (batch, num_quantiles, horizon)
+            # Note: Chronos-Bolt output is fixed to 0.1...0.9 quantiles if no num_samples
+            forecast = self.pipeline.predict(
+                tensor,
+                prediction_length=settings.FORECAST_HORIZON,
+                limit_prediction_length=False,
+            )
+
+            # 3. Quantile Extraction & Interpolation
+            forecast_cpu = forecast.float().cpu()  # (B, 9, H)
+
+            # Slice Last Step of Horizon
+            final_step = forecast_cpu[:, :, -1]  # (B, 9)
+
+            # Extract Native Columns
+            q10 = final_step[:, 0]
+            q20 = final_step[:, 1]
+            q30 = final_step[:, 2]
+            q40 = final_step[:, 3]
+            q50 = final_step[:, 4]
+            q60 = final_step[:, 5]
+            q70 = final_step[:, 6]
+            q80 = final_step[:, 7]
+            q90 = final_step[:, 8]
+
+            # Interpolate Targets [0.05 ... 0.95]
+            # Tails (Linear Extrapolation)
+            q05 = q10 - 0.5 * (q20 - q10)
+            q15 = q10 + 0.5 * (q20 - q10)
+            q25 = q20 + 0.5 * (q30 - q20)
+            q35 = q30 + 0.5 * (q40 - q30)
+            # q50 is native
+            q65 = q60 + 0.5 * (q70 - q60)
+            q75 = q70 + 0.5 * (q80 - q70)
+            q85 = q80 + 0.5 * (q90 - q80)
+            q95 = q90 + 0.5 * (q90 - q80)
+
+            # Context Last Prices for Trend
+            last_prices = tensor[:, -1].float().cpu()
+
+            # Trend = (q50 - Last) / Last
+            trends = (q50 - last_prices) / last_prices
+            trends = torch.nan_to_num(trends, nan=0.0)
+
+            results = []
+            for i in range(batch_size):
+                # Construct parallel arrays
+                values = [
+                    float(q05[i]),
+                    float(q15[i]),
+                    float(q25[i]),
+                    float(q35[i]),
+                    float(q50[i]),
+                    float(q65[i]),
+                    float(q75[i]),
+                    float(q85[i]),
+                    float(q95[i]),
+                ]
+
+                res = {
+                    "q_values": values,
+                    "q_labels": target_labels,
+                    "trend": float(trends[i]),
+                }
+
+                results.append(res)
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Batch Chronos Error: {e}")
+            return [default_res] * batch_size

@@ -15,9 +15,15 @@ message ForecastRequest {
 }
 
 message ForecastResponse {
-  repeated double p10 = 1; // Bear case
-  repeated double p50 = 2; // Base case
-  repeated double p90 = 3; // Bull case
+  // 10 Quantile Arrays: [q05, q15, q25, q35, q45, q55, q65, q75, q85, q95]
+  // We store them as a map or parallel arrays.
+  map<string, QuantileData> forecasts = 1; // Key: Ticker
+}
+
+message QuantileData {
+  // 10 Decile Centers [0.05, 0.15 ... 0.95]
+  repeated float q_values = 1; // The price values
+  repeated float q_labels = 2; // The percentiles (0.05, 0.15, etc)
 }
 
 message SentimentRequest {
