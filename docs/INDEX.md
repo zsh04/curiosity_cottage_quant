@@ -115,6 +115,7 @@ docs/
 
 ### API (Protocols)
 
+- **`protos/`** — **The Rosetta Stone** (gRPC Contracts)
 - `websocket-protocol.md` — TELEMETRY packet schema
 - `redis-protocol.md` — Key patterns, Pub/Sub
 

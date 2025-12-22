@@ -13,33 +13,33 @@ The **Curiosity Cottage Quant Engine (CC-V2)** is a hybrid-metal autonomous trad
 ```mermaid
 graph TD
     User[Trader] -->|View| FE[Frontend (Glass Cockpit)]
-    FE -->|WebSocket| API[API Server (Litestar)]
-    FE -->|REST| API
+    FE -->|WebSocket| Stream[BacktestStream / BrainStream]
+    FE -->|REST| API[API Server (Litestar)]
     
-    API -->|Control| Engine[Agent Graph (LangGraph)]
+    API -->|Control| Controller[BacktestController]
     
     subgraph "The Cognitive Engine"
         Macro[Macro Node] -->|Candidates| Analyst[Analyst Node]
-        Analyst -->|Signal| Risk[Risk Node]
+        Analyst -->|Signal| Risk[Taleb (Risk Node)]
         Risk -->|Verdict| Simons[Simons Node]
     end
     
-    subgraph "Service Layer"
-        Market[Market Service]
-        Physics[Physics Service]
-        Reasoning[Reasoning Service]
-        Memory[Memory Service]
+    subgraph "The Brain (gRPC)"
+        Brain[BrainService]
+        Chronos[Chronos-Bolt (MPS)]
+        FinBERT[FinBERT (ONNX)]
+        Brain --> Chronos
+        Brain --> FinBERT
     end
     
-    Engine --> ServiceLayer
+    subgraph "The Shannon Channel"
+        Engine[BacktestEngine] -->|Pub Progress| Redis[(Dragonfly)]
+        Redis -->|Sub| Stream
+    end
     
-    Market -->|Failover| Adapter[Market Adapters]
-    Adapter --> Alpaca & Tiingo & Finnhub
-    
-    Physics -->|Calc| Chronos[Chronos-Bolt (MPS)]
-    Reasoning -->|Inference| Ollama[Ollama (Llama 3.1)]
-    
-    Simons -->|Trade| AlpacaAPI
+    Controller -->|Spawn| Engine
+    Analyst -->|RPC| Brain
+    Simons -->|Execute| AlpacaAPI
     Simons -->|Log| QuestDB
     
     subgraph "Observability"
@@ -77,7 +77,7 @@ The system runs on an event-driven loop, managed by `app/agent/loop.py`.
 - **Process**: "The Iron Gate"
   1. **Circuit Breaker**: Checks 5% daily drawdown limit.
   2. **Physics Veto**: Rejects trade if Velocity is 0 (Frozen) or Alpha < 1.5 (Chaos).
-  3. **Sizing**: Calculates Kelly Fraction * Volatility Adjustment.
+  3. **Sizing**: Calculates Bayesian Expected Shortfall (BES) Fraction * Alpha Scalar.
 - **Output**: `TOURNAMENT_VERDICT` (Approved Size or Rejection).
 
 ### 4. Execution (`app/agent/nodes/simons.py`)
@@ -105,8 +105,11 @@ The system runs on an event-driven loop, managed by `app/agent/loop.py`.
 
 The domain logic layer. Agents do not talk to APIs directly; they talk to Services.
 
-- **`market.py`**: **The Librarian**.
-  - *Role*: Facade for all market data.
+- **`market.py`**: **The Library of Hypatia**.
+  - *Role*: Unified Data Access Layer (DAL).
+  - *Components*:
+    - **The Shannon Channel** (Redis/Stream).
+    - **The Scrolls of Herodotus** (QuestDB/History).
   - *Key Method*: `get_price(symbol)` - Tries Alpaca -> Tiingo -> Finnhub -> YFinance.
   
 - **`physics.py`**: **The Physicist**.
@@ -131,9 +134,13 @@ The domain logic layer. Agents do not talk to APIs directly; they talk to Servic
 - **`backtest.py`**: **The Quantum Holodeck** (New in v3.1).
   - *Role*: Vectorized Time-Travel Simulator.
   - *Purpose*: Validates the Oracle & Hippocampus offline.
-  - *Design*: Strict causality loop (tqdm) with slippage modeling.
+  - *Streaming*: **The Shannon Channel** (v0.12.0) - Publishes progress to Redis `backtest:{run_id}`.
   - *Key Method*: `run()` - Orchestrates the full simulation loop.
-  - *Execution*: `FrictionExecution` (v3.2) adds dynamic volatility-based slippage and network jitter latency.
+
+- **`brain_service.py`**: **The Brain** (New in v0.12.0).
+  - *Role*: gRPC Host for AI Models.
+  - *Contract*: `protos/brain.proto` (**The Rosetta Stone**).
+  - *Methods*: `Forecast()` and `AnalyzeSentiment()`.
 
 - **`state.py`**: **The Conscious Mind**.
   - *Role*: Global State Definition.

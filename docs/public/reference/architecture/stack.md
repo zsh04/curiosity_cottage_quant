@@ -21,7 +21,13 @@
 
 * **Hot:** Redis (Bus & Cache).
 * **Cold:** QuestDB (High-Performance Time-Series).
-* **Deep:** LanceDB (The Latticework / Munger).
+* **Deep:** LanceDB (The Latticework / Hypatia's Memory).
+
+## Communication
+
+* **Stream:** Redis (Dragonfly) Pub/Sub.
+* **RPC:** gRPC (Protobufs) for AI Services.
+* **API:** Litestar (ASGI) + WebSockets.
 
 ## 4. Hardware Requirements (The "Silicon Ceiling")
 

@@ -1,6 +1,6 @@
 # Curiosity Cottage Quant
 
-### The Ezekiel Operating System (v0.12.0)
+### The Shannon Channel (v0.12.0)
 
 > **"Trust Physics, Not Emotion."**
 
@@ -8,23 +8,27 @@
 
 ## 🏛️ System Overview
 
-**Curiosity Cottage Quant (CCQ)** is an autonomous, physics-driven trading system built on the **Ezekiel Protocol**. It is not just a backtester or a bot; it is a **cybernetic organism** managed by a "Council" of AI agents that debate, reason, and execute trades under strict risk constraints.
+**Curiosity Cottage Quant (CCQ)** is an autonomous, physics-driven trading system built on the **Hybrid Metal Architecture**. It is not just a backtester or a bot; it is a **cybernetic organism** managed by a "Council" of AI agents that debate, reason, and execute trades under strict risk constraints.
 
-### 🧠 The Council (Decision Engine)
+### 2. The Council (Cognitive Stack)
 
-- **The Oracle:** Unified Forecasting Engine (Chronos-Bolt + RAF Memory).
-- **The Analyst:** Pattern recognition & sentiment analysis (FinBERT/ONNX).
-- **The Skeptic:** Devil's advocate & risk challenger.
-- **The Quant:** Statistical arbitrage & math checks (Chronos-Bolt/MPS).
-- **The Executioner:** Order routing & state management.
+The system is governed by a "Bicameral Mind" of specialized agents:
+
+- **Soros (The Philosopher):** Scans the global universe for regime changes and volatility.
+- **Boyd (The Strategist):** Executes the OODA Loop to orient and decide on tactics.
+- **Taleb (The Guardian):** Enforces risk limits and "black swan" protection.
+- **Simons (The Executioner):** Handles high-precision order slicing and routing.
 
 ### ⚛️ The Physics Engine (Risk Core)
 
 A deterministic "Veto Layer" that overrides AI consensus if physical laws of the market are violated.
 
-- **Law I: Conservation of Capital** (Kelly Criterion)
-- **Law II: Entropy Management** (Hill Estimator & Tail Risk)
-- **Law III: Kinematics** (Kalman Filter Velocity/Acceleration)
+- **Law I: Inertia** (Adaptive Kinematic Kalman Filter)
+  *Markets have momentum; a trend in motion tends to stay in motion (Newton's 1st).*
+- **Law II: Entropy** (Hill Estimator & Hurst Exponent)
+  *Markets tend towards disorder; infinite variance (Heavy Tails) violates Gaussian models.*
+- **Law III: Conservation of Capital** (Bayesian Expected Shortfall)
+  *Energy (Capital) cannot be created from nothing; it must be preserved against Ruin.*
 
 ---
 
@@ -33,8 +37,10 @@ A deterministic "Veto Layer" that overrides AI consensus if physical laws of the
 | Component | Technology | Role |
 |-----------|------------|------|
 | **Core** | Python 3.11 | The Metal (AsyncIO) |
+| **Stream** | Redis (Dragonfly) | **The Shannon Channel** (Real-time Telemetry) |
+| **Brain** | gRPC (Protobufs) | **The Rosetta Stone** (Strict Contracts) |
 | **Memory** | LanceDB | Semantic Search / Embeddings |
-| **Time-Series** | QuestDB | High-Frequency Tick Data |
+| **History**| QuestDB | **The Scrolls of Herodotus** (Tick Data) |
 | **Neural** | ONNX + MPS | Hardware-Accelerated Inference |
 | **API** | Litestar | High-Performance REST Interface |
 

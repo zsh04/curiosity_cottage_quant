@@ -12,7 +12,7 @@ The Council is physically distributed across the Apple Silicon chip, creating a 
 | **Chronos** | Prophecy | **MPS / GPU** |
 | **Soros** | Intuition | **Neural Engine (ANE)** |
 | **Simons** | Execution | **Efficiency Cores (CPU)** |
-| **Munger** | Memory | **NVMe / RAM** |
+| **Hypatia** | Memory/DAL | **NVMe / RAM** |
 
 ---
 
@@ -48,7 +48,7 @@ The Council is physically distributed across the Apple Silicon chip, creating a 
 #### 4. Boyd (The Strategist) - "The Pilot"
 
 * **Role:** OODA Loop (Observe-Orient-Decide-Act)
-* **File:** `app/agent/nodes/boyd.py`
+* **File:** `app/agent/boyd.py`
 * **Philosophy:** "Speed of orientation beats speed of movement."
 * **Responsibilities:** Selects tactics (Ambush vs. Snipe) based on Feynman's physics.
 
@@ -62,12 +62,16 @@ The Council is physically distributed across the Apple Silicon chip, creating a 
     > [!WARNING]
     > **Latency**: ~2.3s (High Cognitive Load).
 
-#### 6. Munger (The Librarian) - "The Memory"
+#### 6. Hypatia (The Librarian) - "The Memory"
 
-* **Role:** Latticework & Analog Retrieval
-* **File:** `app/services/memory.py` (LanceDB)
-* **Philosophy:** "History doesn't repeat, but it rhymes."
-* **Responsibilities:** Retrieves the top 5 historical analogs (RAG) to validate current setups.
+* **Role:** Unified Data Access Layer (DAL) & RAG.
+* **Components:**
+  * **The Scrolls of Herodotus:** Querying QuestDB (Time-Series History).
+  * **The Shannon Channel:** Redis Streaming (Real-time).
+  * **Memory Core:** LanceDB (Semantic Search / Vector Memory).
+* **File:** `app/services/market.py` / `app/services/memory.py`
+* **Philosophy:** "Knowledge is the only bridge between the infinite and the finite."
+* **Responsibilities:** Retrieves top 5 historical analogs (RAG) and provides a unified interface for all data.
 
 ### ⚡ The Reflex Layer
 
