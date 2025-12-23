@@ -78,12 +78,37 @@ class ChronosService:
                     torch_dtype=dtype,
                 )
                 logger.info("Chronos Neural Matrix Loaded.")
-            except Exception as e:
-                logger.error(f"Failed to load Chronos model: {e}")
+            except Exception as load_err:
+                logger.error(f"Chronos Initialization Failed: {load_err}")
+
+                # CRITICAL: Check if we're in production
+                from app.core.config import settings
+
+                if settings.ENV == "PROD":
+                    raise RuntimeError(
+                        "❌ CRITICAL: Chronos forecasting library unavailable in PRODUCTION mode. "
+                        "Cannot execute live trading without forecasting engine. "
+                        "Install amazon-chronos-forecasting library or switch to DEV environment. "
+                        f"Error: {load_err}"
+                    )
+
+                # DEV mode: Allow mock for testing
+                logger.warning(
+                    "⚠️ DEV MODE: Chronos library NOT FOUND. "
+                    "Running in Mock/Pass-through Mode (testing only). "
+                    "Forecasts will return neutral/placeholder data."
+                )
+                self.pipeline = None  # Mock mode
+                self.device = "cpu"
+                self.dtype = torch.float32
         else:
             logger.warning(
                 "Chronos Library NOT FOUND. Running in Mock/Pass-through Mode."
             )
+            # Ensure mock mode is explicitly set if Chronos is not available at all
+            self.pipeline = None
+            self.device = "cpu"
+            self.dtype = torch.float32
 
     def update_buffer(self, price: float):
         """Zero-allocation ring buffer update."""

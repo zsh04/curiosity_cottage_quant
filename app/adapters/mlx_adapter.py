@@ -41,27 +41,31 @@ class MLXModel(Model):
         """
         try:
             # 1. Load Model (Cached via Factory)
-            # This handles the heavy lifting of loading weights
             from app.agent.models_legacy import model_factory
+            from app.core.config import settings
 
             model, tokenizer = model_factory.load_gemma()
 
+            # CRITICAL: No mock fallback in production
             if model == "MOCK_MODEL":
-                return self._mock_response()
+                if settings.ENV == "PROD":
+                    raise RuntimeError(
+                        "❌ CRITICAL: MLX model unavailable in PRODUCTION mode. "
+                        "Cannot execute live trading on mock data. "
+                        "Install MLX and Gemma weights, or switch to DEV environment."
+                    )
+                else:
+                    logger.warning("⚠️ DEV MODE: Using mock MLX response (testing only)")
+                    return self._mock_response()
 
             # 2. Apply Chat Template
-            # Convert PydanticAI messages to HF Chat format
             chat_messages = self._convert_messages(messages)
 
             prompt = tokenizer.apply_chat_template(
                 chat_messages, tokenize=False, add_generation_prompt=True
             )
 
-            # 3. Generate (Blocking Call - needs to be optimized for Async if possible,
-            # but MLX is mostly synchronous on the metal. We run in thread if needed,
-            # but PydanticAI 'request' is async, so we can await if we wrapper it.)
-            # For now, running sync in this async method.
-
+            # 3. Generate
             from mlx_lm import generate
 
             # Extract params

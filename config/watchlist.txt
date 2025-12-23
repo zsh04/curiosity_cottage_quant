@@ -1,0 +1,28 @@
+# Watchlist Configuration
+# 
+# Define trading universe here. Symbols are validated on startup.
+# Format: One symbol per line, comments allowed
+
+# Mega-cap tech (high liquidity)
+AAPL
+MSFT
+GOOGL
+AMZN
+NVDA
+META
+TSLA
+
+# Financial sector
+JPM
+BAC
+GS
+
+# Healthcare
+JNJ
+UNH
+
+# Consumer
+WMT
+HD
+
+# Add more symbols below...
