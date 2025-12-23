@@ -200,10 +200,41 @@ async def handle_tick(msg: Union[bytes, Dict[str, Any]]):
             "vectors": forces.model_dump(),
         }
 
-        # Wolf Logging
-        if forces.entropy > 0.9:
+        # Wolf Logging + Hypatia Check (Adaptive Entropy)
+        # Threshold = Max(3.0, Rolling_Vol * 1.5)
+        # Rolling_Vol = prices.pct_change().rolling(90).std()
+
+        valid_len = kernel.window_size if kernel.is_filled else kernel.cursor
+        active_prices = kernel.prices[-valid_len:]
+
+        # Calculate Volatility (Sigma)
+        volatility = 0.0
+
+        # We need at least 91 points for a 90-period rolling window
+        if len(active_prices) > 90:
+            try:
+                import pandas as pd
+
+                # Convert to Series for rolling ops
+                s_prices = pd.Series(active_prices)
+                # Compute Rolling Vol of Returns
+                rolling_vol_series = s_prices.pct_change().rolling(window=90).std()
+                if not rolling_vol_series.empty:
+                    volatility = float(rolling_vol_series.iloc[-1])
+                    if pd.isna(volatility):
+                        volatility = 0.0
+            except ImportError:
+                # Fallback if pandas not present (unlikely in this stack)
+                volatility = np.std(active_prices) if len(active_prices) > 1 else 0.0
+            except Exception as e:
+                logger.warning(f"Hypatia Volatility Error: {e}")
+
+        # Adaptive Threshold (Hypatia)
+        entropy_threshold = max(3.0, volatility * 1.5)
+
+        if forces.entropy > entropy_threshold:
             logger.warning(
-                f"CHAOS DETECTED on {symbol}. Entropy: {forces.entropy:.2f}. Discarding."
+                f"CHAOS DETECTED on {symbol}. Entropy: {forces.entropy:.2f} > {entropy_threshold:.2f} (Vol={volatility:.2f}). Discarding."
             )
 
         # BRIDGE: Write State to Key for synchronous access by Agents

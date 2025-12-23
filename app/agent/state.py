@@ -41,6 +41,9 @@ class AgentState(TypedDict):
     # --- Portfolio ---
     nav: float
     cash: float
+    buying_power: float  # T+1 / Settlement awareness
+    unsettled_cash: float
+    pdt_exempt: bool  # True if Equity >= $25,000
     daily_pnl: float
     max_drawdown: float
 

@@ -36,12 +36,12 @@ The Council is physically distributed across the Apple Silicon chip, creating a 
 * **Responsibilities:** Enforces **Fractal Risk Sizing**. Calculates Heavy-Tail Alpha (α).
 * **Psychology:** **Anxiety Regulation** (Halves position size when stress/consecutive losses > 0.7).
 
-#### 3. Nash (The Auditor) - "The Judge"
+#### 3. Nash (The Auditor) - "The Game Theorist"
 
 * **Role:** Equilibrium & Post-Mortem
-* **File:** `app/services/nash.py` (Implied)
-* **Philosophy:** "Every loss is a failure of game theory."
-* **Responsibilities:** Analyzes drawdowns and structural failures.
+* **File:** `app/agent/nash.py`
+* **Philosophy:** "Every loss is a failure of game theory. Do not chase chaos."
+* **Responsibilities:** VETOES trades where $(Price - Mode) > 2\sigma$. Enforces Mean Reversion.
 
 ### 🧠 The Cognitive Layer
 

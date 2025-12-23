@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from app.strategies.base import BaseStrategy
-from app.lib.preprocessing.fracdiff import FractionalDifferentiator
+from app.lib.memory import FractalMemory
 
 
 class FractalBreakoutStrategy(BaseStrategy):
@@ -20,7 +20,6 @@ class FractalBreakoutStrategy(BaseStrategy):
     def __init__(self, window: int = 20):
         super().__init__()
         self.window = window
-        self.fd = FractionalDifferentiator()
 
     @property
     def name(self) -> str:
@@ -37,10 +36,11 @@ class FractalBreakoutStrategy(BaseStrategy):
             series = market_data["close"]
 
             # 1. Transform to Stationary Series
-            # find_min_d returns (d, transformed_series)
-            # We explicitly want the transformed series
+            # find_optimal_d returns (d, transformed_series_list)
+            # We explicitly want the transformed series as pd.Series
             try:
-                d, stationary_series = self.fd.find_min_d(series)
+                d, stationary_list = FractalMemory.find_optimal_d(series.tolist())
+                stationary_series = pd.Series(stationary_list, index=series.index)
                 span.set_attribute("fractal.d", d)
             except Exception as e:
                 span.record_exception(e)

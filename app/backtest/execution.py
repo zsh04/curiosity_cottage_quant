@@ -90,7 +90,11 @@ class FrictionExecution(ExecutionModel):
 
     @tracer.start_as_current_span("simulate_fill")
     def simulate_fill(
-        self, order: OrderEvent, market_data: MarketEvent, volatility: float = 0.01
+        self,
+        order: OrderEvent,
+        market_data: MarketEvent,
+        volatility: float = 0.01,
+        recent_ticks: list[float] = None,
     ) -> tuple[float, float]:
         """
         Simulate realistic order execution.
@@ -112,10 +116,26 @@ class FrictionExecution(ExecutionModel):
         volatility_factor = volatility * 100
         slippage_bps = base_slip_bps * (1 + volatility_factor)
 
-        # Market Impact
+        # Market Impact (Standard)
         impact_bps = self.impact_factor * (order.quantity**0.5)
 
-        total_slippage_bps = slippage_bps + impact_bps
+        # --- PHASE 37: PREDATORY SLIPPAGE (Hybrid Execution) ---
+        # "Simons" Logic: Use recent ticks to estimate immediate liquidity stress/variance.
+        predatory_slip_bps = 0.0
+        if recent_ticks and len(recent_ticks) > 10:
+            import numpy as np
+
+            local_std = np.std(recent_ticks)
+            # Predatory scaling: If local volatility is high, HFTs widen spreads.
+            # impact = local_std * sqrt(qty) * factor
+            # Normalized to BPS relative to price
+            if mid_price > 0:
+                predatory_impact_dollars = (
+                    local_std * (order.quantity**0.5) * self.impact_factor
+                )
+                predatory_slip_bps = (predatory_impact_dollars / mid_price) * 10000.0
+
+        total_slippage_bps = slippage_bps + impact_bps + predatory_slip_bps
         slippage_pct = total_slippage_bps / 10000.0
 
         if order.direction == "BUY":
@@ -125,6 +145,7 @@ class FrictionExecution(ExecutionModel):
 
         span.set_attribute("execution.slippage_bps", slippage_bps)
         span.set_attribute("execution.impact_bps", impact_bps)
+        span.set_attribute("execution.predatory_bps", predatory_slip_bps)
         span.set_attribute("execution.fill_price", fill_price)
 
         # Step 3: Commission
@@ -135,6 +156,7 @@ class FrictionExecution(ExecutionModel):
         logger.debug(
             f"⚡ Friction Exec: {order.symbol} {order.direction} | "
             f"Slip: {slippage_bps:.2f}bps | Impact: {impact_bps:.2f}bps | "
+            f"Predatory: {predatory_slip_bps:.2f}bps | "
             f"Price: ${mid_price:.2f} -> ${fill_price:.2f}"
         )
 

@@ -3,6 +3,7 @@ from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
 from app.core.config import settings
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,31 @@ class AlpacaClient:
                 )
             except Exception as e:
                 logger.error(f"❌ Failed to init Alpaca TradingClient: {e}")
+
+    def get_account(self):
+        """
+        Fetch Account information (Cash, Buying Power, Unsettled Funds).
+        """
+        if not self.client:
+            if self._enabled:
+                logger.error("Alpaca Client not initialized caught in get_account")
+            return None
+
+        try:
+            return self.client.get_account()
+        except Exception as e:
+            logger.error(f"Failed to fetch account info: {e}")
+            return None
+
+    async def get_account_async(self):
+        """
+        Async wrapper for get_account.
+        """
+        if not self.client:
+            return None
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self.get_account)
 
     def submit_order(
         self,
@@ -75,6 +101,26 @@ class AlpacaClient:
             )
 
         return self.client.submit_order(req)
+
+    async def submit_order_async(self, **kwargs):
+        """
+        Async wrapper for submit_order to prevent blocking the Event Loop.
+        Uses ThreadPoolExecutor to offload the I/O.
+        """
+        if not self.client:
+            # If disabled, maybe simulate slightly async delay?
+            # Or just call synchronous for simulation which is fast.
+            if not self._enabled:
+                return self.submit_order(**kwargs)
+
+            raise RuntimeError("Alpaca Client not initialized")
+
+        loop = asyncio.get_running_loop()
+        # Pass keyword arguments to submit_order via lambda or partial?
+        # partial is cleaner.
+        from functools import partial
+
+        return await loop.run_in_executor(None, partial(self.submit_order, **kwargs))
 
     def list_positions(self):
         """

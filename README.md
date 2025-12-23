@@ -1,40 +1,72 @@
-# Curiosity Cottage Quant
+# Project Ezekiel: The Micro-Sovereign
 
-### Quantum Holodeck V2 (v0.13.0)
+![System Health](https://img.shields.io/badge/Law%20Zero-ENFORCED-brightgreen)
+![Capital Constraint](https://img.shields.io/badge/Seed%20Capital-%24500-red)
+![Architecture](https://img.shields.io/badge/Architecture-Bicameral%20Mind-blue)
+![Python](https://img.shields.io/badge/Python-3.11-yellow)
 
-> **"Trust Physics, Not Emotion."**
+> **"Constraint Breeds Creativity."**
 
 ---
 
-> ⚠️ **LAW ZERO ENFORCED:** System requires >99.9% Health Score (Latency/Jitter) to trade. If the `SystemHealth` tensor degrades, the engine halts.
-
 ## 🏛️ System Overview
 
-**Curiosity Cottage Quant (CCQ)** is an autonomous, physics-driven trading system built on the **Hybrid Metal Architecture**, featuring a **10-Decile Quantum Holodeck** for parallel universe simulation. It is not just a backtester or a bot; it is a **cybernetic organism** managed by a "Council" of AI agents that debate, reason, and execute trades under strict risk constraints.
+**Project Ezekiel** is a sovereign, biological algorithmic trading system designed to solve the **Micro-Capital Paradox**: *How to generate Alpha with only $500, running on local silicon, without the crutch of leverage or high-frequency data.*
 
-### 2. The Council (Cognitive Stack)
+Unlike traditional "Black Box" AI that blindly predicts price, Ezekiel is a **Physics Engine**. It treats the market as a physical system governed by Kinematics (Momentum), Thermodynamics (Entropy), and Gravity (Mean Reversion).
 
-A deterministic logic layer where Agents exchange strict **mathematical vectors** (Physics, Reflexivity, OODA) to solve for execution urgency. There is no voting; only physics.
+### The Constraints (The Forge)
 
-- **Feynman (The Physicist):** Emits `PhysicsVector` (Mass, Momentum, Entropy, Jerk).
-- **Soros (The Feeler):** Emits `ReflexivityVector` to detect self-inflicted feedback loops.
-- **Boyd (The Strategist):** Emits `OODAVector` (Urgency) by fusing Physics & Reflexivity.
-- **Taleb (The Guardian):** Enforces 10-decile physics veto and asymmetric skew limits.
-- **Chronos (The Oracle):** Generates high-resolution probabilistic time-series forecasts.
-- **Simons (The Executioner):** Handles high-precision order slicing and predatory slippage.
-- **Hypatia (The Librarian):** Manages the Unified Data Access Layer (QuestDB/LanceDB).
-- **Shannon (The Signalman):** Ensures zero-loss telemetry transmission.
+The system is hardened by three non-negotiable boundary conditions:
 
-### ⚛️ The Physics Engine (Risk Core)
+1. **The Micro-Seed:** $500 Starting Capital. Zero tolerance for drawdown.
+2. **The Silicon Sovereign:** Runs locally on Apple Silicon (M-Series). No Cloud dependencies.
+3. **The Regulatory Physics:** Cash Account Only. Respects **T+1 Settlement** and **Temporal Rationing** to evade Pattern Day Trader (PDT) locks.
 
-A deterministic "Veto Layer" that overrides AI consensus if physical laws of the market are violated.
+---
 
-- **Law I: Inertia** (Adaptive Kinematic Kalman Filter)
-  *Markets have momentum; a trend in motion tends to stay in motion (Newton's 1st).*
-- **Law II: Entropy** (Hill Estimator & Hurst Exponent)
-  *Markets tend towards disorder; infinite variance (Heavy Tails) violates Gaussian models.*
-- **Law III: Conservation of Capital** (Bayesian Expected Shortfall)
-  *Energy (Capital) cannot be created from nothing; it must be preserved against Ruin.*
+## 🧠 The Architecture: The Bicameral Mind
+
+The system separates cognitive functions into two decoupled organs to ensure speed without sacrificing safety.
+
+### 1. The Brain (Global Inference)
+
+* **Role:** $O(1)$ Probability Forecasting.
+* **Engine:** **Chronos** (Time-Series Transformer).
+* **Output:** The 10-Quantile Wave Function ($\Quant_t$)—predicting the *shape* of uncertainty, not just the price.
+
+### 2. The Body (Local Execution)
+
+* **Role:** $O(N)$ Micro-Structure Analysis.
+* **Engine:** **Simons** (Execution Agent).
+* **Output:** Performs local Order Book scans to calculate **Predatory Slippage** and place limit orders.
+
+### 3. The Council (Vector Logic)
+
+A deterministic logic layer where Agents exchange strict **mathematical vectors**. There is no voting; there is only Physics.
+
+| Agent | Role | Vector Contract |
+| :--- | :--- | :--- |
+| **Feynman** | The Physicist | Outputs **Mass, Momentum, Entropy, Jerk**. |
+| **Soros** | The Feeler | Outputs **Reflexivity Index** (Self-Impact detection). |
+| **Boyd** | The Strategist | Fuses Physics + Reflexivity + Chaos into **Urgency**. |
+| **Nash** | The Allocator | Enforces **Temporal Rationing** (T+1 Budgeting). |
+| **Taleb** | The Guardian | Enforces **Skew Limits** (Crash Protection). |
+| **Hypatia** | The Librarian | Manages Data & applies the **Sparse Data Scalar** (IEX Correction). |
+| **Shannon** | The Signalman | Enforces **Law Zero** (Hardware Health). |
+
+---
+
+## 📡 The Data Ecology
+
+We utilize a hybrid array of data sources to ensure redundancy and depth.
+
+| Category | Sources | Role |
+| :--- | :--- | :--- |
+| **Primary Feed** | **Alpaca** (IEX) | Real-time Tick Data & Order Execution. |
+| **Research/History** | **Tiingo**, **yFinance** | Adjusted OHLCV history & Corporate Actions. |
+| **Sentiment/News** | **NewsAPI.org**, **Finviz** | NLP ingestion for Soros's Reflexivity Index. |
+| **Backup Layers** | **TwelveData**, **MarketStack**, **AlphaVantage** | "Reserve Parachutes" (Configurable Failover). |
 
 ---
 
@@ -42,64 +74,72 @@ A deterministic "Veto Layer" that overrides AI consensus if physical laws of the
 
 | Component | Technology | Role |
 |-----------|------------|------|
-| **Core** | Python 3.11 | The Metal (AsyncIO) |
-| **Stream** | Redis (Dragonfly) | **The Shannon Channel** (Real-time Telemetry) |
-| **Brain** | gRPC (Protobufs) | **The Rosetta Stone** (Strict Contracts) |
-| **Memory** | LanceDB | Semantic Search / Embeddings |
-| **History**| QuestDB | **The Scrolls of Herodotus** (Tick Data) |
-| **Neural** | ONNX + MPS | Hardware-Accelerated Inference |
+| **Core** | Python 3.11 | The Metal (AsyncIO / Uvloop) |
+| **Bus** | Dragonfly (Redis) | **The Hot Memory** (Signal/Health Bus) |
+| **History**| QuestDB | **The Cold Storage** (ILP High-Speed Ingest) |
+| **Inference**| PyTorch (MPS) | Hardware-Accelerated Tensors on Apple Silicon |
 | **API** | Litestar | High-Performance REST Interface |
 
 ---
 
-## 📚 Documentation
+## ♟️ Active Strategies
 
-The knowledge base is organized according to the **Diátaxis** framework.
+The system does not rely on a single algorithm. It uses an ensemble of Logic and Chaos.
 
-### 🟢 For Everyone (Public)
+### The Physics Core
 
-*Start here to understand how to use and deploy the system.*
+* **KalmanMomentum:** Uses Kinematic State Estimation to track velocity ($v$).
+* **FractalBreakout:** Uses Fractional Differentiation ($d$) to detect regime shifts while preserving memory.
+* **BollingerReversion:** Exploits mean reversion when Price deviates $>2\sigma$ from the center of gravity.
 
-- **[Quickstart Guide](docs/public/tutorials/01-quickstart.md)** — Launch the system in 10 minutes.
-- **[How-To Guides](docs/public/how-to/)** — Add strategies, run backtests, or deploy.
-- **[System Architecture](docs/public/reference/architecture/stack.md)** — Diagrams & Stack details.
-- **[API Reference](docs/public/reference/api/rest-endpoints.md)** — REST interactions.
+### The Chaos Agent
+
+* **MoonPhase:** A deterministic "Dithering Agent."
+  * *Role:* Injects a small entropy signal (correlated with lunar cycles) into the decision vector.
+  * *Implementation:* `MoonPhase_V1` (New Moon = Buy, Full Moon = Sell).
+
+### The Neural Agent
+
+* **EchoState (LSTM):** A Reservoir Computing Network with Recursive Least Squares ($O(1)$).
+  * *Role:* Non-linear pattern recognition without the $O(N^3)$ training cost of Transformers.
+  * *Implementation:* `EchoState_RLS_V2`.
+
+### The Quantum Agent
+
+* **QuantumHarmonic:** Models price as displacement in a potential well.
+  * *Role:* Detects "Energy Violations" (Mean Reversion) using harmonic oscillator physics.
+  * *Implementation:* `QuantumHarmonic_V1`.
+
+---
+
+## 📜 The Immutable Laws
+
+The Council is bound by five hard-coded laws that override all AI predictions.
+
+1. **Law Zero (Integrity):** If Hardware Health < 99.9% (Latency/Jitter), **HALT**.
+2. **Law I (Momentum):** Price moves without Volume (Mass) are hallucinations ("Ghost Momentum").
+3. **Law II (Gravity):** Price cannot escape the Median Forecast ($q_{50}$) indefinitely.
+4. **Law III (Entropy):** If Volatility expands beyond the **Hypatia Limit** (Adaptive), the system is blind. **HALT**.
+5. **Law V (Conservation):** A 2% intraday drawdown triggers a hard kill switch.
 
 ---
 
 ## 🛡️ Testing & Verification
 
-The system employs **Adversarial Reflexivity Testing** (The Soros Loop) to ensure robust decision making:
+The system employs **Adversarial Reflexivity Testing** to ensure it survives in a hostile environment.
 
-- **The Bait:** Injects correlated volume/price shocks to simulate self-inflicted moves.
-- **The Trap:** Verifies that `Soros` detects high Reflexivity Index (>0.8).
-- **The Veto:** Ensures `Boyd` crushes Urgency (<0.2) when reflexivity is high.
-
----
-
-## ⚖️ Governance
-
-This project is run as a **Directive-Driven** organization.
-
-- **[GOVERNANCE.md](GOVERNANCE.md)** — The Constitution & Code of Conduct.
-- **[PROJECT_MANAGEMENT.md](PROJECT_MANAGEMENT.md)** — Directive Workflow & Traceability.
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** — Style Guide & PR Rules.
+* **The Soros Loop:** We simulate a scenario where the bot is the *only* buyer. If it chases its own price, the test fails.
+* **The PDT Trap:** We simulate a 100% allocation at 9:30 AM. **Nash** must veto all subsequent trades due to lack of T+1 Buying Power.
 
 ---
 
 ## 🚀 Quick Start
 
+### 1. Configuration
+
+Set your `DATA_PROVIDER` in `.env`.
+
 ```bash
-# 1. Install Dependencies
-python3.11 -m pip install -r requirements.txt
-
-# 2. Run the Engine
-uvicorn app.main:app --reload
-
-# 3. Access the Neural Stream
-# http://localhost:8000/docs
-```
-
----
-
-*Copyright © 2025 Curiosity Cottage. All Rights Reserved.*
+# Options: "alpaca" (Default), "twelvedata", "alphavantage"
+DATA_PROVIDER=alpaca
+LIVE_TRADING_ENABLED=False

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x62rain.proto\"B\n\x0f\x46orecastRequest\x12\x0e\n\x06ticker\x18\x01 \x01(\t\x12\x0e\n\x06prices\x18\x02 \x03(\x01\x12\x0f\n\x07horizon\x18\x03 \x01(\x05\"9\n\x10\x46orecastResponse\x12\x0b\n\x03p10\x18\x01 \x03(\x01\x12\x0b\n\x03p50\x18\x02 \x03(\x01\x12\x0b\n\x03p90\x18\x03 \x03(\x01\"%\n\x10SentimentRequest\x12\x11\n\theadlines\x18\x01 \x03(\t\"@\n\x11SentimentResponse\x12\x17\n\x0fsentiment_score\x18\x01 \x01(\x01\x12\x12\n\nconfidence\x18\x02 \x01(\x01\x32s\n\x05\x42rain\x12/\n\x08\x46orecast\x12\x10.ForecastRequest\x1a\x11.ForecastResponse\x12\x39\n\x10\x41nalyzeSentiment\x12\x11.SentimentRequest\x1a\x12.SentimentResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x62rain.proto\"B\n\x0f\x46orecastRequest\x12\x0e\n\x06ticker\x18\x01 \x01(\t\x12\x0e\n\x06prices\x18\x02 \x03(\x01\x12\x0f\n\x07horizon\x18\x03 \x01(\x05\"\xd2\x01\n\x10\x46orecastResponse\x12\x0e\n\x06signal\x18\x01 \x01(\t\x12\x12\n\nconfidence\x18\x02 \x01(\x01\x12\x11\n\treasoning\x18\x03 \x01(\t\x12\x0b\n\x03p10\x18\x04 \x01(\x01\x12\x0b\n\x03p50\x18\x05 \x01(\x01\x12\x0b\n\x03p90\x18\x06 \x01(\x01\x12\r\n\x05trend\x18\x07 \x01(\x01\x12\x14\n\x0c\x63hronos_json\x18\x08 \x01(\t\x12\x10\n\x08raf_json\x18\t \x01(\t\x12\x11\n\tmeta_json\x18\n \x01(\t\x12\x16\n\x0e\x66ull_quantiles\x18\x0b \x03(\x01\"%\n\x10SentimentRequest\x12\x11\n\theadlines\x18\x01 \x03(\t\"@\n\x11SentimentResponse\x12\x17\n\x0fsentiment_score\x18\x01 \x01(\x01\x12\x12\n\nconfidence\x18\x02 \x01(\x01\x32s\n\x05\x42rain\x12/\n\x08\x46orecast\x12\x10.ForecastRequest\x1a\x11.ForecastResponse\x12\x39\n\x10\x41nalyzeSentiment\x12\x11.SentimentRequest\x1a\x12.SentimentResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,12 +33,12 @@ if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_FORECASTREQUEST']._serialized_start=15
   _globals['_FORECASTREQUEST']._serialized_end=81
-  _globals['_FORECASTRESPONSE']._serialized_start=83
-  _globals['_FORECASTRESPONSE']._serialized_end=140
-  _globals['_SENTIMENTREQUEST']._serialized_start=142
-  _globals['_SENTIMENTREQUEST']._serialized_end=179
-  _globals['_SENTIMENTRESPONSE']._serialized_start=181
-  _globals['_SENTIMENTRESPONSE']._serialized_end=245
-  _globals['_BRAIN']._serialized_start=247
-  _globals['_BRAIN']._serialized_end=362
+  _globals['_FORECASTRESPONSE']._serialized_start=84
+  _globals['_FORECASTRESPONSE']._serialized_end=294
+  _globals['_SENTIMENTREQUEST']._serialized_start=296
+  _globals['_SENTIMENTREQUEST']._serialized_end=333
+  _globals['_SENTIMENTRESPONSE']._serialized_start=335
+  _globals['_SENTIMENTRESPONSE']._serialized_end=399
+  _globals['_BRAIN']._serialized_start=401
+  _globals['_BRAIN']._serialized_end=516
 # @@protoc_insertion_point(module_scope)

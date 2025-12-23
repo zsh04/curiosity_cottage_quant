@@ -11,7 +11,6 @@ from app.agent.state import AgentState, TradingStatus
 from app.services.global_state import get_global_state_service, get_current_snapshot_id
 from app.execution.alpaca_client import AlpacaClient
 from app.core.config import settings
-from app.core import metrics as business_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,7 @@ class SimonsAgent:
         # Initialize Alpaca Client (will be None or inactive if keys/flag missing)
         self.alpaca = AlpacaClient()
 
-    def execute(self, state: AgentState) -> AgentState:
+    async def execute(self, state: AgentState) -> AgentState:
         """
         Executes the trade if validated and approved.
         """
@@ -61,6 +60,16 @@ class SimonsAgent:
 
             # 3. Calculate Quantity & Limit Price
             qty = approved_size / price
+            notional_value = qty * price
+
+            # Phase 49: Micro-Account Filter (Dust Protection)
+            # Avoid sending orders < $5.00 which get eaten by spread
+            MIN_NOTIONAL = 5.0
+            if notional_value < MIN_NOTIONAL:
+                logger.warning(
+                    f"EXECUTION: 📉 Trade Value (${notional_value:.2f}) < Min (${MIN_NOTIONAL}). Skipping to save spread."
+                )
+                return state
 
             # Dynamic Slippage Buffer Logic (HFT)
             # Base Buffer: 0.1% (Standard)
@@ -91,7 +100,7 @@ class SimonsAgent:
             if settings.LIVE_TRADING_ENABLED:
                 # --- LIVE FIRE (or Paper API) ---
                 try:
-                    order = self.alpaca.submit_order(
+                    order = await self.alpaca.submit_order_async(
                         symbol=symbol,
                         qty=round(qty, 4),  # Alpaca support fractional
                         side=signal_side,
@@ -127,9 +136,10 @@ class SimonsAgent:
                 current_cash = state.get("cash", 0.0)
                 state["cash"] = current_cash - approved_size
 
+                vel_str = f"{velocity:.4f}" if velocity is not None else "N/A"
                 log_msg = (
                     f"🧪 PAPER TRADE (SIMULATED): Would {signal_side} {qty:.4f} {symbol} "
-                    f"LIMIT @ ${limit_price:.2f} (Buffer: {buffer_pct:.2%} | α={alpha:.2f}, v={velocity:.4f})"
+                    f"LIMIT @ ${limit_price:.2f} (Buffer: {buffer_pct:.2%} | α={alpha:.2f}, v={vel_str})"
                 )
                 logger.info(log_msg)
 
@@ -175,10 +185,10 @@ class SimonsAgent:
 
 
 @tracer.start_as_current_span("node_simons_execution")
-def simons_node(state: AgentState) -> AgentState:
+async def simons_node(state: AgentState) -> AgentState:
     """
     Simons Node: Execution Logic.
     """
     logger.info("--- NODE: SIMONS (EXECUTION) ---")
     agent = SimonsAgent()
-    return agent.execute(state)
+    return await agent.execute(state)
