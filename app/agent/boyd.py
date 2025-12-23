@@ -8,7 +8,11 @@ from opentelemetry import trace
 from app.agent.state import AgentState
 from app.services.market import MarketService
 from app.services.feynman_bridge import FeynmanBridge
-from app.services.forecast import TimeSeriesForecaster
+
+# from app.services.forecast import TimeSeriesForecaster # MOVED TO BRAIN SERVICE
+import grpc
+import app.generated.brain_pb2 as pb2
+import app.generated.brain_pb2_grpc as pb2_grpc
 
 # from app.services.forecasting import ForecastingService # Deprecated
 from app.services.reasoning import ReasoningService
@@ -37,7 +41,12 @@ class BoydAgent:
         # Instantiate Services
         self.market = MarketService()
         self.feynman_map: Dict[str, FeynmanBridge] = {}  # Per-symbol Physics Bridge
-        self.oracle = TimeSeriesForecaster()
+        # self.oracle = TimeSeriesForecaster() # REMOVED
+
+        # Connect to Brain Service (gRPC)
+        self.brain_channel = grpc.aio.insecure_channel("localhost:50051")
+        self.brain_stub = pb2_grpc.BrainStub(self.brain_channel)
+        logger.info("BOYD: Connected to Brain Mesh (localhost:50051)")
         self.reasoning = ReasoningService()
         self.memory = MemoryService()  # Quantum Memory
 
@@ -285,22 +294,96 @@ class BoydAgent:
             # --- Step 3: THE UNIFIED ORACLE (Forecast + Memory) ---
             sentiment_snapshot = market_snapshot.get("sentiment", {})
 
-            # Get Context Tensor (Last 64 bars)
-            oracle_context_list = history[-64:] if history else []
-            import torch
+            # gRPC Call to Brain Service
+            try:
+                # Construct Request
+                req = pb2.ForecastRequest(
+                    ticker=symbol, prices=history[-64:] if history else [], horizon=12
+                )
 
-            context_tensor = torch.tensor(oracle_context_list, dtype=torch.float32)
+                # Call Async (Heavy Lifting offloaded)
+                grpc_resp = await self.brain_stub.Forecast(req)
 
-            oracle_result = await self.oracle.predict_ensemble(
-                context_tensor=context_tensor,
-                current_prices=history,  # For RAG normalization
-            )
+                # Unpack Response
+                import json
+
+                try:
+                    import orjson
+
+                    loads = orjson.loads
+                except ImportError:
+                    loads = json.loads
+
+                oracle_result = {
+                    "signal": grpc_resp.signal,
+                    "confidence": grpc_resp.confidence,
+                    "reasoning": grpc_resp.reasoning,
+                    "components": {
+                        "chronos": loads(grpc_resp.chronos_json)
+                        if grpc_resp.chronos_json
+                        else {},
+                        "raf": loads(grpc_resp.raf_json) if grpc_resp.raf_json else {},
+                    },
+                    "meta": loads(grpc_resp.meta_json) if grpc_resp.meta_json else {},
+                }
+            except grpc.RpcError as e:
+                logger.error(f"BOYD: 🧠 Brain Service Connection Failed: {e}")
+                # Fallback to Neutral
+                oracle_result = {
+                    "signal": "NEUTRAL",
+                    "confidence": 0.0,
+                    "reasoning": "Brain Offline",
+                    "components": {},
+                }
 
             # Extract Components
             forecast = oracle_result.get("components", {}).get("chronos", {})
             historical_regimes = oracle_result.get("components", {}).get("raf", {})
             oracle_signal_side = oracle_result.get("signal", "NEUTRAL")
             oracle_confidence = oracle_result.get("confidence", 0.0)
+
+            # --- Calculate Risk Metrics from Quantiles ---
+            risk_metrics = {}
+            full_quantiles = forecast.get("quantiles")
+
+            if full_quantiles and len(full_quantiles) == 9 and current_price > 0:
+                try:
+                    from app.agent.risk.quantile_risk import QuantileRiskAnalyzer
+
+                    quantile_levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+                    analyzer = QuantileRiskAnalyzer(quantile_levels)
+
+                    # Calculate all risk metrics
+                    var_metrics = analyzer.calculate_var(full_quantiles, current_price)
+                    es_metrics = analyzer.calculate_expected_shortfall(
+                        full_quantiles, current_price
+                    )
+                    confidence_metrics = analyzer.calculate_distributional_confidence(
+                        full_quantiles
+                    )
+                    scenarios = analyzer.build_scenario_analysis(
+                        full_quantiles, current_price
+                    )
+
+                    # Store for downstream use
+                    risk_metrics = {
+                        "var": var_metrics,
+                        "expected_shortfall": es_metrics,
+                        "distributional_confidence": confidence_metrics,
+                        "scenarios": scenarios,
+                    }
+
+                    # Log key metrics
+                    logger.info(
+                        f"📊 Risk [{symbol}]: "
+                        f"VaR={var_metrics['var_pct']:.2%} | "
+                        f"ES={es_metrics['es_pct']:.2%} | "
+                        f"Conf={confidence_metrics['confidence_score']:.2f} | "
+                        f"R/R={scenarios['summary']['risk_reward_ratio']:.2f}"
+                    )
+                except Exception as e:
+                    logger.warning(f"BOYD: Risk metrics calculation failed: {e}")
+                    risk_metrics = {}
 
             # --- Step 4: COGNITION (Reasoning / Signal) ---
             if not skip_llm:
@@ -355,6 +438,7 @@ class BoydAgent:
                     "chronos_forecast": forecast,  # Propagate real forecast
                     "urgency": ooda_vec.urgency_score,  # Hoist Urgency
                     "reflexivity_index": reflexivity_vec.reflexivity_index,
+                    "risk_metrics": risk_metrics,  # Quantile-based risk analytics
                     "success": True,
                 }
             )
@@ -365,6 +449,134 @@ class BoydAgent:
             logger.error(f"BOYD: Single Analysis Failed for {symbol}: {e}")
             result_packet["reasoning"] = f"CRASH: {e}"
             return result_packet
+
+    def check_correlation(
+        self, candidates: list[dict], portfolio_history: dict[str, list[float]] = None
+    ) -> list[dict]:
+        """
+        Public Covariance Check.
+        Filters candidates that are highly correlated (>0.85) with each other OR existing positions.
+        """
+        return self._apply_covariance_veto(candidates, portfolio_history)
+
+    def _apply_covariance_veto(
+        self, candidates: list[dict], portfolio_history: dict[str, list[float]] = None
+    ) -> list[dict]:
+        """
+        The Cluster Veto.
+        If Corr(Asset_A, Asset_B) > 0.85, they are the same trade.
+        We pick the one with higher Confidence (or Momentum) and Veto the loser.
+        Also checks against existing portfolio positions.
+        """
+        if len(candidates) < 1:
+            return candidates
+
+        import pandas as pd
+
+        # 1. Build DataFrame of Histories include Candidates AND Portfolio
+        data_map = {}
+
+        # Add Candidates
+        for c in candidates:
+            sym = c.get("symbol")
+            hist = c.get("history", [])
+            if len(hist) > 10:
+                data_map[sym] = hist[-100:]  # Last 100 ticks/days
+
+        # Add Portfolio Positions (if any)
+        # portfolio_history format: { "AAPL": [100, 101, ...], "GOOG": [...] }
+        if portfolio_history:
+            for sym, hist in portfolio_history.items():
+                # Only add if not already in candidates (avoid self-comparison double count)
+                if sym not in data_map and len(hist) > 10:
+                    data_map[sym] = hist[-100:]
+
+        if len(data_map) < 2:
+            return candidates
+
+        # Make equal length
+        min_len = min(len(v) for v in data_map.values())
+        truncated_map = {k: v[-min_len:] for k, v in data_map.items()}
+
+        df = pd.DataFrame(truncated_map)
+
+        # 2. Compute Correlation Matrix
+        corr_matrix = df.corr()
+
+        # 3. Scan for Clusters
+        vetoed_symbols = set()
+
+        # Identify which symbols are candidates vs existing positions
+        candidate_symbols = set(c["symbol"] for c in candidates)
+        existing_symbols = set(portfolio_history.keys()) if portfolio_history else set()
+
+        symbols = list(truncated_map.keys())
+        for i in range(len(symbols)):
+            for j in range(i + 1, len(symbols)):
+                sym_a = symbols[i]
+                sym_b = symbols[j]
+
+                if sym_a in vetoed_symbols or sym_b in vetoed_symbols:
+                    continue
+
+                correlation = corr_matrix.loc[sym_a, sym_b]
+
+                if correlation > 0.85:
+                    logger.warning(
+                        f"BOYD: 🛡️ Cluster Detected! Corr({sym_a}, {sym_b}) = {correlation:.2f} > 0.85"
+                    )
+
+                    # LOGIC:
+                    # 1. If Candidate vs Candidate -> Pick Winner.
+                    # 2. If Candidate vs Portfolio -> VETO Candidate (Don't double down).
+                    # 3. If Portfolio vs Portfolio -> Already held, ignore (or log warning).
+
+                    is_a_cand = sym_a in candidate_symbols
+                    is_b_cand = sym_b in candidate_symbols
+
+                    if is_a_cand and is_b_cand:
+                        # Battle of Candidates
+                        cand_a = next(c for c in candidates if c["symbol"] == sym_a)
+                        cand_b = next(c for c in candidates if c["symbol"] == sym_b)
+
+                        score_a = cand_a.get("signal_confidence", 0.0) + abs(
+                            cand_a.get("velocity", 0.0)
+                        )
+                        score_b = cand_b.get("signal_confidence", 0.0) + abs(
+                            cand_b.get("velocity", 0.0)
+                        )
+
+                        if score_a >= score_b:
+                            vetoed_symbols.add(sym_b)
+                        else:
+                            vetoed_symbols.add(sym_a)
+
+                    elif is_a_cand and not is_b_cand:
+                        # Candidate A vs Existing B -> Veto A
+                        vetoed_symbols.add(sym_a)
+                        logger.info(
+                            f"BOYD: VETOING Candidate {sym_a} due to correlation with Existing {sym_b}"
+                        )
+
+                    elif not is_a_cand and is_b_cand:
+                        # Existing A vs Candidate B -> Veto B
+                        vetoed_symbols.add(sym_b)
+                        logger.info(
+                            f"BOYD: VETOING Candidate {sym_b} due to correlation with Existing {sym_a}"
+                        )
+
+                    # Portfolio vs Portfolio - Do nothing (we already own them)
+
+        # 4. Filter Candidates
+        final_candidates = []
+        for c in candidates:
+            if c["symbol"] in vetoed_symbols:
+                c["success"] = False
+                c["reasoning"] += f" | VETOED: Correlation > 0.85 (Cluster Check)"
+                c["signal_side"] = "FLAT"
+            final_candidates.append(c)
+
+        return final_candidates
 
     async def analyze(self, state: AgentState) -> AgentState:
         """
@@ -408,14 +620,33 @@ class BoydAgent:
 
             if isinstance(res, dict):
                 candidate.update(res)
-                if candidate.get("symbol") == primary_symbol:
-                    primary_data = candidate
+                # Primary logic delayed until after filters
             elif isinstance(res, Exception):
                 logger.error(f"BOYD: Error analyzing {candidate.get('symbol')}: {res}")
                 candidate["error"] = str(res)
                 candidate["success"] = False
 
             enriched_candidates.append(candidate)
+
+        # --- PHASE 37: THE ADAPTATION (Cluster Veto) ---
+        # Apply Covariance Filter before picking Primary
+        enriched_candidates = self._apply_covariance_veto(enriched_candidates)
+
+        # Re-identify Primary based on Symbol (State) OR Veto status
+        # If State Primary was Vetoed, we must switch.
+
+        # Check current primary status
+        temp_primary = next(
+            (c for c in enriched_candidates if c["symbol"] == primary_symbol), None
+        )
+
+        if temp_primary and not temp_primary.get("success"):
+            logger.warning(
+                f"BOYD: Primary {primary_symbol} failed or VETOED. Seeking alternative..."
+            )
+            primary_data = None  # Force switch
+        elif temp_primary:
+            primary_data = temp_primary
 
         state["analysis_reports"] = enriched_candidates
         state["candidates"] = enriched_candidates

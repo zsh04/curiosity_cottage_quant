@@ -429,7 +429,9 @@ async def handle_physics(msg: Union[bytes, Dict[str, Any]]):
         # Let's finish `soros.py` first with valid logic, assuming `vectors.py` will be updated.
 
         # We need `price` for `calculate_reflexivity`.
-        price = data.get("price", 0.0)  # Will ensure feynman sends this
+        price = physics_vec.price
+        if price <= 0.0:
+            price = data.get("price", 0.0)  # Fallback if Vector is empty/malformed
 
         reflexivity_vec = soros.calculate_reflexivity(symbol, price)
 

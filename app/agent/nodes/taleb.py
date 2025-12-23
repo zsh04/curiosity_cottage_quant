@@ -159,10 +159,30 @@ class RiskManager:
         # Guard 2: Physics (BES Calculation)
         # Using NAV as capital base
         capital = state.get("nav", 100000.0)
+
         try:
-            size_pct = self.bes.calculate_size(
-                forecast=forecast, alpha=alpha, current_price=price, capital=capital
-            )
+            # Check if we have full quantile distribution
+            full_quantiles = forecast.get("quantiles")
+
+            if full_quantiles and len(full_quantiles) == 9:
+                # Use quantile-based BES sizing (PREFERRED)
+                # Chronos-bolt provides 9 quantiles: [0.1, 0.2, ..., 0.9]
+                quantile_levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+                size_pct = self.bes.calculate_size_with_quantiles(
+                    quantiles=full_quantiles,
+                    quantile_levels=quantile_levels,
+                    alpha=alpha,
+                    current_price=price,
+                    capital=capital,
+                )
+                logger.debug(f"RISK: Using quantile-based BES: {size_pct:.2%}")
+            else:
+                # Fallback to Normal approximation (backward compatibility)
+                size_pct = self.bes.calculate_size(
+                    forecast=forecast, alpha=alpha, current_price=price, capital=capital
+                )
+                logger.debug(f"RISK: Using Normal-approx BES: {size_pct:.2%}")
+
         except Exception as e:
             logger.error(f"RISK: BES Calculation Error: {e}")
             return 0.0

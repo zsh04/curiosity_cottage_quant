@@ -22,6 +22,14 @@ class BrainService(pb2_grpc.BrainServicer):
     """
 
     def __init__(self):
+        # Verify PB2 Definition at runtime
+        try:
+            test = pb2.ForecastResponse(signal="TEST")
+            logger.info("✅ PB2 Signal Field Verified via Instantiation.")
+        except Exception as e:
+            logger.critical(f"❌ PB2 Signal Field MISSING: {e}")
+            # We don't raise here to allow startup, but log critical failure.
+
         logger.info("🧠 BrainService: Initializing Neural Core...")
 
         # Initialize Models
@@ -37,54 +45,56 @@ class BrainService(pb2_grpc.BrainServicer):
         Chronos Inference via gRPC.
         """
         try:
-            # ticker = request.ticker (Unused in MVP)
+            # prices = list(request.prices) (Historical Context)
             prices = list(request.prices)
-            # horizon = request.horizon (Unused in MVP - fixed by config)
 
             # Convert to Tensor for Forecaster
-            # Context tensor shape: (Time,)
-            # Forecaster handles device placement
             context_tensor = torch.tensor(prices, dtype=torch.float32)
 
-            # Call Async Forecaster
-            # Note: predict_ensemble expects context_tensor and raw list
-            # We use `prices` as raw list.
-
-            # Since this is a gRPC call, we likely want just the "Chronos" part or the fused part?
-            # The proto returns p10, p50, p90.
-            # `predict_ensemble` provides detailed dict.
-            # Let's use `predict_ensemble` to get the full power (Fusion/RAF).
-
+            # Call Async Forecaster (The Oracle)
             result = await self.forecaster.predict_ensemble(
                 context_tensor=context_tensor, current_prices=prices
             )
 
-            # Extract quantiles from the result components or the ensemble
-            # The `predict_ensemble` output structure is flat:
-            # "components": {"chronos": {p10, p50...}, ...}
+            # Extract Core Components (FLAT structure from _fuse_signals)
+            chronos_data = result.get("chronos", {})
+            raf_data = result.get("raf", {})
+            meta_data = result.get("meta", {})
 
-            chronos_data = result.get("components", {}).get("chronos", {})
+            # Use `orjson` for high-speed serialization if possible, else json
+            import json
 
-            # Note: The proto expects REPEATED doubles for p10/p50/p90
-            # But `predict_ensemble` -> `_run_chronos_batch` currently returns SINGLE floats (terminal values).
-            # We might want the FULL CURVE.
-            # Let's check `_run_chronos_batch`. It returns:
-            # "p10": float(p10), "p50": float... which are TERMINAL values.
-            #
-            # Ideally Forecast RPC returns the path.
-            # But for now, complying with current implementation of `predict_ensemble`:
-            # We will return list of [val] (length 1) or extrapolate?
-            #
-            # Let's LOOK at the proto. `repeated double p50`.
-            # If we only have terminal value, we return [value].
-            #
-            # TODO: Upgrade `TimeSeriesForecaster` to return full curve if needed.
-            # For now, we wrap the terminal value in a list.
+            try:
+                import orjson
+
+                def dumps(x):
+                    return orjson.dumps(
+                        x, option=orjson.OPT_SERIALIZE_NUMPY, default=str
+                    ).decode()
+            except ImportError:
+                dumps = lambda x: json.dumps(x, default=str)
+
+            q_list = chronos_data.get("quantiles", [])
+            logger.debug(f"📊 BrainService: Quantiles extracted: {len(q_list)} values")
+            logger.debug(f"📊 chronos_data keys: {list(chronos_data.keys())}")
+            if q_list:
+                logger.debug(f"📊 First 3 quantiles: {q_list[:3]}")
 
             return pb2.ForecastResponse(
-                p10=[chronos_data.get("p10", 0.0)],
-                p50=[chronos_data.get("p50", 0.0)],
-                p90=[chronos_data.get("p90", 0.0)],
+                # Decision
+                signal=result.get("signal", "NEUTRAL"),
+                confidence=result.get("confidence", 0.0),
+                reasoning=result.get("reasoning", "No context."),
+                # Metrics (From Chronos)
+                p10=chronos_data.get("p10", 0.0),
+                p50=chronos_data.get("p50", 0.0),
+                p90=chronos_data.get("p90", 0.0),
+                trend=chronos_data.get("trend", 0.0),
+                # Full Context (Serialized)
+                chronos_json=dumps(result.get("chronos", chronos_data)),
+                raf_json=dumps(result.get("raf", raf_data)),
+                meta_json=dumps(meta_data),
+                full_quantiles=q_list,
             )
 
         except Exception as e:

@@ -51,17 +51,47 @@ class Settings(BaseSettings):
     MARKETSTACK_API_KEY: str = ""
     TIINGO_API_KEY: str = ""
 
+    # FRED (Federal Reserve Economic Data) - For Treasury yields
+    # Get free API key: https://fred.stlouisfed.org/docs/api/api_key.html
+    FRED_API_KEY: str = ""
+
     # --- Config ---
-    WATCHLIST: list[str] = [
-        "SPY",
-        "NVDA",
-        "AAPL",
-        "QQQ",
-        "IWM",
-        "MSFT",
-        "GOOGL",
-        "AMZN",
-    ]
+    # Dynamic Watchlist - loaded from config/watchlist.txt
+    _watchlist_cache: list[str] | None = None
+
+    @property
+    def WATCHLIST(self) -> list[str]:
+        """Load watchlist dynamically from config/watchlist.txt"""
+        if self._watchlist_cache is not None:
+            return self._watchlist_cache
+
+        import logging
+        from pathlib import Path
+
+        default = ["SPY", "NVDA", "AAPL", "QQQ", "IWM", "MSFT", "GOOGL", "AMZN"]
+
+        try:
+            config_file = Path("config/watchlist.txt")
+            if not config_file.exists():
+                config_file = (
+                    Path(__file__).parent.parent.parent / "config" / "watchlist.txt"
+                )
+
+            if config_file.exists():
+                with open(config_file, "r") as f:
+                    symbols = [
+                        line.strip().upper()
+                        for line in f
+                        if line.strip() and not line.strip().startswith("#")
+                    ]
+                if symbols:
+                    self._watchlist_cache = symbols
+                    return symbols
+        except Exception as e:
+            logging.warning(f"Failed to load watchlist: {e}")
+
+        self._watchlist_cache = default
+        return default
 
     # --- LLM Configuration ---
     OLLAMA_BASE_URL: str = "http://localhost:11434"

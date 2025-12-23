@@ -45,8 +45,8 @@ Get high-level system status.
 ```json
 {
   "status": "Online",
-  "active_agents": 8,
-  "version": "2.0.0-alpha"
+  "active_agents": 9,
+  "version": "0.41.0"
 }
 ```
 

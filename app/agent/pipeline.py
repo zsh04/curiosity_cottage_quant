@@ -2,6 +2,7 @@ import logging
 from app.agent.state import AgentState, TradingStatus
 from app.agent.nodes.soros import soros_node
 from app.agent.boyd import boyd_node
+from app.agent.nash import nash_node
 from app.agent.nodes.taleb import taleb_node
 from app.agent.nodes.simons import SimonsAgent, simons_node
 
@@ -12,7 +13,7 @@ class TradingPipeline:
     """
     The Linear Trading Pipeline.
     Architecture: Phase 17 (Linear Flow)
-    Flow: Macro -> Analyst -> Risk -> Execution
+    Flow: Macro -> Analyst -> Auditor -> Risk -> Execution
     """
 
     def __init__(self):
@@ -34,6 +35,10 @@ class TradingPipeline:
             # --- 2. BOYD (The Strategist) ---
             # OODA Loop & Analysis
             state = await boyd_node(state)
+
+            # --- 2.5. NASH (The Game Theorist) ---
+            # Equilibrium Audit
+            state = nash_node(state)
 
             # --- 3. TALEB (The Skeptic) ---
             # Risk Veto & Sizing
@@ -74,8 +79,17 @@ class TradingPipeline:
         """
         Persist state and emit final metrics.
         """
-        # (Optional) Deep persistence/logging here if not handled by nodes.
-        pass
+        # Broadcast to Shannon (The Signalman)
+        # Fire and forget task to avoid blocking the pipeline
+        try:
+            from app.services.state_stream import get_state_broadcaster
+            import asyncio
+
+            broadcaster = get_state_broadcaster()
+            # serialization happens in the websocket route, we just push the dict
+            asyncio.create_task(broadcaster.broadcast(state))
+        except Exception as e:
+            logger.error(f"📡 Shannon Broadcast Failed: {e}")
 
 
 # Global Pipeline Instance

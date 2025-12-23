@@ -51,6 +51,36 @@ async def run_agent_service():
                 logger.error(f"Failed to fetch portfolio: {e}")
                 inputs["current_positions"] = []
 
+            # Phase 48: Fetch Account (Wallet) for T+1 Logic
+            try:
+                account = await alpaca.get_account_async()
+                if account:
+                    # Map Alpaca Account attributes to Agent State
+                    inputs["cash"] = float(account.cash)
+                    inputs["buying_power"] = float(account.buying_power)
+
+                    # Phase 49: Dynamic PDT Threshold
+                    # If Equity >= 25,000, we are exempt from PDT / T+1 Locks
+                    equity = (
+                        float(account.equity)
+                        if hasattr(account, "equity")
+                        else float(account.portfolio_value)
+                    )
+                    inputs["pdt_exempt"] = equity >= 25000.0
+
+                    inputs["unsettled_cash"] = (
+                        0.0  # Placeholder if not explicitly available, reliant on BP
+                    )
+                else:
+                    inputs["buying_power"] = 0.0
+                    inputs["cash"] = 0.0
+                    inputs["pdt_exempt"] = False
+
+                logger.info(f"💰 Wallet: BP=${inputs.get('buying_power', 0):.2f}")
+            except Exception as e:
+                logger.error(f"Failed to fetch account wallet: {e}")
+                inputs["buying_power"] = 0.0
+
             logger.info("--- 🧠 Agent Loop: Thinking ---")
 
             # Run the Pipeline (Linear Mode)

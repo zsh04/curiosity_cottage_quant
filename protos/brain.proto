@@ -15,15 +15,22 @@ message ForecastRequest {
 }
 
 message ForecastResponse {
-  // 10 Quantile Arrays: [q05, q15, q25, q35, q45, q55, q65, q75, q85, q95]
-  // We store them as a map or parallel arrays.
-  map<string, QuantileData> forecasts = 1; // Key: Ticker
-}
+  // Decision Core
+  string signal = 1;        // "BUY", "SELL", "NEUTRAL"
+  double confidence = 2;    // 0.0 to 1.0
+  string reasoning = 3;     // "Resonance: Neural and Memory align..."
 
-message QuantileData {
-  // 10 Decile Centers [0.05, 0.15 ... 0.95]
-  repeated float q_values = 1; // The price values
-  repeated float q_labels = 2; // The percentiles (0.05, 0.15, etc)
+  // Key Forecast Metrics
+  double p10 = 4;
+  double p50 = 5;
+  double p90 = 6;
+  double trend = 7;
+
+  // Full Context (Serialized JSON)
+  string chronos_json = 8;  // detailed neural outputs
+  string raf_json = 9;      // memory analog details
+  string meta_json = 10;    // relativity, etc.
+  repeated double full_quantiles = 11; // Full spectrum of forecasted quantiles (0.1 to 0.9)
 }
 
 message SentimentRequest {
