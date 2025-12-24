@@ -16,10 +16,41 @@ logger = logging.getLogger(__name__)
 
 
 class SimonsAgent:
-    """
-    Jim Simons: The Quant.
-    Role: Execution & State Management.
-    Receives approved orders from Risk and routes them to Alpaca.
+    """Jim Simons - The Execution Quant with HFT-style limit order logic.
+
+    Named after Jim Simons (Renaissance Technologies), this agent handles
+    trade execution with dynamic slippage buffering and T+1 settlement awareness.
+
+    **Core Mission:**
+    Execute risk-approved trades via Alpaca (live/paper) or simulation,
+    with velocity-adjusted limit pricing to minimize slippage.
+
+    **Execution Logic:**
+    1. **Validation**: Approved size > 0, status = ACTIVE, price valid
+    2. **Dust Filter**: Skip trades < $5 (spread eats micro-orders)
+    3. **Dynamic Buffering**: Slippage = 0.1% base + velocity penalty
+    4. **Limit Orders**: Use limit price (not market) for control
+    5. **Mode Switch**: Live/paper API vs simulation (cash tracking)
+
+    **Slippage Formula:**
+    ```
+    buffer = 0.001 + abs(velocity) * 0.1
+    limit_price = price * (1 ± buffer)
+    ```
+
+    **Safety Features:**
+    - Minimum notional: $5 (dust protection)
+    - Velocity fallback: 0.5% if missing
+    - Day orders only (no GTC)
+    - Simulation mode for testing
+
+    Attributes:
+        alpaca: AlpacaClient instance for API calls
+
+    Example:
+        >>> agent = SimonsAgent()
+        >>> state = await agent.execute(state)  # Executes trade
+        >>> print(state["execution_status"])  # FILLED or SIMULATED
     """
 
     def __init__(self):
@@ -27,8 +58,36 @@ class SimonsAgent:
         self.alpaca = AlpacaClient()
 
     async def execute(self, state: AgentState) -> AgentState:
-        """
-        Executes the trade if validated and approved.
+        """Execute risk-approved trade with velocity-adjusted limit pricing.
+
+        Applies HFT-style dynamic slippage buffering based on velocity to
+        minimize adverse selection while ensuring fills.
+
+        **Execution Flow:**
+        1. Extract approved_size, signal_side, price, velocity
+        2. Apply validation guards (size, status, price)
+        3. Calculate quantity and notional
+        4. Apply dust filter ($5 minimum)
+        5. Calculate dynamic limit price (velocity-dependent)
+        6. Route to Alpaca (live/paper) OR simulate
+        7. Record execution metrics (latency, success)
+
+        Args:
+            state: Agent state with approved trade parameters
+
+        Returns:
+            Updated state with execution_status and order_id
+
+        Side Effects:
+            - Submits order to Alpaca if LIVE_TRADING_ENABLED
+            - Updates state['cash'] in simulation mode
+            - Logs execution via state['messages']
+            - Records metrics to global_state_service
+
+        Example:
+            >>> state = {"approved_size": 100, "signal_side": "BUY", "price": 50, "velocity": 0.01}
+            >>> state = await agent.execute(state)
+            >>> assert state["execution_status"] in ["FILLED", "SIMULATED"]
         """
         start_time = time.time()
         success = True

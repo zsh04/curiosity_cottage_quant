@@ -47,10 +47,45 @@ scanner_service = MarketScanner()
 
 @tracer.start_as_current_span("node_soros_scanner")
 def soros_node(state: AgentState) -> Dict[str, Any]:
-    """
-    Soros Node (The Philosopher / Macro Scanner).
-    Mission: Hunt for Volatility (The "Energy" of the market) and Reflexivity.
-    Now powered by Dynamic Market Scanner (Alpaca).
+    """Soros Node - The Macro Scanner hunting volatility and reflexivity.
+
+    Named after George Soros's reflexivity theory, this node implements a parallel
+    universe scanner to find high-potential trading candidates based on volatility
+    and Hurst exponent (fractal memory).
+
+    **Core Mission:**
+    1. **Dynamic Universe**: Fetch live liquid assets (or fallback to curated list)
+    2. **Parallel Scanning**: ThreadPool fetch of market snapshots (10 workers)
+    3. **Vectorized Analysis**: Pandas-based liquidity filtering and scoring
+    4. **Signal Potential**: Rank by |H - 0.5| (deviation from randomness)
+    5. **Winner Selection**: Return top Hurst exponent asset
+
+    **Scoring Methodology:**
+    - **Hurst Exponent (H)**: Fractal memory analysis of price history
+      - H > 0.5: Trending (momentum)
+      - H < 0.5: Mean-reverting (anti-persistence)
+      - H ≈ 0.5: Random walk (no signal)
+    - **Signal Potential**: abs(H - 0.5) = "tradability"
+    - **Example**: H=0.8 (strong trend) or H=0.2 (strong reversion) both score 0.3
+
+    **Filters:**
+    - Minimum volume: $10M daily
+    - Minimum price: $5 (avoid penny stocks)
+
+    Args:
+        state: Agent state (unused, provides context)
+
+    Returns:
+        Dict with:
+            - symbol: Winner ticker (highest signal potential)
+            - watchlist: Top 5 candidates with Hurst scores
+            - candidates: Alias for watchlist (backward compatibility)
+            - status: "active"
+
+    Example:
+        >>> result = soros_node(state)
+        >>> print(result["symbol"], result["watchlist"][0]["hurst"])
+        NVDA, 0.78
     """
     start_time = time.time()
 

@@ -12,10 +12,37 @@ logger = logging.getLogger(__name__)
 
 
 class RiskManager:
-    """
-    Enforces the 'Iron Gate' Protocol:
-    1. Governance: Hard checks on Drawdown and Regime.
-    2. Sizing: Bayesian sizing based on Volatility Stop + Physics Scalar.
+    """Taleb's Iron Gate - Antifragility arbiter and position sizing authority.
+
+    Named after Nassim Taleb's risk management principles, this class enforces
+    the "Iron Gate" protocol: strict survival constraints before any trade execution.
+
+    **Core Responsibilities:**
+    1. **Circuit Breaker**: Halt trading if max drawdown exceeded
+    2. **Physics Veto**: Block trades in critical/infinite-variance regimes
+    3. **BES Position Sizing**: Calculate optimal size using Bayesian Expected Shortfall
+    4. **Correlation Veto**: Prevent clustered/correlated positions
+
+    **Iron Gate Protocol:**
+    - **Governance**: Global drawdown check (kill switch)
+    - **Physics**: Per-symbol regime analysis (alpha < 2 = infinite variance)
+    - **Sizing**: BES methodology with volatility scaling
+
+    **Mathematical Basis:**
+    - BES = min(Kelly * volatility_scalar, MAX_SIZE)
+    - Physics veto: Regime.CRITICAL (α < 2.0) → HALT
+    - Correlation threshold: 0.85 (85% correlation = same trade)
+
+    Attributes:
+        bes: BesSizing instance for Bayesian position sizing
+        market: MarketService for data fetching
+        MAX_DRAWDOWN_LIMIT: Global kill switch threshold
+
+    Example:
+        >>> rm = RiskManager()
+        >>> state = rm.check_circuit_breaker(state)  # Global checks
+        >>> state = rm.check_physics_veto(state)     # Regime checks
+        >>> state = rm.size_position(state)           # BES sizing
     """
 
     MAX_DRAWDOWN_LIMIT = MAX_DRAWDOWN
