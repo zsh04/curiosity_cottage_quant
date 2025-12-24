@@ -29,7 +29,9 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # --- Database ---
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/cc_quant"
+    DATABASE_URL: str = (
+        "postgresql://user:password@localhost:5432/quant"  # Default dev URL
+    )
     QUESTDB_URL: str = "http://localhost:9000"
     QUESTDB_ILP_HOST: str = "localhost"
     QUESTDB_ILP_PORT: int = 9009

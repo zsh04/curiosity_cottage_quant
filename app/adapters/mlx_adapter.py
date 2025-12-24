@@ -1,6 +1,8 @@
+```
 import logging
 from typing import List
 from datetime import datetime
+import os # Added for os.getenv, though settings.ENV is preferred
 
 from pydantic_ai.models import (
     Model,
@@ -68,12 +70,9 @@ class MLXModel(Model):
 
             # CRITICAL: No mock fallback in production
             if model == "MOCK_MODEL":
-                if settings.ENV == "PROD":
-                    raise RuntimeError(
-                        "❌ CRITICAL: MLX model unavailable in PRODUCTION mode. "
-                        "Cannot execute live trading on mock data. "
-                        "Install MLX and Gemma weights, or switch to DEV environment."
-                    )
+                # 🛡️ FATAL GUARD: Never allow mock data in Production
+                if settings.ENV == "PROD": # Using settings.ENV as it's already imported and used
+                    raise RuntimeError("🚨 CRITICAL: MLX Mock Model blocked in PROD environment!")
                 else:
                     logger.warning("⚠️ DEV MODE: Using mock MLX response (testing only)")
                     return self._mock_response()

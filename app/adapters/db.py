@@ -1,3 +1,1 @@
-"""
-Adapter for TimescaleDB (Async SQLAlchemy).
-"""
+"""TimescaleDB adapter stub - deprecated, using QuestDB for time-series."""

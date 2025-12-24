@@ -4,8 +4,16 @@ import queue
 
 
 class Portfolio:
-    """
-    Handles positions, cash, and order generation from signals.
+    """Simulated Portfolio Manager for Backtesting.
+
+    Tracks cash, positions, and equity curve. Handles signal-to-order conversion
+    and fill updates.
+
+    Attributes:
+        current_cash (float): Available cash balance.
+        positions (Dict[str, int]): Current quantity per symbol (e.g., {'AAPL': 100}).
+        history (List[Dict]): Equity curve history for reporting.
+        performance_reporter (PerformanceReporter): Metric calculation helper.
     """
 
     def __init__(self, initial_capital=100000.0, start_date=None, data_feed=None):
@@ -25,8 +33,16 @@ class Portfolio:
         self.current_holdings = {"CASH": initial_capital, "TOTAL_HOLDINGS_VALUE": 0.0}
 
     def update_on_market_event(self, event: MarketEvent):
-        """
-        Update market value of positions based on new prices.
+        """Updates portfolio valuation based on new market data.
+
+        Mark-to-Market (MtM) valuation:
+        1. Updates latest price for the symbol.
+        2. Re-calculates market value of holdings.
+        3. Updates total equity (cash + holdings).
+        4. Records snapshot to equity history.
+
+        Args:
+            event (MarketEvent): New market data bar.
         """
         sym = event.symbol
         self.latest_prices[sym] = event.close  # Update latest price registry
@@ -54,9 +70,16 @@ class Portfolio:
         )
 
     def update_signal(self, event: SignalEvent, event_queue: queue.Queue):
-        """
-        Acts on a SignalEvent to generate an OrderEvent.
-        Naive implementation: Buy 100 shares on Long, Sell all on Close.
+        """Converts valid trade signals into execution orders.
+
+        Logic:
+        1.  **Risk Check**: Vetoes signals with low strength/confidence.
+        2.  **Sizing**: Calculates quantity based on signal strength (fraction of cash).
+        3.  **Generation**: Creates 'MARKET' orders for entry or exit.
+
+        Args:
+            event (SignalEvent): The signal to process.
+            event_queue (queue.Queue): Order queue to append new orders to.
         """
         # RISK CHECK: Use event.strength from Risk Node
         strength = getattr(
@@ -131,8 +154,14 @@ class Portfolio:
                 event_queue.put(order)
 
     def update_fill(self, event: FillEvent):
-        """
-        Updates portfolio positions and cash from a FillEvent.
+        """Updates cash and positions based on executed fills.
+
+        Adjusts:
+        - **Cash**: Deducts cost (price * qty) and commissions.
+        - **Positions**: Updates held quantity.
+
+        Args:
+            event (FillEvent): The execution confirmation details.
         """
         fill_dir = 1 if event.direction == "BUY" else -1
         qty = event.quantity * fill_dir

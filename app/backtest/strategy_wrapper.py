@@ -25,24 +25,21 @@ logger = logging.getLogger(__name__)
 
 
 class AnalystStrategy(Strategy):
-    """
-    Backtest wrapper for AnalystAgent.
-
-    Enables the production analyst agent to run in backtest mode by:
-    - Providing historical market data as "current" data
-    - Mocking external dependencies (news, sentiment)
-    - Optionally mocking LLM for speed (or using local Ollama)
-    - Converting agent state to SignalEvents
-
-    Features:
-    - Monkey-patches market adapter methods for time travel
-    - Maintains price history buffer
-    - Mock modes for fast backtesting vs realistic simulation
-
-    Args:
-        mock_llm: If True, mocks LLM with simple heuristic (fast)
-        mock_sentiment: If True, returns neutral sentiment (no news API calls)
-        lookback_bars: Number of historical bars to maintain
+    """Backtest wrapper for AnalystAgent to enable time-travel simulation.
+    
+    Acts as a bridge between the event-driven backtester and the production AnalystAgent.
+    
+    Key Features:
+    - **Time Travel**: Injects historical price/volume data as if it were live.
+    - **Dependency Mocking**: Patches external APIs (news, sentiment, LLM) to avoid
+      calls during backtest and ensure determinism.
+    - **State Management**: Maintains a rolling buffer of price history to calculate returns.
+    
+    Attributes:
+        agent (AnalystAgent): The production agent instance being tested.
+        mock_llm (bool): If True, uses a heuristic instead of calling Ollama (speed).
+        mock_sentiment (bool): If True, bypasses FinBERT analysis.
+        price_history (List[float]): Rolling buffer of closing prices.
     """
 
     def __init__(
@@ -69,19 +66,19 @@ class AnalystStrategy(Strategy):
         )
 
     def calculate_signals(self, event: MarketEvent, event_queue):
-        """
-        Main backtest entry point.
-
+    def calculate_signals(self, event: MarketEvent, event_queue):
+        """Main backtest entry point: Wraps agent analysis with mocked state.
+        
         Process:
-        1. Update price history buffer
-        2. Construct AgentState with historical context
-        3. Monkey-patch external dependencies
-        4. Run AnalystAgent.analyze()
-        5. Extract signal and emit SignalEvent
+        1.  Updates internal price history buffer.
+        2.  Constructs an `AgentState` object using historical context.
+        3.  Monkey-patches `market`, `sentiment`, and `llm` adapters.
+        4.  Executes `AnalystAgent.analyze()`.
+        5.  Converts the agent's output signal to a backtest `SignalEvent`.
 
         Args:
-            event: Current market data bar
-            event_queue: Queue to post signals to
+            event (MarketEvent): The current market data bar.
+            event_queue (queue.Queue): Queue to post generated signals to.
         """
         if event.type != "MARKET":
             return

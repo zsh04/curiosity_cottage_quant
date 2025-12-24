@@ -7,8 +7,9 @@ logger = logging.getLogger(__name__)
 
 
 class MarketStackAdapter:
-    """
-    Adapter for MarketStack API.
+    """MarketStack API adapter - EOD (End-of-Day) historical data.
+
+    Free tier: 1000 req/month. Good for daily backtests.
     """
 
     def __init__(self, api_key: Optional[str] = None):

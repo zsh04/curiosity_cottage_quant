@@ -21,6 +21,13 @@ import numpy as np
 from opentelemetry import trace
 
 from app.backtest.events import OrderEvent, FillEvent, MarketEvent
+from app.core.constants import (
+    DEFAULT_SLIPPAGE,
+    FEE_PER_SHARE,
+    MIN_COMMISSION_PER_ORDER,
+    MARKET_IMPACT_FACTOR,
+    REJECTION_RATE,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -42,16 +49,20 @@ class ExecutionModel(ABC):
     def simulate_fill(
         self, order: OrderEvent, market_data: MarketEvent, volatility: float = 0.01
     ) -> tuple[float, float]:
-        """
-        Simulate order execution and return fill price and commission.
+        """Simulate order execution and return fill price and commission.
+
+        Calculates:
+        1. Slippage: Based on volatility and order size (Square Root Law)
+        2. Market Impact: Permanent price displacement
+        3. Commission: Broker fees (e.g., $0.005/share)
 
         Args:
             order: The order to execute
-            market_data: Current market state
-            volatility: Recent volatility estimate (for slippage)
+            market_data: Current market state containing bid/ask/last
+            volatility: Current annualized volatility (for slippage model)
 
         Returns:
-            (fill_price, commission): Tuple of fill price and commission cost
+            tuple[float, float]: (average_fill_price, commission_cost)
         """
         pass
 
@@ -76,11 +87,12 @@ class FrictionExecution(ExecutionModel):
 
     def __init__(
         self,
-        spread_bps: float = 5.0,  # 5 basis points = 0.05%
-        commission_per_share: float = 0.005,  # $0.005/share (Alpaca tier)
-        min_commission: float = 1.0,  # $1 minimum
-        impact_factor: float = 0.1,  # Market impact coefficient
-        rejection_rate: float = 0.0,  # 0% rejection (could be 0.1 for 10%)
+        slippage_bps: float = DEFAULT_SLIPPAGE,
+        spread_bps: float = DEFAULT_SLIPPAGE,  # 5 basis points = 0.05%
+        commission_per_share: float = FEE_PER_SHARE,  # $0.005/share (Alpaca tier)
+        min_commission: float = MIN_COMMISSION_PER_ORDER,  # $1 minimum
+        impact_factor: float = MARKET_IMPACT_FACTOR,  # Market impact coefficient
+        rejection_rate: float = REJECTION_RATE,  # 0% rejection (could be 0.1 for 10%)
     ):
         self.spread_bps = spread_bps
         self.commission_per_share = commission_per_share

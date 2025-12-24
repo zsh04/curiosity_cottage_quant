@@ -219,7 +219,9 @@ class MarketScanner:
         Placeholder Sector Map.
         Ideally fetch from Asset profile, but that's n+1 calls.
         """
-        # Simple mock or lookup
+        # TODO(Phase40): Connect to Finnhub/FMP Profile API for real sector data
+        # This is currently a hardcoded mockup for the MVP tech demo.
+        # DO NOT use for sector-neutral strategies in PROD until updated.
         SECTORS = {
             "NVDA": "Tech",
             "AMD": "Tech",

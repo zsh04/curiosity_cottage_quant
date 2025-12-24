@@ -1,3 +1,8 @@
+"""Telemetry API routes for agent state streaming.
+
+Legacy endpoint - prefer /ws/stream (websocket.py) for production use.
+"""
+
 from litestar import Controller, WebSocket, websocket
 from app.services.state_stream import get_state_broadcaster
 import logging

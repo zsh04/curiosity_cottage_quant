@@ -4,7 +4,7 @@ Defines mathematical parameters and safety thresholds:
 - **Risk Limits**: MAX_DRAWDOWN (2%), MAX_LEVERAGE (1x), FAT_FINGER_CAP (20%)
 - **Execution Physics**: SLIPPAGE (5 bps), COMMISSION ($0.005/share)
 - **Execution**: SLIPPAGE (5 bps), COMMISSION ($0.005/share)
-- **Financial**: RISK_FREE_RATE (dynamic 10Y Treasury), TRADING_DAYS (252)
+- **Financial**: RISK_FREE_RATE (5.25% default, configurable), TRADING_DAYS (252)
 - **Backtest**: INITIAL_CAPITAL, TARGET_ALLOCATION
 - **Volatility Skew**: Crash/meltup thresholds
 
@@ -32,7 +32,17 @@ FAT_FINGER_CAP = float(os.getenv("FAT_FINGER_CAP_PCT", "0.20"))  # 20% NAV per T
 DEFAULT_SLIPPAGE = float(os.getenv("DEFAULT_SLIPPAGE_BPS", "0.0005"))  # 5 bps
 
 # Commission: Broker-specific. Default based on Alpaca Pro tier.
+# Commission: Broker-specific. Default based on Alpaca Pro tier.
 FEE_PER_SHARE = float(os.getenv("COMMISSION_PER_SHARE", "0.005"))  # $0.005/share
+MIN_COMMISSION_PER_ORDER = float(os.getenv("MIN_COMMISSION", "1.0"))  # $1.00 min
+
+# Impact model
+MARKET_IMPACT_FACTOR = float(
+    os.getenv("MARKET_IMPACT_FACTOR", "0.1")
+)  # Linear impact factor
+REJECTION_RATE = float(
+    os.getenv("REJECTION_RATE", "0.0")
+)  # Probability of order rejection (0-1)
 
 # ============================================================================
 # BACKTEST / STRATEGY CONFIG

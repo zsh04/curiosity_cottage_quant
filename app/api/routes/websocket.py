@@ -1,3 +1,9 @@
+"""WebSocket routes for real-time state streaming.
+
+The Shannon Signalman: Maintains Information Velocity with the Instrument Cluster (Frontend).
+Uses orjson for HFT-grade serialization (~2-5x faster than stdlib json).
+"""
+
 from litestar import WebSocket, websocket_listener
 from litestar.handlers import WebsocketListener
 from app.services.state_stream import get_state_broadcaster

@@ -1,3 +1,8 @@
+"""Vector data types for agent outputs.
+
+Defines PhysicsVector (Feynman), ReflexivityVector (Soros), and OODAVector (Boyd).
+"""
+
 from pydantic import BaseModel, Field
 
 

@@ -82,7 +82,21 @@ class ChronosService:
         logger.info(f"Chronos Hardware Accelerated: {self.device.upper()}")
 
         self.pipeline = None
-        if CHRONOS_AVAILABLE:
+        # 2. Check for library availability
+        if not CHRONOS_AVAILABLE:
+            # 🛡️ FATAL GUARD: Never allow mock forecasts in Production
+            from app.core.config import settings
+            if settings.ENV == "PROD":
+                raise RuntimeError("🚨 CRITICAL: Chronos library missing in PROD! Cannot forecast.")
+
+            logger.warning(
+                "Chronos Library NOT FOUND. Running in Mock/Pass-through Mode."
+            )
+            # Ensure mock mode is explicitly set if Chronos is not available at all
+            self.pipeline = None
+            self.device = "cpu"
+            self.dtype = torch.float32
+        else:
             try:
                 logger.info(f"Loading {model_name} on {self.device}...")
 
