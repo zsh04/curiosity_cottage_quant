@@ -11,10 +11,15 @@ logger = logging.getLogger(__name__)
 
 
 class LSTMPredictionStrategy(BaseStrategy):
-    """
-    Reservoir Computing Strategy (Echo State Network) with Recursive Least Squares.
+    """Echo State Network (ESN) with Recursive Least Squares - O(1) incremental learning.
 
-    Uses a fixed random reservoir to project inputs into high-dimensional space,
+    NOT a traditional LSTM! Uses reservoir computing: a fixed random recurrent network
+    projects inputs into high-dimensional space, then trains only the output weights.
+
+    **Theory** (Jaeger & Haas, 2004):
+    - **Reservoir**: Fixed random RNN (100 neurons, spectral radius 0.9)
+    - **Echo State Property**: Ensures fading memory of past inputs
+    - **R
     then uses RLS (Recursive Least Squares) to incrementally update the readout layer.
 
     PERFORMANCE OPTIMIZATION:
