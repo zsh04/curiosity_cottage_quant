@@ -16,9 +16,35 @@ logger = logging.getLogger(__name__)
 
 
 class BrainService(pb2_grpc.BrainServicer):
-    """
-    The Brain gRPC Service.
-    Hosts the AI models (Chronos/FinBERT) as a high-performance microservice.
+    """gRPC microservice hosting Chronos forecasting and FinBERT sentiment models.
+
+    Provides high-performance AI inference via gRPC, separating model execution
+    from the main agent loop for better resource isolation and scalability.
+
+    **Services Provided**:
+    1. **Forecast (Chronos)**: Time series probabilistic forecasting
+    2. **AnalyzeSentiment (FinBERT)**: News headline sentiment analysis
+
+    **Architecture**:
+    - gRPC server on port 50051
+    - Async service methods (asyncio)
+    - Protobuf serialization for efficiency
+    - Model initialization at startup
+
+    **Models**:
+    - TimeSeriesForecaster: Chronos-bolt ensemble forecasting
+    - SentimentAdapter: FinBERT ONNX runtime
+
+    Attributes:
+        forecaster: TimeSeriesForecaster instance
+        sentiment: SentimentAdapter instance
+
+    Example:
+        >>> # Start server
+        >>> asyncio.run(serve())  # Listens on [::]:50051
+
+        >>> # Client usage (from Boyd)
+        >>> stub.Forecast(ForecastRequest(prices=[...]))
     """
 
     def __init__(self):

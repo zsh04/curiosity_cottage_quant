@@ -8,9 +8,34 @@ logger = logging.getLogger("feynman_bridge")
 
 
 class FeynmanBridge:
-    """
-    The Feynman Bridge.
-    Reads live physics state directly from the Redis Keys written by FeynmanService (The Kernel).
+    """Redis-backed physics state accessor - reads live kinematics from FeynmanService.
+
+    Acts as a synchronous bridge between Boyd Agent and the async FeynmanService kernel.
+    Reads precomputed physics vectors from Redis (written by FeynmanService) to avoid
+    recomputation and ensure consistency.
+
+    **Architecture**:
+    - Reads from `physics:state:{symbol}` Redis keys
+    - Falls back to zero-gravity defaults if unavailable
+    - Provides legacy adapters for stateless kinematics
+
+    **Physics Vector (5-Pillar)**:
+    1. mass: Price inertia
+    2. momentum: Velocity * mass
+    3. friction: Drag coefficient
+    4. entropy: Shannon entropy of returns
+    5. nash_dist: Nash distance from mode
+    6. regime: Market regime (Gaussian/Lévy/Critical)
+    7. alpha_coefficient: Power law exponent
+
+    Attributes:
+        redis: Sync Redis client for blocking access
+        price_history_buffer: Internal buffer for legacy methods
+
+    Example:
+        >>> bridge = FeynmanBridge()
+        >>> forces = bridge.get_forces("SPY")
+        >>> print(forces["momentum"], forces["regime"])
     """
 
     def __init__(self):
