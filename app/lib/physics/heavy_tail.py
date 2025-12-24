@@ -36,14 +36,44 @@ def expected_shortfall(returns: np.ndarray, confidence_level: float = 0.95) -> f
 
 
 class HeavyTailEstimator:
-    """
-    Implements Heavy Tail statistics to detect the Probabilistic Regime of the market.
+    """Hill estimator for tail exponent (α) - detects infinite-variance regimes.
 
-    Core Concept:
-    Markets alternate between two regimes:
-    1. Gaussian (Alpha > 3.0): Mean-reverting, finite variance. Safe for standard models.
-    2. Levy Stable (1.0 < Alpha < 2.0): Infinite variance, trending, black swan prone.
-       Standard models fail here. Momentum dominates.
+    Implements power law analysis to classify market regimes based on return distribution
+    tail behavior. Critical for risk management when standard deviation becomes meaningless.
+
+    **Theory**:
+    Financial returns follow power law: P(X > x) ~ x^(-α)
+    - **α > 3.0**: Gaussian regime (finite variance, standard models work)
+    - **2.0 < α ≤ 3.0**: Lévy stable (heavy tails, momentum dominates)
+    - **α ≤ 2.0**: Critical/Cauchy (infinite variance, BLACK SWAN zone)
+
+    **Hill Estimator Formula**:
+    ```
+    α = 1 / [ (1/k) * Σ ln(X_i / X_min) ]
+    ```
+    Where k = tail sample size (adaptive: 10%/5%/3% based on n)
+
+    **Adaptive Tail Sizing**:
+    - n < 30: 10% (small sample stability)
+    - 30 ≤ n < 500: 5% (medium samples)
+    - n ≥ 500: 3% (large sample precision)
+    - Minimum: 10 observations for reliability
+
+    **Regime Classification & Leverage Caps**:
+    - **Gaussian** (α > 3.0): 1.0x leverage (safe)
+    - **Lévy** (2.0 < α ≤ 3.0): 0.5x leverage (caution)
+    - **Critical** (α ≤ 2.0): 0.0x leverage (HALT trading)
+
+    Attributes:
+        window_size: Rolling window for alpha calculation
+        returns: Circular buffer of return observations
+
+    Example:
+        >>> estimator = HeavyTailEstimator(window_size=100)
+        >>> estimator.update(return_val=0.02)
+        >>> alpha = estimator.get_current_alpha()
+        >>> regime = HeavyTailEstimator.get_regime(alpha)
+        >>> print(regime.regime, regime.leverage_cap)  # "Critical", 0.0
     """
 
     def __init__(self, window_size: int = 100):

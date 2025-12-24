@@ -11,13 +11,53 @@ class StateEstimate:
 
 
 class KinematicKalmanFilter:
-    """
-    3-State Kinematic Kalman Filter (Constant Acceleration Model).
+    """3-state Extended Kalman Filter for price kinematics (position, velocity, acceleration).
 
-    State Vector x = [Position (Price), Velocity (Trend), Acceleration (Momentum)]^T
+        Estimates the "true" velocity and acceleration of price movements by filtering out
+        market noise. Foundation for physics-based regime detection and trend following.
 
-    Goal: Estimate the 'True' Velocity of the price to identify trends,
-          filtering out market noise.
+        **State Vector** (x):
+        ```
+        x = [position, velocity, acceleration]^T
+          = [price, trend, momentum]^T
+        ```
+
+        **State Transition** (constant acceleration model):
+
+    ```
+        x_k = x_{k-1} + v *  dt + 0.5 * a * dt^2
+        v_k = v_{k-1} + a * dt
+        a_k = a_{k-1}  (assumed constant between observations)
+        ```
+
+        **Observation Model**:
+        - Only price is observed directly (H = [1, 0, 0])
+        - Velocity and acceleration are latent (inferred)
+
+        **Smart Initialization** (3-sample warmup):
+        - Uses finite differences on first 3 measurements
+        - v0 = (p2 - p0) / (2*dt) (central difference)
+        - a0 = (p2 - 2*p1 + p0) / dt^2 (second-order difference)
+        - Prevents cold-start bias
+
+        **Adaptive Noise Scaling**:
+        - R_adaptive = R * (1 + volatility_factor^2)
+        - Increases measurement noise during high volatility
+        - Makes filter "stiffer" to resist whipsaw from Lévy flights
+
+       Attributes:
+            dt: Time step between observations (default: 1.0)
+            F: State transition matrix (3x3)
+            H: Observation matrix (1x3)
+            Q: Process noise covariance (3x3)
+            R: Measurement noise covariance (1x1)
+            P: Error covariance matrix (3x3)
+            x: State estimate vector (3,)
+
+        Example:
+            >>> kf = KinematicKalmanFilter(dt=1.0, process_noise=0.01)
+            >>> state = kf.update(measurement=150.25, volatility_factor=0.5)
+            >>> print(state.velocity, state.acceleration)
     """
 
     def __init__(
