@@ -103,6 +103,7 @@ docs/
 - `hill-estimator.md` — Tail exponent (α) estimation
 - [BES Sizing](./internal/math/bes-sizing.md) — BES position sizing
 - `physics-engine.md` — 5-Pillar Physics Model
+- [Performance Metrics](./internal/metrics/PERFORMANCE_METRICS.md) — 27-metric performance suite
 
 ### Architecture (Implementation Details)
 
