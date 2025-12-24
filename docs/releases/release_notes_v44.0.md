@@ -38,7 +38,16 @@ This release focuses on **Granular Observability** and **High-Performance API** 
 - **Strict Typing**: Refactored `MarketController` and `OrdersController` to use strict `Dataclass` responses, removing implicit `Dict[str, Any]` returns.
 - **Result**: Reduced serialization latency and enforced schema validation.
 
-### 3. Comprehensive Audit Compliance
+### 3. The Kepler Protocol ("Unique Pulse")
+
+- **Ref**: `app/core/models.py`, `app/services/scanner.py`, `app/agent/nodes/soros.py`
+- **Objective**: Prevent "Echo Trading" by enforcing unique observation windows.
+- **Mechanism**:
+  - Scanner emits `scan_id` (UUID4).
+  - Soros VETOES any cycle where `scan_id` matches `last_scan_id`.
+- **Impact**: Eliminates redundant processing of stale market snapshots.
+
+### 4. Comprehensive Audit Compliance
 
 - **Ref**: `docs/internal/reports/audit/templates/`
 - **New Templates**: Created "Brutally Honest" audit checklists:

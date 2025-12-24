@@ -810,3 +810,27 @@ f"📜 [INNER LOOP] Hypatia: Ingesting Telemetry for Run {id}..."
 ```
 
 ---
+
+## 17. The Kepler Protocol (Unique Pulse)
+
+### 17.1 Contract Overview
+
+**Responsibility:** Enforce uniqueness of market observation windows to prevent "Echo Trading".
+**Mechanism:** UUID4 Fingerprinting.
+
+### 17.2 The Payload
+
+```python
+class KeplerPayload(BaseModel):
+    scan_id: UUID4       # Unique Fingerprint (Prevent Echos)
+    timestamp: datetime  # Pulse Time
+    count: int           # Asset Count
+    universe: list       # Candidate Assets
+```
+
+### 17.3 The Veto Logic
+
+1. **Scanner** emits `KeplerPayload` with `scan_id=UUID4()`.
+2. **Soros** checks `state["last_scan_id"]`.
+3. If `scan_id == last_scan_id`: **VETO** (Sleep).
+4. Else: **PROCEED** and update `last_scan_id`.
