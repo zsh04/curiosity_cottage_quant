@@ -238,10 +238,11 @@ class SimulatedExecutionHandler:
             )
             return
 
-        # Simulate fill using execution model
-        # TODO: Calculate volatility from recent price history
-        # For now, use fixed 1% daily volatility
-        volatility = 0.01
+        # Calculate volatility from recent price history
+        volatility = self._calculate_historical_volatility(event.symbol, market_data)
+        if volatility is None or volatility == 0:
+            # Fallback to 1% if calculation fails
+            volatility = 0.01
 
         if self.latency_ms > 0:
             # Random jitter: +/- 50% of latency

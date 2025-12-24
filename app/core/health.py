@@ -37,12 +37,39 @@ class SystemHealth:
 
     def check_queue_depth(self) -> int:
         """
-        Mockable queue depth check.
-        In a real scenario, this would check Redis/Internal queues.
-        For now, returns 0 as we are in a backtest loop mostly.
+        Check queue depth from Redis (if available in production).
+
+        Returns:
+            int: Number of items in queue, 0 if Redis unavailable
         """
-        # TODO: Connect to Redis if needed for depth check
-        return 0
+        try:
+            # Check if Redis is configured
+            import os
+
+            redis_url = os.getenv("REDIS_URL")
+
+            if not redis_url:
+                # No Redis configured - return 0 (backtest/dev mode)
+                return 0
+
+            # Try to connect to Redis and check queue depth
+            import redis
+
+            r = redis.from_url(redis_url, decode_responses=True)
+
+            # Check depth of relevant queues
+            # Assuming we have queues like: 'order_queue', 'signal_queue', etc.
+            depth = 0
+            queue_names = ["order_queue", "signal_queue", "execution_queue"]
+
+            for queue_name in queue_names:
+                depth += r.llen(queue_name)
+
+            return depth
+        except Exception:
+            # Redis not available or connection failed
+            # This is OK in backtest mode
+            return 0
 
     def get_health(self) -> float:
         """

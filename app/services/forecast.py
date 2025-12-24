@@ -54,12 +54,7 @@ class TimeSeriesForecaster:
         # Thread Pool for blocking Inference
         self.executor = ThreadPoolExecutor(max_workers=1)
 
-    def _load_chronos(self):
-        """Load Chronos-Bolt model implementation."""
-        if not CHRONOS_AVAILABLE:
-            logger.warning("⚠️ Chronos not available. Running in PLACEHOLDER mode.")
-            return
-
+        # Load model
         model_name = "amazon/chronos-bolt-small"
         logger.info(f"🔮 Loading {model_name} on {self.device.upper()}...")
 
