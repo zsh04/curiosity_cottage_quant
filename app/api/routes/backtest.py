@@ -1,3 +1,5 @@
+"""Backtest API routes - spawn simulations and stream results via WebSocket + Redis pub/sub."""
+
 from litestar import Controller, post, WebSocket, get
 from litestar.handlers import WebsocketListener
 from litestar.background_tasks import BackgroundTask
@@ -5,8 +7,26 @@ from redis.asyncio import Redis
 import os
 import uuid
 import asyncio
+
+"""System health monitoring - operational health tensor via latency/jitter/queue depth metrics."""
+import time
+
+"""OpenTelemetry metrics definitions - business-level observability for trading, physics, LLM, risk, forecasting.
+
+Defines histograms, gauges, counters for:
+- Analyst latency and candidate counts
+- Signal generation and conviction levels
+- Physics (velocity, acceleration, regime)
+- LLM (tokens, latency, signal extraction)
+- Risk (position size, multipliers, vetoes)
+- Forecasting (Chronos uncertainty, RAF similarity)
+- Backtest (Sharpe, max DD, win rate, tail ratio)
+"""
+"""OpenTelemetry setup - traces/metrics/logs to OTLP collector (cc_pulse → Grafana Cloud)."""
 import logging
 import orjson
+
+"""Pydantic data models - physics vectors, signals, orders, forecasts, execution reports, LanceDB schemas."""
 from datetime import datetime
 
 from app.services.backtest import BacktestEngine
