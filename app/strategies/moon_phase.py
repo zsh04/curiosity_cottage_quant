@@ -5,12 +5,10 @@ from app.strategies.base import BaseStrategy
 
 
 class MoonPhaseStrategy(BaseStrategy):
-    """
-    Moon Phase Strategy (MoonPhase_V1).
+    """Lunar cycle timing (experimental) - new moon = buy, full moon = sell.
 
-    Trading logic based on lunar cycles:
-    - New Moon: Buy
-    - Full Moon: Sell
+    Based on folklore. Academic research shows NO consistent lunar market effect.
+    **Educational only** - not recommended for live trading.
     """
 
     # Astronomical Constants

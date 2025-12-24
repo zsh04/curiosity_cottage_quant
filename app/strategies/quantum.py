@@ -4,9 +4,10 @@ import numpy as np
 
 
 class QuantumOscillatorStrategy(BaseStrategy):
-    """
-    Quantum Harmonic Oscillator Strategy.
-    Models price deviation as displacement in a quantum potential well.
+    """Quantum harmonic oscillator mean reversion - price as particle in potential well.
+
+    Large displacement from SMA → high potential energy → reversion force.
+    Signal = -sign(price - SMA) if |displacement| > E₀ (ground state threshold)
     """
 
     def __init__(self, window: int = 20, omega: float = 0.1):

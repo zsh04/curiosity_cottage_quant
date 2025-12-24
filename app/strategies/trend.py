@@ -5,13 +5,10 @@ from app.lib.kalman.kinematic import KinematicKalmanFilter
 
 
 class KalmanMomentumStrategy(BaseStrategy):
-    """
-    Trend Following Strategy using Kinematic Kalman Filter.
-    "KalmanMomentum_V2"
+    """Trend following via Kalman-filtered velocity (3-state kinematic model).
 
-    Logic:
-    - Estimate velocity of price using 3-state KF (Pos, Vel, Acc).
-    - Signal is normalized velocity.
+    Signal = tanh(velocity * 10). Filters noise, captures sustained moves.
+    **Best**: Trending markets | **Worst**: Choppy (velocity oscillates)
     """
 
     @property

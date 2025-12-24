@@ -5,16 +5,10 @@ from app.lib.memory import FractalMemory
 
 
 class FractalBreakoutStrategy(BaseStrategy):
-    """
-    Fractal Breakout Strategy.
-    "FractalBreakout_V1"
+    """Donchian Channel breakouts on fracdiff-stationary prices.
 
-    Logic:
-    - Dynamically fractionally differentiate the price series to stationarity (find min d).
-    - Detect breakout of the Stationary Series against its 20-day rolling Max/Min.
-    - Signal:
-      - Stationary Value > Prior 20-Bar Max -> Buy (1.0)
-      - Stationary Value < Prior 20-Bar Min -> Sell (-1.0)
+    Combines López de Prado's fracdiff with turtle trading breakouts.
+    **Best**: Trending markets | **Worst**: Choppy (false breakouts)
     """
 
     def __init__(self, window: int = 20):

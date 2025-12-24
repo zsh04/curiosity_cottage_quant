@@ -3,14 +3,10 @@ from app.strategies.base import BaseStrategy
 
 
 class BollingerReversionStrategy(BaseStrategy):
-    """
-    Mean Reversion Strategy using Bollinger Bands.
-    "BollingerReversion_V1"
+    """Bollinger Bands mean reversion - buy oversold, sell overbought extremes.
 
-    Logic:
-    - Buy if Price < Lower Band
-    - Sell if Price > Upper Band
-    - Neutral otherwise
+    Classic statistical arbitrage: price mean-reverts after touching ±2σ bands.
+    **Best**: Ranging markets | **Worst**: Strong trends (whipsaw losses)
     """
 
     def __init__(self, window: int = 20, num_std: float = 2.0):
