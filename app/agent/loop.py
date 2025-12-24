@@ -21,7 +21,7 @@ async def run_agent_service():
     1. **Halt Check**: Verify emergency kill switch not engaged
     2. **Portfolio Fetch**: Get current positions from Alpaca
     3. **Account Fetch**: Get buying power, cash, PDT status
-    4. **Pipeline Execute**: Run app_pipeline (LangGraph)
+    4. **Pipeline Execute**: Run app_pipeline (Boyd OODA cycle)
     5. **Telemetry Broadcast**: Push state to WebSocket clients
     6. **Sleep**: Wait SLEEP_INTERVAL (5s) before next cycle
 

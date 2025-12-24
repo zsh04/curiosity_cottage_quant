@@ -915,6 +915,6 @@ _boyd_agent_instance = BoydAgent()
 
 async def boyd_node(state: AgentState) -> AgentState:
     """
-    LangGraph/Pipeline Node Wrapper (Async) for Boyd (The Strategist).
+    Pipeline Node Wrapper (Async) for Boyd (The Strategist).
     """
     return await _boyd_agent_instance.analyze(state)
