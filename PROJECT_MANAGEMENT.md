@@ -118,6 +118,7 @@ Every Directive follows this format:
   - Acceptance testing
   - Sign-off
 - **Exit Criteria:** Directive closed
+- **Mandatory:** The IDE must self-verify against `docs/internal/process/DEFINITION_OF_DONE.md` before requesting verification.
 
 ---
 
