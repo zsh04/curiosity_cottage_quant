@@ -31,13 +31,68 @@ tracer = trace.get_tracer(__name__)
 
 
 class BoydAgent:
-    """
-    The Council of Giants: 'Boyd' (The Strategist).
-    Uses 'Feynman' (Physics) for OODA Loop Orientation.
-    Implements the core Analyst/Strategist logic.
+    """The Council of Giants: 'Boyd' (The Strategist) - OODA Loop Orchestrator.
+
+    Named after Colonel John Boyd's OODA Loop (Observe-Orient-Decide-Act), this agent
+    serves as the primary analyst and strategist for market analysis. It integrates
+    multiple data sources, physics-based calculations, and LLM reasoning to generate
+    high-confidence trading signals.
+
+    **Architecture**:
+    - **Observe**: Gathers market data, physics vectors, and reflexivity signals
+    - **Orient**: Runs The Council (7+ strategies) to generate consensus signals
+    - **Decide**: Applies correlation veto to prevent cluster risk
+    - **Act**: Returns analyzed signals with confidence scores
+
+    **Key Responsibilities**:
+    1. **Physics Integration**: Uses FeynmanBridge to calculate kinematic state
+       (position, velocity, acceleration, jerk) for each asset
+    2. **Strategy Council**: Orchestrates 7+ independent trading strategies,
+       aggregating their signals via weighted voting
+    3. **Reflexivity Detection**: Monitors Soros reflexivity index to avoid
+       bubble/artificial momentum (anti-FOMO protection)
+    4. **Cluster Veto**: Prevents correlated positions via correlation matrix
+       analysis (>0.85 correlation threshold)
+    5. **LLM Reasoning**: Generates natural language explanations for signals
+       using context-aware prompting
+
+    **Mathematical Basis**:
+    - OODA urgency = f(momentum, jerk, reflexivity)
+    - Correlation veto uses Pearson correlation >0.85 threshold
+    - Council voting: weighted average of strategy signals
+
+    Attributes:
+        market: Market data service for price/volume fetching
+        feynman_map: Per-symbol physics bridges (state isolation)
+        brain_stub: gRPC client to Brain Service (Gemini LLM)
+        reasoning: LLM reasoning service for narrative generation
+        memory: Quantum memory service for context retrieval
+        lstm_model: Echo State Network (Reservoir Computing)
+        strategies: List of Council strategy instances
+        cycle_count: Analysis cycle counter for checkpointing
+
+    Example:
+        >>> agent = BoydAgent()
+        >>> state = AgentState(symbol="SPY", ...)
+        >>> await agent.analyze(state)
+        >>> # state.signals updated with Council consensus
     """
 
     def __init__(self):
+        """Initialize Boyd agent with all services and strategy council.
+
+        Sets up:
+        - Market data service
+        - Per-symbol physics bridges (Feynman)
+        - gRPC connection to Brain Service (Gemini LLM)
+        - Reasoning and memory services
+        - LSTM persistence (database or file fallback)
+        - Strategy Council (7+ independent experts)
+
+        Raises:
+            ConnectionError: If Brain Service unavailable
+            IOError: If LSTM checkpoint fails to load (warning only)
+        """
         # Instantiate Services
         self.market = MarketService()
         self.feynman_map: Dict[str, FeynmanBridge] = {}  # Per-symbol Physics Bridge
@@ -72,9 +127,20 @@ class BoydAgent:
         self.cycle_count = 0
 
     def _get_feynman_bridge(self, symbol: str) -> FeynmanBridge:
-        """
-        Factory method to get or create a unique FeynmanBridge for a symbol.
-        Ensures strict state isolation.
+        """Get or create symbol-specific FeynmanBridge for physics calculations.
+
+        Each symbol gets its own Feynman instance to ensure strict state isolation.
+        Bridges are cached in feynman_map for reuse across analysis cycles.
+
+        Args:
+            symbol: Ticker symbol (e.g., "SPY", "AAPL")
+
+        Returns:
+            FeynmanBridge instance for this symbol (cached or new)
+
+        Example:
+            >>> bridge = agent._get_feynman_bridge("SPY")
+            >>> physics = bridge.calculate_physics(price_data)
         """
         if symbol not in self.feynman_map:
             logger.info(f"BOYD: ⚛️ Spawning new Feynman Bridge for {symbol}")
@@ -82,9 +148,21 @@ class BoydAgent:
         return self.feynman_map[symbol]
 
     def _read_reflexivity(self, symbol: str) -> ReflexivityVector:
-        """
-        Read Soros Reflexivity State.
-        Uses one of the Feynman Bridges (Redis Client) to peek.
+        """Read Soros reflexivity state from Redis.
+
+        Fetches reflexivity index and sentiment delta to detect bubble conditions.
+        Uses FeynmanBridge's Redis client to read from "reflexivity:state:{symbol}" key.
+
+        Args:
+            symbol: Ticker symbol
+
+        Returns:
+            ReflexivityVector with:
+                - reflexivity_index: Correlation between price and sentiment [0,1]
+                - sentiment_delta: Rate of sentiment change
+
+        Note:
+            Returns zero vector if reflexivity data unavailable (graceful degradation)
         """
         # Hack: Borrow Redis from first available bridge or create checks
         bridge = self._get_feynman_bridge(symbol)
@@ -185,9 +263,39 @@ class BoydAgent:
     async def _analyze_single(
         self, symbol: str, skip_llm: bool = False
     ) -> Dict[str, Any]:
-        """
-        Performs deep analysis on a single asset.
-        Returns a dictionary of analysis results (Signal, Physics, Reasoning).
+        """Perform deep multi-modal analysis on a single asset.
+
+        Orchestrates The Council (7+ strategies), physics calculations, OODA scoring,
+        and optional LLM reasoning to generate a comprehensive trading signal.
+
+        **Pipeline**:
+        1. Fetch market data (OHLCV, fundamentals, news)
+        2. Run Feynman physics (kinematics: p, v, a, j)
+        3. Poll Council strategies (LSTM, Mean Reversion, Breakout, etc.)
+        4. Calculate OODA urgency (momentum + jerk - reflexivity)
+        5. Generate LLM reasoning (if skip_llm=False)
+        6. Aggregate into final signal with confidence
+
+        Args:
+            symbol: Ticker symbol to analyze
+            skip_llm: If True, skip expensive LLM reasoning (faster but less context)
+
+        Returns:
+            Dict with keys:
+                - symbol: Ticker
+                - signal: Consensus direction [-1.0 to +1.0]
+                - signal_confidence: Aggregate confidence [0.0 to 1.0]
+                - council_votes: List of individual strategy signals
+                - physics: PhysicsVector (p, v, a, j)
+                - ooda: OODAVector (urgency)
+                - reasoning: LLM-generated narrative (if skip_llm=False)
+                - history: Price history for correlation analysis
+                - timestamp: Analysis time
+
+        Example:
+            >>> result = await agent._analyze_single("SPY")
+            >>> print(result["signal"], result["signal_confidence"])
+            0.75, 0.82
         """
         result_packet = {
             "symbol": symbol,
@@ -498,9 +606,19 @@ class BoydAgent:
     def check_correlation(
         self, candidates: list[dict], portfolio_history: dict[str, list[float]] = None
     ) -> list[dict]:
-        """
-        Public Covariance Check.
-        Filters candidates that are highly correlated (>0.85) with each other OR existing positions.
+        """Public API: Filter candidates by correlation to prevent cluster risk.
+
+        Wrapper around _apply_covariance_veto for external callers.
+
+        Args:
+            candidates: List of analyzed signals from _analyze_single
+            portfolio_history: Optional dict of existing positions {symbol: [prices]}
+
+        Returns:
+            Filtered list with highly correlated candidates removed
+
+        See Also:
+            _apply_covariance_veto: Internal implementation with detailed logic
         """
         return self._apply_covariance_veto(candidates, portfolio_history)
 
