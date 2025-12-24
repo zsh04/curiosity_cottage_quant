@@ -1,15 +1,19 @@
 """Backtest API routes - spawn simulations and stream results via WebSocket + Redis pub/sub."""
 
-from litestar import Controller, post, WebSocket, get
+from litestar import Controller, post, WebSocket
 from litestar.handlers import WebsocketListener
-from litestar.background_tasks import BackgroundTask
 from redis.asyncio import Redis
 import os
 import uuid
 import asyncio
+import logging
+import orjson
+
+from app.services.backtest import BacktestEngine
+from app.dal.backtest import BacktestDAL
 
 """System health monitoring - operational health tensor via latency/jitter/queue depth metrics."""
-import time
+
 
 """OpenTelemetry metrics definitions - business-level observability for trading, physics, LLM, risk, forecasting.
 
@@ -23,14 +27,10 @@ Defines histograms, gauges, counters for:
 - Backtest (Sharpe, max DD, win rate, tail ratio)
 """
 """OpenTelemetry setup - traces/metrics/logs to OTLP collector (cc_pulse → Grafana Cloud)."""
-import logging
-import orjson
+
 
 """Pydantic data models - physics vectors, signals, orders, forecasts, execution reports, LanceDB schemas."""
-from datetime import datetime
 
-from app.services.backtest import BacktestEngine
-from app.dal.backtest import BacktestDAL
 
 logger = logging.getLogger("ShannonChannel")
 
@@ -105,7 +105,7 @@ class BacktestStream(WebsocketListener):
                             # Allow client to read it then close?
                             # Or just keep open. Let's keep open for a moment.
                             pass
-                    except:
+                    except Exception:
                         pass
                 else:
                     await asyncio.sleep(0.01)

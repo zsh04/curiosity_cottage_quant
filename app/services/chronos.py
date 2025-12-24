@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 import orjson
 import torch
 import numpy as np
@@ -86,8 +86,11 @@ class ChronosService:
         if not CHRONOS_AVAILABLE:
             # 🛡️ FATAL GUARD: Never allow mock forecasts in Production
             from app.core.config import settings
+
             if settings.ENV == "PROD":
-                raise RuntimeError("🚨 CRITICAL: Chronos library missing in PROD! Cannot forecast.")
+                raise RuntimeError(
+                    "🚨 CRITICAL: Chronos library missing in PROD! Cannot forecast."
+                )
 
             logger.warning(
                 "Chronos Library NOT FOUND. Running in Mock/Pass-through Mode."
@@ -139,14 +142,6 @@ class ChronosService:
                 self.pipeline = None  # Mock mode
                 self.device = "cpu"
                 self.dtype = torch.float32
-        else:
-            logger.warning(
-                "Chronos Library NOT FOUND. Running in Mock/Pass-through Mode."
-            )
-            # Ensure mock mode is explicitly set if Chronos is not available at all
-            self.pipeline = None
-            self.device = "cpu"
-            self.dtype = torch.float32
 
     def update_buffer(self, price: float):
         """Zero-allocation ring buffer update."""

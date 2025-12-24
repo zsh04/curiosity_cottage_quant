@@ -12,8 +12,7 @@ import asyncio
 import os
 import aiohttp
 import logging
-import json
-import time
+
 from datetime import datetime
 
 logger = logging.getLogger(__name__)

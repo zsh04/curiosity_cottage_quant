@@ -11,14 +11,13 @@ This enables "time travel" - treating historical data as if it were live.
 
 import logging
 from typing import Optional, List
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import numpy as np
 
 from app.backtest.events import MarketEvent, SignalEvent
 from app.backtest.strategy import Strategy
 from app.agent.nodes.analyst import AnalystAgent
-from app.agent.state import AgentState, OrderSide
+from app.agent.state import AgentState
 
 
 logger = logging.getLogger(__name__)
@@ -26,15 +25,15 @@ logger = logging.getLogger(__name__)
 
 class AnalystStrategy(Strategy):
     """Backtest wrapper for AnalystAgent to enable time-travel simulation.
-    
+
     Acts as a bridge between the event-driven backtester and the production AnalystAgent.
-    
+
     Key Features:
     - **Time Travel**: Injects historical price/volume data as if it were live.
     - **Dependency Mocking**: Patches external APIs (news, sentiment, LLM) to avoid
       calls during backtest and ensure determinism.
     - **State Management**: Maintains a rolling buffer of price history to calculate returns.
-    
+
     Attributes:
         agent (AnalystAgent): The production agent instance being tested.
         mock_llm (bool): If True, uses a heuristic instead of calling Ollama (speed).
@@ -66,9 +65,8 @@ class AnalystStrategy(Strategy):
         )
 
     def calculate_signals(self, event: MarketEvent, event_queue):
-    def calculate_signals(self, event: MarketEvent, event_queue):
         """Main backtest entry point: Wraps agent analysis with mocked state.
-        
+
         Process:
         1.  Updates internal price history buffer.
         2.  Constructs an `AgentState` object using historical context.
@@ -286,7 +284,7 @@ class AnalystStrategy(Strategy):
                         else:
                             signal_side = "FLAT"
                             confidence = 0.5
-                    except:
+                    except Exception:
                         signal_side = "FLAT"
                         confidence = 0.5
                 else:
@@ -297,7 +295,7 @@ class AnalystStrategy(Strategy):
                 return {
                     "signal_side": signal_side,
                     "signal_confidence": confidence,
-                    "reasoning": f"Mock LLM heuristic based on velocity",
+                    "reasoning": "Mock LLM heuristic based on velocity",
                     # Add dummy tokens for saving metrics in AnalystAgent
                     "tokens_input": 100,
                     "tokens_output": 20,

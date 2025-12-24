@@ -1,7 +1,7 @@
 import os
 import logging
 import concurrent.futures
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from datetime import datetime, timedelta, timezone
 
 from alpaca.data.historical import StockHistoricalDataClient

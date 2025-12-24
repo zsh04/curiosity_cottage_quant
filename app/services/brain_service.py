@@ -50,7 +50,7 @@ class BrainService(pb2_grpc.BrainServicer):
     def __init__(self):
         # Verify PB2 Definition at runtime
         try:
-            test = pb2.ForecastResponse(signal="TEST")
+            pb2.ForecastResponse(signal="TEST")
             logger.info("✅ PB2 Signal Field Verified via Instantiation.")
         except Exception as e:
             logger.critical(f"❌ PB2 Signal Field MISSING: {e}")
@@ -98,7 +98,9 @@ class BrainService(pb2_grpc.BrainServicer):
                         x, option=orjson.OPT_SERIALIZE_NUMPY, default=str
                     ).decode()
             except ImportError:
-                dumps = lambda x: json.dumps(x, default=str)
+
+                def dumps(x):
+                    return json.dumps(x, default=str)
 
             q_list = chronos_data.get("quantiles", [])
             logger.debug(f"📊 BrainService: Quantiles extracted: {len(q_list)} values")

@@ -100,7 +100,7 @@ class FeynmanBridge:
             a = v - v_prev
 
             return {"velocity": float(v), "acceleration": float(a)}
-        except:
+        except Exception:
             return {"velocity": 0.0, "acceleration": 0.0}
 
     def analyze_regime(self, buffer: List[float]) -> Dict[str, Any]:

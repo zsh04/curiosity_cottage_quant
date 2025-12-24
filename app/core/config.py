@@ -11,7 +11,6 @@ All settings can be overridden via environment variables or .env file.
 Follows 12-factor app methodology for configuration management.
 """
 
-from typing import List
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import os

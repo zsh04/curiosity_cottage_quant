@@ -81,10 +81,10 @@ class KinematicKalmanFilter:
         # Process Noise Covariance (Q)
         # Assume noise enters primarily through acceleration (the highest order term)
         # discrete noise model for constant acceleration
-        q = process_noise
-        dt2 = dt**2
-        dt3 = dt**3
-        dt4 = dt**4
+        # q = process_noise
+        # dt2 = dt**2
+        # dt3 = dt**3
+        # dt4 = dt**4
         # self.Q = q * np.array([
         #     [dt4/4, dt3/2, dt2/2],
         #     [dt3/2, dt2,   dt],
@@ -177,8 +177,8 @@ class KinematicKalmanFilter:
         self.x = x_pred + (K @ y)  # Flatten if necessary, but dot usually handles it
 
         # P_new = (I - K * H) * P_pred
-        I = np.eye(3)
-        self.P = (I - K @ self.H) @ P_pred
+        identity_matrix = np.eye(3)
+        self.P = (identity_matrix - K @ self.H) @ P_pred
 
         return StateEstimate(
             position=float(self.x[0]),

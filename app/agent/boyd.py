@@ -2,7 +2,7 @@ import logging
 import asyncio
 import time
 import orjson
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from opentelemetry import trace
 
 from app.agent.state import AgentState
@@ -178,7 +178,7 @@ class BoydAgent:
                 # payload wrapper: {symbol: ..., reflexivity: {...}}
                 ref_dict = payload.get("reflexivity", {})
                 return ReflexivityVector(**ref_dict)
-        except Exception as e:
+        except Exception:
             # logger.warning(f"Reflexivity Read Error: {e}")
             pass
 
@@ -355,7 +355,7 @@ class BoydAgent:
             forces_dict = feynman.get_forces(symbol)
             try:
                 physics_vec = PhysicsVector(**forces_dict)
-            except:
+            except Exception:
                 physics_vec = PhysicsVector(mass=0, momentum=0, entropy=0, jerk=0)
 
             # Use strict vector values if available/nonzero, else rely on legacy calc for fallback?
@@ -701,7 +701,6 @@ class BoydAgent:
 
         # Identify which symbols are candidates vs existing positions
         candidate_symbols = set(c["symbol"] for c in candidates)
-        existing_symbols = set(portfolio_history.keys()) if portfolio_history else set()
 
         symbols = list(truncated_map.keys())
         for i in range(len(symbols)):
@@ -765,7 +764,7 @@ class BoydAgent:
         for c in candidates:
             if c["symbol"] in vetoed_symbols:
                 c["success"] = False
-                c["reasoning"] += f" | VETOED: Correlation > 0.85 (Cluster Check)"
+                c["reasoning"] += " | VETOED: Correlation > 0.85 (Cluster Check)"
                 c["signal_side"] = "FLAT"
             final_candidates.append(c)
 

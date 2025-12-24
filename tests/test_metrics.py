@@ -7,7 +7,6 @@ Tests all 27 metrics with known inputs/outputs.
 import numpy as np
 import pytest
 from app.services.metrics import MetricsCalculator
-from app.core.metrics_types import PerformanceMetrics
 
 
 class TestTailMetrics:

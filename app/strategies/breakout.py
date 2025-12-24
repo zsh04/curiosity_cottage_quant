@@ -1,5 +1,5 @@
 import pandas as pd
-import numpy as np
+
 from app.strategies.base import BaseStrategy
 from app.lib.memory import FractalMemory
 

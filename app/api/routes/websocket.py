@@ -4,12 +4,12 @@ The Shannon Signalman: Maintains Information Velocity with the Instrument Cluste
 Uses orjson for HFT-grade serialization (~2-5x faster than stdlib json).
 """
 
-from litestar import WebSocket, websocket_listener
+from litestar import WebSocket
 from litestar.handlers import WebsocketListener
 from app.services.state_stream import get_state_broadcaster
 from app.services.redis_bridge import RedisBridge
 import logging
-import asyncio
+
 import orjson
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class BrainStream(WebsocketListener):
         Called when a client connects.
         Subscribes to the internal StateBroadcaster and pipes events to the socket.
         """
-        logger.info(f"🧠 BrainStream: Client Connected")
+        logger.info("🧠 BrainStream: Client Connected")
 
         # Lazy Start the Watchtower Bridge
         bridge = RedisBridge.get_instance()
