@@ -64,7 +64,7 @@ class BoydAgent:
     Attributes:
         market: Market data service for price/volume fetching
         feynman_map: Per-symbol physics bridges (state isolation)
-        brain_stub: gRPC client to Brain Service (Gemini LLM)
+        brain_stub: gRPC client to Brain Service (Gemma2 9B, FinBERT, Chronos-bolt)
         reasoning: LLM reasoning service for narrative generation
         memory: Quantum memory service for context retrieval
         lstm_model: Echo State Network (Reservoir Computing)
