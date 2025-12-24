@@ -1,16 +1,14 @@
 from contextlib import asynccontextmanager
+import asyncio
+import logging
 from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 from litestar import Litestar, get
 from litestar.config.cors import CORSConfig
-from app.core.serialization import ORJSONResponse
 from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
 
+from app.core.serialization import ORJSONResponse
 from app.core.telemetry import setup_telemetry
-import asyncio
 from app.agent.loop import run_agent_service
 
 # Import Controllers
@@ -24,9 +22,11 @@ from app.api.routes.websocket import BrainStream
 from app.api.routes.backtest import BacktestController, BacktestStream
 
 # Database & State
-from app.dal.database import init_db, SessionLocal, async_session_maker
+from app.dal.database import init_db, SessionLocal
 from app.services.global_state import initialize_global_state_service
-import logging
+
+# Load environment variables from .env file
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
