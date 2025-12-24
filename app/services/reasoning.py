@@ -39,9 +39,39 @@ class TradeDecision(BaseModel):
 
 
 class ReasoningService:
-    """
-    Reasoning Service: The 'Prefrontal Cortex' of the system.
-    Synthesizes multi-modal data using Pydantic AI for structured reasoning.
+    """The Prefrontal Cortex - LLM-powered structured reasoning via Pydantic AI.
+
+    Synthesizes multi-modal market data (physics, sentiment, forecast, council)
+    into actionable trade decisions using Gemma2 9B or Ollama fallback.
+
+    **Architecture**:
+    - **Apple Silicon**: Native MLX (Gemma2 9B @ 40-50 tok/s)
+    - **Linux/Cloud**: Ollama bridge (llama3.1/gemma2)
+    - Structured output via Pydantic AI (TradeDecision model)
+    - Quantum interference calculation for news conflicts
+
+    **Decision Pipeline**:
+    1. Aggregate context (market, physics, forecast, sentiment, council)
+    2. Calculate news quantum interference (if multiple headlines)
+    3. Serialize to JSON for LLM consumption
+    4. Execute "God Prompt" via Pydantic AI agent
+    5. Return structured TradeDecision (action, confidence, reasoning)
+
+    **Performance**:
+    - MLX mode: ~200-500ms per inference
+    - Ollama mode: ~1-2s (network latency)
+    - Includes telemetry/metrics tracking
+
+    Attributes:
+        agent: Pydantic AI Agent instance
+        mode: Execution mode (MLX_NATIVE, OLLAMA_BRIDGE, LOCAL)
+        executor: ThreadPool for background tasks
+        pending_tasks: Background computation tracker
+
+    Example:
+        >>> service = ReasoningService()
+        >>> decision = await service.generate_signal(context)
+        >>> print(decision["signal_side"], decision["reasoning"])
     """
 
     def __init__(self):

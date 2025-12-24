@@ -14,15 +14,38 @@ logger = logging.getLogger(__name__)
 
 
 class MarketScanner:
-    """
-    Dynamic Market Scanner.
-    Finds 'In Play' assets by scanning the entire US Equity universe.
+    """Dynamic universe scanner - finds "in play" assets across 8k+ US equities.
 
-    Logic:
-    1. Fetch ALL active/tradable assets (~8k-10k).
-    2. Batch fetch Snapshots (Price, Vol, Daily Change) in chunks of 1000.
-    3. Filter: Price > $5, Notional Vol > $20M, Move > 1.5%.
-    4. Rank: Abs(Change%) Descending.
+    Replaces static watchlists with real-time volatility hunting. Scans the entire
+    Alpaca universe and ranks by absolute price movement to find trading opportunities.
+
+    **Scanning Pipeline**:
+    1. **Fetch Universe**: Get all active/tradable US equities (~8-10k)
+    2. **Batch Snapshots**: Parallel fetch in 1000-symbol chunks
+    3. **Filter**: Price > $5, Volume > $20M, Move > 1.5%
+    4. **Rank**: Sort by abs(change%) descending
+    5. **Return**: Top N most volatile assets
+
+    **Performance**:
+    - Full scan: ~3-5 seconds (parallel batching)
+    - Cache TTL: 5 minutes (avoid redundant scans)
+    - ThreadPool: 10 workers for snapshot fetching
+
+    **Filters**:
+    - Min price: $5 (avoid penny stocks)
+    - Min notional: $20M daily volume (liquidity)
+    - Min movement: 1.5% (volatility threshold)
+
+    Attributes:
+        trading_client: Alpaca TradingClient
+        data_client: Alpaca StockHistoricalDataClient
+        _universe_cache: Cached scan results
+        _cache_ttl: Cache expiration (300s)
+
+    Example:
+        >>> scanner = MarketScanner()
+        >>> universe = await scanner.get_active_universe(limit=20)
+        >>> print(universe)  # ['NVDA', 'TSLA', ...]
     """
 
     def __init__(self):

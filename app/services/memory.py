@@ -13,12 +13,35 @@ tracer = trace.get_tracer(__name__)
 
 
 class MemoryService:
-    """
-    Quantum Memory Service (Cloud Cortex Edition).
-    Responsibility:
-    1. Embed Market States (Physics + Sentiment) into vectors.
-    2. Store them in LanceDB (Local Vector DB).
-    3. Retrieve similar historical outcomes (RAG) to ground LLM reasoning.
+    """Quantum Memory - RAG-powered historical regime retrieval via LanceDB.
+
+    Embeds market states (physics + sentiment) as vectors and retrieves similar
+    historical contexts to ground LLM reasoning with empirical data.
+
+    **Core Functions**:
+    1. **Embed**: Convert state (physics, sentiment) to 384-dim vector
+    2. **Save**: Store embeddings in LanceDB with metadata
+    3. **Retrieve**: Find top-k similar historical regimes (cosine similarity)
+
+    **Architecture**:
+    - Embeddings: SentenceTransformer (all-MiniLM-L6-v2)
+    - Vector DB: LanceDB (local, embedded)
+    - Schema: Pydantic model (MarketStateEmbedding)
+
+    **Use Cases**:
+    - Ground LLM with "This situation resembles..."
+    - Detect novel regimes (low similarity scores)
+    - Track regime transitions over time
+
+    Attributes:
+        embedding_model: SentenceTransformer instance
+        db: LanceDB connection
+        table: market_state_embeddings table
+
+    Example:
+        >>> memory = MemoryService()
+        >>> memory.save_regime("SPY", physics, sentiment)
+        >>> similar = memory.retrieve_similar("SPY", physics, sentiment, k=3)
     """
 
     def __init__(self, db_path: str = "data/lancedb"):

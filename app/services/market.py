@@ -10,9 +10,33 @@ tracer = trace.get_tracer(__name__)
 
 
 class MarketService:
-    """
-    Market Service: Unified data aggregation layer.
-    Provides: Price, History, News, Sentiment
+    """Sensor Fusion Layer - aggregates multi-modal market data.
+
+    Provides unified access to:
+    1. **Real-time pricing** (Alpaca/Tiingo)
+    2. **Historical OHLCV** (100+ bars for physics/forecasting)
+    3. **News headlines** (sentiment context)
+    4. **FinBERT sentiment** (NLP analysis)
+
+    **Architecture**:
+    - Delegates to MarketAdapter (price/history)
+    - Delegates to SentimentAdapter (FinBERT)
+    - Combines data into unified snapshots
+    - Instruments with OpenTelemetry spans
+
+    **Key Methods**:
+    - get_market_snapshot(): Complete multi-modal snapshot
+    - scan_market(): Batch scanning for multiple symbols
+    - get_startup_bars(): Warm-up data for physics/LSTM
+
+    Attributes:
+        market_adapter: Adapter for price/history/news
+        sentiment_adapter: FinBERT sentiment analyzer
+
+    Example:
+        >>> service = MarketService()
+        >>> snapshot = service.get_market_snapshot("SPY")
+        >>> print(snapshot["price"], snapshot["sentiment"])
     """
 
     def __init__(self):

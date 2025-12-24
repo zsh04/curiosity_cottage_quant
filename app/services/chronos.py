@@ -30,13 +30,37 @@ app = FastStream(broker)
 
 
 class ChronosService:
-    """
-    The GPU Mind (Probabilistic Forecasting).
+    """GPU-accelerated probabilistic time series forecasting using Chronos-bolt.
 
-    "Patterns are hidden." - Jim Simons
+     Named after the Greek god of time, this service provides quantile forecasts
+     using Amazon's Chronos-bolt-small model optimized for Apple MPS (Metal).
 
-    Role: Time-Series Forecasting (Chronos-T5).
-    Hardware: Apple Metal Performance Shaders (MPS).
+     **Architecture**:
+     - Ring buffer (512-sample context window)
+     - Throttled inference (every 10 ticks)
+     - Zero-allocation updates for performance
+     - MPS/CUDA/CPU device auto-selection
+
+    **Probabilistic Forecasting**:
+     - Returns P10, P50 (median), P90 quantiles
+     - Horizon: Configurable (default: short-term)
+     - Enables risk-aware decision making
+
+     **Performance**:
+     - MPS (Apple Silicon): ~50-100ms per forecast
+     - Throttling prevents GPU saturation
+     - Ring buffer avoids memory reallocation
+
+     Attributes:
+         model: ChronosBoltPipeline instance
+         buffer: numpy ring buffer (context_len samples)
+         device: torch device (mps/cuda/cpu)
+         throttle_steps: Inference frequency (every N ticks)
+
+     Example:
+         >>>chronos = ChronosService()
+         >>> chronos.update_buffer(price=150.25)
+         >>> forecast = chronos.forecast()  # {"p10": ..., "p50": ..., "p90": ...}
     """
 
     def __init__(
