@@ -5,9 +5,12 @@ from typing import Dict, Any
 from sqlalchemy.orm import Session
 import orjson
 import logging
+import os
+from redis.asyncio import Redis
 
 
 from app.services.state_service import StateService
+from app.services.global_state import set_system_halt
 from app.api.dependencies import get_redis_client
 from app.dal.database import get_db
 
@@ -52,6 +55,9 @@ class SystemController(Controller):
         Halts all trading logic immediately.
         """
         try:
+            # 1. Set In-Memory Flag (Immediate Effect on Local Loop)
+            set_system_halt(True)
+
             redis = await get_redis_client()
             await redis.set("SYSTEM:HALT", "true")
 
@@ -62,7 +68,7 @@ class SystemController(Controller):
             }
             await redis.publish("system_events", orjson.dumps(msg).decode())
 
-            logger.critical("🚨 KILL SWITCH ACTIVATED VIA API 🚨")
+            logger.critical("🚨 KILL SWITCH ACTIVATED VIA API (System Controller) 🚨")
             return {"status": "HALTED", "message": "System Halt sequence initiated."}
         except Exception as e:
             logger.error(f"Kill Switch Failed: {e}")
@@ -74,6 +80,9 @@ class SystemController(Controller):
         Resume Trading logic.
         """
         try:
+            # 1. Unset In-Memory Flag
+            set_system_halt(False)
+
             redis = await get_redis_client()
             await redis.delete("SYSTEM:HALT")
 
