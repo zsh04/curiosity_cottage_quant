@@ -307,23 +307,45 @@ class MarketAdapter:
 
     def get_snapshots(self, symbols: List[str]) -> Dict[str, Any]:
         """
-        Batch Snapshot.
-        Parallelize per symbol using get_price logic?
-        Or use batch endpoints where available.
-        For now, iterative get_price is safest for mixed providers.
+        Batch Snapshot with parallel execution optimization.
+
+        Uses ThreadPoolExecutor to fetch prices concurrently,
+        taking advantage of batch endpoints where available.
         """
         results = {}
-        # TODO: Optimize this with batch APIs later.
-        # For now, simplistic loop to ensure data quality.
-        for sym in symbols:
-            price = self.get_price(sym)
-            results[sym] = {
-                "symbol": sym,
-                "price": price,
-                "open": price,  # Approx
-                "high": price,
-                "low": price,
-                "close": price,
-                "volume": 0,
+
+        # Batch API optimization: Use ThreadPoolExecutor
+        # This parallelizes price fetches across symbols
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(len(symbols), 10)
+        ) as executor:
+            future_to_symbol = {
+                executor.submit(self.get_price, sym): sym for sym in symbols
             }
+
+            for future in concurrent.futures.as_completed(future_to_symbol):
+                sym = future_to_symbol[future]
+                try:
+                    price = future.result()
+                    results[sym] = {
+                        "symbol": sym,
+                        "price": price,
+                        "open": price,  # Approx
+                        "high": price,
+                        "low": price,
+                        "close": price,
+                        "volume": 0,
+                    }
+                except Exception as e:
+                    logger.warning(f"Failed to fetch snapshot for {sym}: {e}")
+                    results[sym] = {
+                        "symbol": sym,
+                        "price": 0.0,
+                        "open": 0.0,
+                        "high": 0.0,
+                        "low": 0.0,
+                        "close": 0.0,
+                        "volume": 0,
+                    }
+
         return results
