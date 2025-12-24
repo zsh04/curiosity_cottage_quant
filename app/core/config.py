@@ -1,5 +1,14 @@
-"""
-Pydantic Settings (12-Factor App).
+"""Application configuration via Pydantic Settings (12-Factor App compliance).
+
+Centralized environment-driven configuration for:
+- Database URLs (Postgres, QuestDB, LanceDB)
+- API keys (Alpaca, market data providers)
+- Model parameters (forecasting, backtesting)
+- Telemetry endpoints (OpenTelemetry)
+- Risk limits and trading flags
+
+All settings can be overridden via environment variables or .env file.
+Follows 12-factor app methodology for configuration management.
 """
 
 from typing import List

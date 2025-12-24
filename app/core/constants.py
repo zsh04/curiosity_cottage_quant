@@ -1,9 +1,18 @@
-"""
-The Laws of Physics (Constants).
-Centralized configuration for Mathematical and Risk parameters.
+"""System-wide constants for trading physics, risk management, and execution.
 
-IMPORTANT: Many of these should be overridden via environment variables.
-See app/core/config.py for full configuration.
+Defines mathematical parameters and safety thresholds:
+- **Risk Limits**: MAX_DRAWDOWN (2%), MAX_LEVERAGE (1x), FAT_FINGER_CAP (20%)
+- **Execution Physics**: SLIPPAGE (5 bps), COMMISSION ($0.005/share)
+- **Financial Constants**: RISK_FREE_RATE (dynamic 10Y Treasury API)
+- **Backtest Config**: INITIAL_CAPITAL, TARGET_ALLOCATION, CONFIDENCE_THRESHOLD
+- **Volatility Skew**: Crash/meltup detection thresholds
+- **Time Constants**: TRADING_DAYS (252), ANNUALIZATION_FACTOR
+
+**Dynamic Risk-Free Rate**:
+Fetches live 10Y Treasury yield via `get_risk_free_rate()` function.
+Fallback: 4.17% static rate if API unavailable.
+
+Most values overridable via environment variables for flexibility.
 """
 
 import os
@@ -65,15 +74,31 @@ _RISK_FREE_RATE_STATIC = 0.0417  # Fallback only
 
 
 def get_risk_free_rate() -> float:
-    """
-    Get current risk-free rate (10Y Treasury).
+    """Event-sourced data access layer for backtest lifecycle and equity curves (QuestDB).
 
-    Fetches from US Treasury API with daily caching.
-    Falls back to static rate if API unavailable.
+    Implements CQRS pattern: append-only event log with time-series queries.
+    Stores backtest execution events and equity curve snapshots for analysis.
 
-    Returns:
-        float: Annualized risk-free rate (e.g., 0.0417 for 4.17%)
+    **Event Types**:
+    - SPAWNED: Simulation initialized
+    - COMPLETED: Simulation finished successfully
+    - FAILED: Simulation error
+
+    **Tables**:
+    - `backtest_events`: Event log (run_id, event_type, payload, timestamp)
+    - `backtest_equity`: Equity curve points (run_id, equity, drawdown, timestamp)
+
+    **Query Pattern**:
+    - LATEST ON ts PARTITION BY run_id (get current status)
+    - Reconstruct full history via event sourcing
+
+    Example:
+        >>> dal = BacktestDAL()
+        >>> await dal.log_spawn("run_123", "SPY", {"capital": 100000})
+        >>> status = await dal.get_run_status("run_123")  # "SPAWNED"
     """
+    # The following lines are part of the original function body, not the docstring.
+    # They are kept here to maintain the original function's logic.
     try:
         from app.lib.market.treasury import get_current_risk_free_rate
 
