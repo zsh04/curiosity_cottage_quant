@@ -84,10 +84,14 @@ class BoydAgent:
         Sets up:
         - Market data service
         - Per-symbol physics bridges (Feynman)
-        - gRPC connection to Brain Service (Gemini LLM)
+        - gRPC connection to Brain Service (Gemma2 9B for reasoning)
         - Reasoning and memory services
         - LSTM persistence (database or file fallback)
         - Strategy Council (7+ independent experts)
+
+        Note:
+            Brain Service orchestrates: Gemma2 9B (reasoning), FinBERT (sentiment),
+            Chronos-bolt (time series forecasting)
 
         Raises:
             ConnectionError: If Brain Service unavailable
