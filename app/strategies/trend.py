@@ -22,6 +22,31 @@ class KalmanMomentumStrategy(BaseStrategy):
         """
         Runs Kalman Filter on the close prices.
         Returns normalized velocity signal.
+
+        **Kalman Momentum Constants**:
+
+        1. **dt = 1.0** (Time Step):
+           - Physical meaning: Discrete time interval
+           - Chosen: 1 day (daily bars)
+           - Units: Days (for daily data)
+           - Alternative: Adjust for higher/lower frequency data
+           - Effect: Determines velocity/acceleration scaling
+           - Reference: Kalman (1960) "New Approach to Filtering"
+
+        2. **final_velocity * 10** (Velocity Scaling for tanh):
+           - Goal: Map velocity to [-1, 1] signal range
+           - Physical basis: Typical velocity ≈ $0.1-$1.0 per day
+           - Chosen: 10x multiplier saturates tanh at v > 0.1
+           - Effect of tanh: Smooth saturation (no hard clipping)
+           - Alternative: 5x (slower saturation), 20x (faster)
+           - Example: v=0.1 -> signal=tanh(1.0)≈0.76 (strong buy)
+           - Empirical: Tuned on SPY for optimal trend detection
+
+        **Kalman Filter Note**:
+        - Filter processes entire window (stateful)
+        - Each bar updates: position, velocity, acceleration
+        - Final velocity = momentum estimate at latest bar
+        - Noise filtering: KF smooths out price jitter
         """
         with self.tracer.start_as_current_span("calculate_signal") as span:
             if market_data.empty:

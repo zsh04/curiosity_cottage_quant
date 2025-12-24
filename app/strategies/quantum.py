@@ -10,6 +10,34 @@ class QuantumOscillatorStrategy(BaseStrategy):
     """
 
     def __init__(self, window: int = 20, omega: float = 0.1):
+        """
+        Initialize Quantum Harmonic Oscillator Strategy.
+
+        **Constants** (Quantum Physics Analogy):
+
+        1. **window = 20** (Fair Value Window):
+           - Same as Bollinger Bands (industry standard)
+           - Physical meaning: Equilibrium price (x₀)
+           - Used for SMA calculation
+           - Reference: See mean_reversion.py documentation
+
+        2. **omega = 0.1** (Angular Frequency):
+           - Physics: ω in E_n = (n + 0.5)ℏω forQuantumHO
+           - Chosen: 0.1 = Empirical tuning for price displacement
+           - Physical meaning: "Stiffness" of mean reversion potential
+           - Interpretation: Larger ω = stronger pull to equilibrium
+           - Alternative: 0.05 (weaker), 0.2 (stronger)
+           - Units: Dimensionless (normalized to price scale)
+           - Empirical: Tuned on SPY to match typical deviations
+
+        3. **0.5 * omega = 0.05** (Ground State Threshold):
+           - Physics: E₀ = 0.5ℏω (Zero-point energy)
+           - Meaning: Minimum "quantum fluctuation" around equilibrium
+           - Chosen: If |displacement| < E₀, stay neutral
+           - Rationale: Small deviations = noise (don't trade)
+           - Example: Price within 5% of SMA = no signal
+           - Prevents overtrading on tiny fluctuations
+        """
         super().__init__()
         self.window = window
         self.omega = omega
