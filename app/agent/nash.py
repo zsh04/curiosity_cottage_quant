@@ -5,21 +5,67 @@ logger = logging.getLogger(__name__)
 
 
 class NashAgent:
-    """
-    The Council of Giants: 'Nash' (The Game Theorist).
+    """The Council of Giants: 'Nash' (The Game Theorist) - Equilibrium Auditor.
 
-    Role: Equilibrium Auditor.
-    Metric: Nash Distance (N) = (Price - Mode) / Sigma.
-    Logic:
-        - Markets seek Equilibrium (Mode).
-        - If Price deviates significantly (N > 2.0), the "Payoff Matrix"
-          for following the trend turns negative (Reversion likely).
-        - Nash VETOES "Chasing" the deviation.
+    Named after John Nash's game theory equilibrium concept, this agent prevents
+    "chasing" behavior by vetoing trades when price has deviated too far from
+    statistical equilibrium (mode).
+
+    **Core Principle:** Markets seek equilibrium. Extreme deviations reverse.
+
+    **Nash Distance Formula:**
+        N = (Price - Mode) / Sigma
+
+    Where:
+        - Mode: Most likely price (peak of distribution)
+        - Sigma: Standard deviation
+        - N > +2.0: Price extended above equilibrium (don't buy tops)
+        - N < -2.0: Price extended below equilibrium (don't sell bottoms)
+
+    **Decision Logic:**
+    1. **BUY Signal + N > 2.0σ** → VETO (buying the top)
+    2. **SELL Signal + N < -2.0σ** → VETO (selling the bottom)
+    3. **BUY Signal + Low Buying Power** → VETO (T+1 settlement issue)
+
+    **Risk Management:**
+    - Prevents momentum chasing into overextended moves
+    - Enforces game-theoretic \"payoff matrix\" where chasing has negative EV
+    - Applies T+1 settlement checks for accounts under $25k (PDT rules)
+
+    Attributes:
+        None (stateless auditor)
+
+    Example:
+        >>> agent = NashAgent()
+        >>> state = AgentState(symbol=\"SPY\", signal_side=\"BUY\", ...)
+        >>> updated_state = agent.audit(state)
+        >>> # Signal may be VETOED if nash_dist > 2.0
     """
 
     def audit(self, state: AgentState) -> AgentState:
-        """
-        Audits the proposed trade against Game Theory equilibrium.
+        """Audit proposed trade against game-theoretic equilibrium constraints.
+
+        Applies two veto rules:
+        1. **Equilibrium Veto**: Prevents chasing extreme price deviations
+        2. **Capital Veto**: Prevents trades when T+1 settlement risks exist
+
+        **Veto Thresholds:**
+        - Nash Distance: ±2.0σ (95% confidence interval)
+        - Buying Power: $20 minimum for non-PDT-exempt accounts
+
+        Args:
+            state: Current agent state with signal, symbol, physics, account info
+
+        Returns:
+            Updated state with signal potentially vetoed (FLAT) and reasoning updated
+
+        Side Effects:
+            Modifies state['signal_side'] and state['reasoning'] if veto triggered
+
+        Example:
+            >>> state = {\"signal_side\": \"BUY\", \"nash_dist\": 2.5, ...}
+            >>> state = agent.audit(state)
+            >>> assert state[\"signal_side\"] == \"FLAT\"  # Vetoed for buying top
         """
         try:
             # 1. Check if we have a signal to audit

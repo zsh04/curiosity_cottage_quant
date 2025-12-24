@@ -11,9 +11,41 @@ SLEEP_INTERVAL = 5  # seconds (Real-time Physics)
 
 
 async def run_agent_service():
-    """
-    Background service that runs the Cognitive Engine Agent Loop indefinitely.
-    Broadcasts state updates to the StateBroadcaster.
+    """Main agent service loop - orchestrates The Cognitive Engine indefinitely.
+
+    This is the central coordinator that runs the complete trading pipeline in real-time.
+    It fetches market data, runs the agent pipeline (Scanner → Analyst → Risk → Execution),
+    and broadcasts telemetry to connected frontends via WebSocket.
+
+    **Pipeline Flow:**
+    1. **Halt Check**: Verify emergency kill switch not engaged
+    2. **Portfolio Fetch**: Get current positions from Alpaca
+    3. **Account Fetch**: Get buying power, cash, PDT status
+    4. **Pipeline Execute**: Run app_pipeline (LangGraph)
+    5. **Telemetry Broadcast**: Push state to WebSocket clients
+    6. **Sleep**: Wait SLEEP_INTERVAL (5s) before next cycle
+
+    **Responsibilities:**
+    - Portfolio awareness (feed current positions to Risk node)
+    - T+1 settlement tracking (buying_power, pdt_exempt)
+    - Crash recovery (try/except with 5s retry)
+    - Real-time telemetry broadcasting
+
+    **State Management:**
+    - Maintains inputs dict with portfolio, wallet, messages
+    - Executes pipeline with fresh state each cycle
+    - Broadcasts final_state as TELEMETRY packet
+
+    Raises:
+        Never exits - catches all exceptions and retries
+
+    Note:
+        Designed to run forever as background asyncio task.
+        Uses SLEEP_INTERVAL global for cycle timing (default: 5s).
+
+    Example:
+        >>> # In main.py
+        >>> asyncio.create_task(run_agent_service())
     """
     logger.info("🚀 Agent Service Started")
     broadcaster = get_state_broadcaster()
