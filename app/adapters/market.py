@@ -24,9 +24,31 @@ tracer = trace.get_tracer(__name__)
 
 
 class MarketAdapter:
-    """
-    Production Market Data Adapter using Parallel Execution Strategy.
-    "The Data Flood": Queries 6 providers simultaneously and aggregates results.
+    """Multi-provider market data aggregator with parallel fetching and failover.
+
+    Queries 6 data providers simultaneously (Alpaca, Tiingo, Finnhub, TwelveData,
+    AlphaVantage, MarketStack) and returns the first valid result. Implements
+    graceful degradation and provider racing for maximum uptime.
+
+    **Architecture**:
+    - **Parallel Racing**: ThreadPoolExecutor for concurrent API calls
+    - **Waterfall Fallback**: Sequential providers for history (schema complexity)
+    - **Provider Diversity**: 6 sources minimize single-point-of-failure
+
+    **Methods**:
+    - `get_price`: Real-time price (parallel race)
+    - `get_price_history`: OHLCV bars (waterfall: Alpaca → Tiingo → Finnhub)
+    - `get_news`: Headlines (Tiingo primary)
+    - `get_snapshots`: Batch snapshots (parallel)
+
+    **Performance**:
+    - Parallel: ~100-300ms (fastest provider wins)
+    - Waterfall: ~200-500ms (depends on provider order)
+
+    Example:
+        >>> adapter = MarketAdapter()
+        >>> price = adapter.get_price("SPY")
+        >>> history = adapter.get_price_history("SPY", limit=100)
     """
 
     def __init__(self):

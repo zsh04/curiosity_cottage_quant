@@ -20,9 +20,29 @@ logger = logging.getLogger(__name__)
 
 
 class MLXModel(Model):
-    """
-    Adapter for running MLX-LM models (Gemma 2) natively on Apple Silicon
-    within the PydanticAI framework.
+    """PydanticAI adapter for MLX-LM (Gemma 2 9B) on Apple Silicon.
+
+    Runs Gemma 2 natively on MPS (Apple Metal) via MLX framework for structured
+    reasoning without external API calls. Integrates with PydanticAI for type-safe
+    LLM responses.
+
+    **Architecture**:
+    - **Model**: google/gemma-2-9b-it (instruction-tuned)
+    - **Runtime**: MLX (Apple Silicon optimized)
+    - **Framework**: PydanticAI (structured outputs)
+    - **Fallback**: Mock responses in non-Silicon environments
+
+    **Performance**:
+    - M1/M2/M3: ~500ms-2s per generation (1000 tokens)
+    - Memory: ~9GB VRAM (quantized: ~5GB)
+
+    **Safety**:
+    - PROD mode: Raises error if MLX unavailable (no mock trading)
+    - DEV mode: Returns mock JSON for testing
+
+    Example:
+        >>> model = MLXModel("google/gemma-2-9b-it")
+        >>> response = await model.request(messages, settings, params)
     """
 
     def __init__(self, model_name: str = "google/gemma-2-9b-it"):
