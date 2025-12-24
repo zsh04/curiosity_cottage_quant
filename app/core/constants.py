@@ -3,16 +3,12 @@
 Defines mathematical parameters and safety thresholds:
 - **Risk Limits**: MAX_DRAWDOWN (2%), MAX_LEVERAGE (1x), FAT_FINGER_CAP (20%)
 - **Execution Physics**: SLIPPAGE (5 bps), COMMISSION ($0.005/share)
-- **Financial Constants**: RISK_FREE_RATE (dynamic 10Y Treasury API)
-- **Backtest Config**: INITIAL_CAPITAL, TARGET_ALLOCATION, CONFIDENCE_THRESHOLD
-- **Volatility Skew**: Crash/meltup detection thresholds
-- **Time Constants**: TRADING_DAYS (252), ANNUALIZATION_FACTOR
+- **Execution**: SLIPPAGE (5 bps), COMMISSION ($0.005/share)
+- **Financial**: RISK_FREE_RATE (dynamic 10Y Treasury), TRADING_DAYS (252)
+- **Backtest**: INITIAL_CAPITAL, TARGET_ALLOCATION
+- **Volatility Skew**: Crash/meltup thresholds
 
-**Dynamic Risk-Free Rate**:
-Fetches live 10Y Treasury yield via `get_risk_free_rate()` function.
-Fallback: 4.17% static rate if API unavailable.
-
-Most values overridable via environment variables for flexibility.
+Most values overridable via environment variables.
 """
 
 import os

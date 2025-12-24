@@ -7,9 +7,17 @@ logger = logging.getLogger(__name__)
 
 
 class BacktestDAL:
-    """
-    THE LIBRARY OF HYPATIA.
-    Event Sourcing DAL for Backtest Lifecycle and Equity Curves.
+    """Event-sourced DAL for backtest lifecycle tracking via QuestDB.
+
+    Implements CQRS: append-only event log + time-series equity curves.
+
+    **Event Types**: SPAWNED, COMPLETED, FAILED
+    **Tables**: backtest_events, backtest_equity
+    **Pattern**: LATEST ON ts PARTITION BY run_id
+
+    Example:
+        >>> dal = BacktestDAL()
+        >>> await dal.log_spawn("run_123", "SPY", {"capital": 100000})
     """
 
     def __init__(self):
