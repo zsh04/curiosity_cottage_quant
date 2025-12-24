@@ -10,6 +10,8 @@ import pandas as pd
 from typing import Dict, List, Optional, Tuple
 from scipy import stats
 
+from app.core.constants import RISK_FREE_RATE
+
 from app.core.metrics_types import (
     PerformanceMetrics,
     TailMetrics,
@@ -33,7 +35,8 @@ class MetricsCalculator:
     """
 
     TRADING_DAYS_PER_YEAR = 252
-    RISK_FREE_RATE = 0.0416  # 4.16% from FRED API (updated dynamically elsewhere)
+    TRADING_DAYS_PER_YEAR = 252
+    RISK_FREE_RATE = RISK_FREE_RATE  # Single Source of Truth (from constants.py)
 
     def __init__(self, risk_free_rate: Optional[float] = None):
         """Initialize calculator with optional risk-free rate override."""

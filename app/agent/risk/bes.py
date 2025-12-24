@@ -48,7 +48,9 @@ These constants can be moved to app/core/constants.py for easier tuning:
 
 from scipy.stats import norm
 from typing import List
-import numpy as np
+
+from app.core.constants import RISK_FREE_RATE
+
 
 # Mathematical constants (can be moved to config)
 GAUSSIAN_ALPHA_BASELINE = 3.0  # Normal distribution tail exponent
@@ -180,7 +182,7 @@ class BesSizing:
         alpha: float,
         current_price: float,
         capital: float,
-        risk_free_rate: float = 0.04,
+        risk_free_rate: float = RISK_FREE_RATE,
     ) -> float:
         """
         Calculate position size using Bayesian Expected Shortfall logic.
@@ -308,7 +310,7 @@ class BesSizing:
         alpha: float,
         current_price: float,
         capital: float,
-        risk_free_rate: float = 0.04,
+        risk_free_rate: float = RISK_FREE_RATE,
     ) -> float:
         """
         BES sizing using actual quantile distribution (not Normal approx).
