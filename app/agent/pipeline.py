@@ -30,22 +30,37 @@ class TradingPipeline:
         try:
             # --- 1. SOROS (The Philosopher) ---
             # Global Regime Scan
+            logger.info(
+                f"🌀 [INNER LOOP] 1. SOROS: Scanning Regime (Cycle {cycle_id})..."
+            )
             state = soros_node(state)
 
             # --- 2. BOYD (The Strategist) ---
             # OODA Loop & Analysis
+            logger.info(
+                f"🤔 [INNER LOOP] 2. BOYD: Executing OODA Loop (Cycle {cycle_id})..."
+            )
             state = await boyd_node(state)
 
             # --- 2.5. NASH (The Game Theorist) ---
             # Equilibrium Audit
+            logger.info(
+                f"⚖️ [INNER LOOP] 2.5. NASH: Auditing Equilibrium (Cycle {cycle_id})..."
+            )
             state = nash_node(state)
 
             # --- 3. TALEB (The Skeptic) ---
             # Risk Veto & Sizing
+            logger.info(
+                f"🦢 [INNER LOOP] 3. TALEB: Calculating Risk (Cycle {cycle_id})..."
+            )
             state = taleb_node(state)
 
             # --- 4. SIMONS (The Quant) ---
             # Execution
+            logger.info(
+                f"🔢 [INNER LOOP] 4. SIMONS: Processing Execution (Cycle {cycle_id})..."
+            )
             state = simons_node(state)
 
             # --- 4. VETO CHECK ---
@@ -54,19 +69,28 @@ class TradingPipeline:
                 TradingStatus.HALTED_DRAWDOWN,
                 TradingStatus.HALTED_SYSTEM,
             ]:
-                logger.info(f"🛑 Cycle {cycle_id} HALTED by Risk Gate.")
+                logger.info(
+                    f"🛑 [INNER LOOP] Cycle {cycle_id} HALTED by Risk Gate: {state.get('status')}"
+                )
                 return state
 
             # --- 5. EXECUTION NODE (The Hands) ---
             # Execution logic is handled by simons_node (Line 44).
             # We just log if needed, or rely on state updates.
             if state.get("approved_size", 0.0) > 0:
-                logger.info(f"⚡ Cycle {cycle_id} Execution Processed by Simons.")
+                logger.info(
+                    f"⚡ [INNER LOOP] Cycle {cycle_id} Execution Processed by Simons."
+                )
             else:
-                logger.info(f"💤 Cycle {cycle_id} No Execution (Size 0 or Veto).")
+                logger.info(
+                    f"💤 [INNER LOOP] Cycle {cycle_id} No Execution (Size 0 or Veto)."
+                )
 
         except Exception as e:
-            logger.error(f"💥 Pipeline Crash in Cycle {cycle_id}: {e}", exc_info=True)
+            logger.error(
+                f"💥 [INNER LOOP] Pipeline Crash in Cycle {cycle_id}: {e}",
+                exc_info=True,
+            )
             state["status"] = TradingStatus.HALTED_SYSTEM
             state["error"] = str(e)
 

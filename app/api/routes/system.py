@@ -5,8 +5,6 @@ from typing import Dict, Any
 from sqlalchemy.orm import Session
 import orjson
 import logging
-import os
-from redis.asyncio import Redis
 
 
 from app.services.state_service import StateService

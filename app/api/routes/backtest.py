@@ -118,3 +118,7 @@ class BacktestStream(WebsocketListener):
 
     async def on_disconnect(self, socket: WebSocket) -> None:
         pass
+
+    async def on_receive(self, data: str) -> None:
+        """Handle incoming messages (No-op for now as this is a read-only stream)."""
+        pass

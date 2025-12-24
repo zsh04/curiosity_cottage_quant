@@ -14,6 +14,7 @@ Follows 12-factor app methodology for configuration management.
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import os
+import logging
 
 
 class Settings(BaseSettings):
@@ -75,7 +76,6 @@ class Settings(BaseSettings):
         if self._watchlist_cache is not None:
             return self._watchlist_cache
 
-        import logging
         from pathlib import Path
 
         default = ["SPY", "NVDA", "AAPL", "QQQ", "IWM", "MSFT", "GOOGL", "AMZN"]
@@ -123,7 +123,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-import logging
 
 print(f"📡 Telemetry connected to {settings.OTEL_EXPORTER_OTLP_ENDPOINT}")

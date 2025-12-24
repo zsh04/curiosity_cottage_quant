@@ -6,6 +6,7 @@ load_dotenv()
 
 from litestar import Litestar, get
 from litestar.config.cors import CORSConfig
+from app.core.serialization import ORJSONResponse
 from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
 
 from app.core.telemetry import setup_telemetry
@@ -103,6 +104,7 @@ app = Litestar(
     middleware=[OpenTelemetryMiddleware] if otel_enabled else [],
     debug=True,
     lifespan=[lifespan],
+    response_class=ORJSONResponse,
 )
 
 if __name__ == "__main__":

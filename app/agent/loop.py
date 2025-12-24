@@ -113,7 +113,7 @@ async def run_agent_service():
                 logger.error(f"Failed to fetch account wallet: {e}")
                 inputs["buying_power"] = 0.0
 
-            logger.info("--- 🧠 Agent Loop: Thinking ---")
+            logger.info("--- 🧠 [INNER LOOP] OODA Cycle Start ---")
 
             # Run the Pipeline (Linear Mode)
             current_state = inputs.copy()
@@ -190,5 +190,5 @@ async def run_agent_service():
             continue
 
         # Sleep
-        logger.info(f"Adding sleep for {SLEEP_INTERVAL}s")
+        logger.info(f"💤 [INNER LOOP] Cycle Complete. Sleep {SLEEP_INTERVAL}s")
         await asyncio.sleep(SLEEP_INTERVAL)

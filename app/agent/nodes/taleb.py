@@ -6,7 +6,7 @@ from app.lib.physics import Regime
 from app.agent.risk.bes import BesSizing
 from app.core import metrics as business_metrics
 from app.services.global_state import get_global_state_service, get_current_snapshot_id
-from app.core.constants import MAX_DRAWDOWN, FAT_FINGER_CAP
+from app.core.constants import MAX_DRAWDOWN
 
 logger = logging.getLogger(__name__)
 

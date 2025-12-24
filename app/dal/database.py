@@ -15,3 +15,8 @@ def get_async_db():
 def init_db():
     """Deprecated Init"""
     print("⚠️ Database (SQLAlchemy) Initializer skipped (Purged).")
+
+
+# Exports to satisfy legacy imports in main.py
+SessionLocal = None
+async_session_maker = None

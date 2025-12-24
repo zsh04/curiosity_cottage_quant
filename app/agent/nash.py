@@ -143,7 +143,7 @@ class NashAgent:
                     reason = f"Nash Equilibrium Violation: Price is {nash_dist:.2f}σ from Mode. Selling the bottom."
 
             if veto:
-                logger.info(f"NASH: ⚖️ VETO {symbol} {signal}. {reason}")
+                logger.info(f"⚖️ [INNER LOOP] NASH VETO: {symbol} {signal} -> {reason}")
                 state["signal_side"] = "FLAT"
                 state["reasoning"] += f" | NASH VETO: {reason}"
                 # We don't necessarily HALT the system, just kill the trade.
@@ -151,7 +151,9 @@ class NashAgent:
                 # Just flattening the signal is enough for "The Auditor".
 
             else:
-                logger.info(f"NASH: ✅ Approved {symbol}. Nash Dist: {nash_dist:.2f}σ")
+                logger.info(
+                    f"⚖️ [INNER LOOP] NASH APPROVED: {symbol}. Nash Dist: {nash_dist:.2f}σ"
+                )
 
         except Exception as e:
             logger.error(f"NASH: Audit Failed: {e}")

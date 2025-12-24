@@ -11,12 +11,11 @@ from app.services.market import MarketService
 import pandas as pd
 import concurrent.futures
 import time
+import asyncio
+from app.services.scanner import MarketScanner
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
-
-import asyncio
-from app.services.scanner import MarketScanner
 
 # FALLBACK UNIVERSE (High Liquidity, "Power Law" Candidates)
 FALLBACK_UNIVERSE = [

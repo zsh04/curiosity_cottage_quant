@@ -262,6 +262,11 @@ class BoydAgent:
 
         final_urgency = base_urgency * dampener
 
+        logger.info(
+            f"🧠 [INNER LOOP] OODA Calc | Momentum={p_score:.2f} Jerk={j_score:.2f} "
+            f"Reflexivity={reflexivity.reflexivity_index:.2f} Dampener={dampener} -> Urgency={final_urgency:.2f}"
+        )
+
         return OODAVector(urgency_score=final_urgency)
 
     async def _analyze_single(
@@ -429,6 +434,13 @@ class BoydAgent:
                             strat_signals[strat.name] = sig  # -1.0 to 1.0
                         except Exception as e:
                             logger.warning(f"Strategy {strat.name} failed: {e}")
+
+                    # Log Council Results
+                    votes_str = ", ".join(
+                        [f"{k}={v:.2f}" for k, v in strat_signals.items()]
+                    )
+                    logger.info(f"🗳️ [INNER LOOP] Council of Giants Votes: {votes_str}")
+
                 except Exception as e:
                     logger.error(f"Council Session Failed: {e}")
 
@@ -483,6 +495,11 @@ class BoydAgent:
                     },
                     "meta": loads(grpc_resp.meta_json) if grpc_resp.meta_json else {},
                 }
+                logger.info(
+                    f"🔮 [INNER LOOP] CHRONOS FORECAST: Signal={oracle_result['signal']} "
+                    f"Conf={oracle_result['confidence']:.2f} Horizon={req.horizon}"
+                )
+
             except grpc.RpcError as e:
                 logger.error(f"BOYD: 🧠 Brain Service Connection Failed: {e}")
                 # Fallback to Neutral

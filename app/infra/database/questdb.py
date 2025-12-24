@@ -160,3 +160,8 @@ class QuestDBClient:
                     text = await resp.text()
                     logger.error(f"QUESTDB QUERY ERROR: {resp.status} - {text}")
                     return None
+
+    # Hypatia's Quill (Telemetry Ingestion)
+    async def ingest_telemetry(self, run_id: str, data: dict):
+        logger.info(f"📜 [INNER LOOP] Hypatia: Ingesting Telemetry for Run {run_id}...")
+        pass
