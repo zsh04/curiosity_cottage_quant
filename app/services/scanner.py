@@ -2,13 +2,13 @@ import os
 import logging
 import asyncio
 from typing import List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import GetAssetsRequest
 from alpaca.trading.enums import AssetStatus, AssetClass
 from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockLatestQuoteRequest, StockSnapshotRequest
+from alpaca.data.requests import StockSnapshotRequest
 
 logger = logging.getLogger(__name__)
 

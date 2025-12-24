@@ -17,7 +17,7 @@ import time
 from datetime import timedelta
 from typing import Optional
 
-import numpy as np
+
 from opentelemetry import trace
 
 from app.backtest.events import OrderEvent, FillEvent, MarketEvent

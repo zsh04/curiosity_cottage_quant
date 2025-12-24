@@ -13,14 +13,14 @@ import torch
 import numpy as np
 from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor
-from enum import Enum
+
 
 from app.core.config import settings
 from app.services.rag_forecast import MarketMemory
 
 # Try importing ChronosPipeline
 try:
-    from chronos import ChronosPipeline, ChronosBoltPipeline
+    from chronos import ChronosBoltPipeline
 
     CHRONOS_AVAILABLE = True
 except ImportError:
@@ -257,7 +257,6 @@ class TimeSeriesForecaster:
         r_dir = np.sign(raf_trend)
 
         # Base signal is Chronos (The Oracle)
-        final_conviction = abs(chronos_trend)
         signal_type = "NEUTRAL"
 
         # Agreement Check
