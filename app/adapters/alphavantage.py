@@ -7,8 +7,9 @@ logger = logging.getLogger(__name__)
 
 
 class AlphaVantageAdapter:
-    """
-    Adapter for AlphaVantage API.
+    """AlphaVantage API adapter - global quotes and daily adjusted series.
+
+    **Rate Limit**: 5 req/min, 500/day (free tier)
     """
 
     def __init__(self, api_key: Optional[str] = None):

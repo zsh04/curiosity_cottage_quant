@@ -4,8 +4,9 @@ from typing import List, Optional, Dict, Any
 
 
 class TiingoAdapter:
-    """
-    Adapter for Tiingo API (News & Sentiment).
+    """Tiingo API adapter - news, real-time IEX prices, historical EOD data.
+
+    **Endpoints**: /tiingo/news, /iex/{symbol}, /daily/{symbol}/prices
     """
 
     def __init__(self, api_key: Optional[str] = None):

@@ -16,14 +16,11 @@ tracer = trace.get_tracer(__name__)
 
 
 class ChronosAdapter:
-    """
-    Local Chronos-2 Time-Series Forecasting using chronos-forecasting library.
+    """Local Chronos-2 forecasting (amazon/chronos-t5-small) - zero-shot probabilistic predictions.
 
-    Chronos-2 (amazon/chronos-t5-small) provides:
-        - Probabilistic forecasts with quantiles (10th, 50th, 90th)
-        - Zero-shot inference (no fine-tuning needed)
-        - Handles irregular time-series
-        - GPU acceleration via Metal (MPS) on Apple Silicon
+    **Architecture**: T5-based pretrained model (~46M params), PyTorch on CPU
+    **Output**: Quantile forecasts (10th, 50th, 90th percentiles)
+    **Performance**: ~1-3s inference on M1/M2/M3, min 10 observations required
     """
 
     def __init__(self, model_name: str = "amazon/chronos-t5-small"):

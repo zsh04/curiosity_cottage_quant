@@ -7,8 +7,9 @@ logger = logging.getLogger(__name__)
 
 
 class TwelveDataAdapter:
-    """
-    Adapter for Twelve Data API.
+    """Twelve Data API adapter - real-time prices and time series.
+
+    **Intervals**: 1min/5min/15min/30min/1h/1day/1week/1month
     """
 
     def __init__(self, api_key: Optional[str] = None):

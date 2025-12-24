@@ -8,8 +8,9 @@ logger = logging.getLogger(__name__)
 
 
 class FinnhubAdapter:
-    """
-    Adapter for Finnhub API.
+    """Finnhub API adapter - real-time quotes and historical candles.
+
+    **Resolutions**: 1/5/15/30/60 min, D/W/M
     """
 
     def __init__(self, api_key: Optional[str] = None):

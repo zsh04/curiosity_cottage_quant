@@ -16,13 +16,11 @@ tracer = trace.get_tracer(__name__)
 
 
 class LLMAdapter:
-    """
-    Client for Gemma2 9B running on Ollama.
+    """Gemma2 9B local LLM via Ollama - structured reasoning and trade signals.
 
-    Ollama provides:
-        - Local LLM inference (no API costs)
-        - Fast response times
-        - Full control over prompt engineering
+    **Model**: gemma2:9b (local inference, no API costs)
+    **Endpoint**: http://localhost:11434/api/generate
+    **Latency**: ~2-5s per response (M1/M2/M3)
     """
 
     def __init__(self, base_url: Optional[str] = None, model: Optional[str] = None):
